@@ -1,0 +1,1 @@
+/home/welshea/data/genbank/latest/human/accession_table.txt
