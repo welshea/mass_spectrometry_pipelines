@@ -1,0 +1,1 @@
+/home/welshea/data/genbank/latest/accession_table_human_mouse.txt
