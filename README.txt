@@ -2,6 +2,12 @@ Documentation for individual programs within the pipeline:
 
 
 
+findmedian, iron_generic
+  see http://gene.moffitt.org/libaffy/
+
+
+
+
 autodetect_ms_data.pl
 
   Scan MaxQuant output file to determine (or guess) various parameters to feed
