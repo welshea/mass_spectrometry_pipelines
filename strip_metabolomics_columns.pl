@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2020-08-26:  default to deleting "one-hit wonders" (single pre gap-fill peak)
 # 2020-08-26:  attempt to deal with more pos/neg sample name typos
 # 2020-08-26:  add Number of non-zero peaks, Percent pre-gap peaks,
 #              Percent non-zero peaks columns
@@ -133,13 +134,61 @@ sub is_heavy_labeled
 }
 
 
-$filename = shift;
-$output_unidentified_filename = shift;
-$output_spikeins_filename   = shift;
+$keep_single_pregap_flag = 0;
 
-if (!defined($filename))
+$syntax_error_flag    = 0;
+$num_files            = 0;
+
+for ($i = 0; $i < @ARGV; $i++)
 {
-    printf STDERR "Usage: strip_mzmine_columns.pl mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]\n";
+    $field = $ARGV[$i];
+
+    if ($field =~ /^--/)
+    {
+        if ($field =~ /^--keep-single-pregap$/)
+        {
+            $keep_single_pregap_flag = 1;
+        }
+        elsif ($field =~ /^--discard-single-pregap$/)
+        {
+            $keep_single_pregap_flag = 0;
+        }
+        else
+        {
+            printf STDERR "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
+    }
+    else
+    {
+        if ($num_files == 0)
+        {
+            $filename = $field;
+            $num_files++;
+        }
+        elsif ($num_files == 1)
+        {
+            $output_unidentified_filename = $field;
+            $num_files++;
+        }
+        elsif ($num_files == 2)
+        {
+            $output_spikeins_filename = $field;
+            $num_files++;
+        }
+    }
+}
+
+
+if (!defined($filename) || $syntax_error_flag)
+{
+    printf STDERR "Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]\n";
+    printf STDERR "\n";
+    printf STDERR "Options:\n";
+    printf STDERR "  options which use the MZmine \"row number of detected peaks\" column:\n";
+    printf STDERR "    --discard-single-pregap    discard pre gap-filled single-hit rows (default)\n";
+    printf STDERR "    --keep-single-pregap       keep pre gap-filled single-hit rows\n";
+
     exit(1);
 }
 
@@ -321,14 +370,14 @@ $n_total = @sample_col_array;
 
 
 # scan for number of detected peaks prior to gap filling
-$pregap_flag = 0;
+$has_pregap_flag = 0;
 for ($col = 0; $col < @header_col_array; $col++)
 {
     $field = $header_col_array[$col];
     
     if ($field =~ /row number of detected peaks/i)
     {
-        $pregap_flag = 1;
+        $has_pregap_flag = 1;
         
         $pregap_col = $col;
     }
@@ -392,7 +441,7 @@ for ($col = 0; $col < @header_col_array; $col++)
     {
         print "Number of non-zero peaks\t";
         
-        if ($pregap_flag)
+        if ($has_pregap_flag)
         {
             print "Percent pre-gap peaks\t";
         }
@@ -504,7 +553,7 @@ while(defined($line=<INFILE>))
 
     $n_pregap = 0;
     $n_percent_pregap = 0;    
-    if ($pregap_flag && $n_total)
+    if ($has_pregap_flag && $n_total)
     {
         $n_pregap = $array[$pregap_col];
         
@@ -514,6 +563,15 @@ while(defined($line=<INFILE>))
         }
     
         $n_percent_pregap = 100 * $n_pregap / $n_total;
+    }
+    
+    # skip "one-hit wonders"
+    if ($has_pregap_flag && $keep_single_pregap_flag == 0)
+    {
+        if ($n_pregap < 2)
+        {
+            next;
+        }
     }
 
     for ($col = 0; $col < @array; $col++)
@@ -538,7 +596,7 @@ while(defined($line=<INFILE>))
         {
             print "$n\t";
             
-            if ($pregap_flag)
+            if ($has_pregap_flag)
             {
                 print "$n_percent_pregap\t";
             }
