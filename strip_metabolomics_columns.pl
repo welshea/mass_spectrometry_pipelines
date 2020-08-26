@@ -1,11 +1,14 @@
 #!/usr/bin/perl -w
 
-# 2020-07-24: add Non-Spikein Identified Flag column to output
-#             begin adding support for El-MAVEN
-# 2020-07-13: add additional command line options for output file names
-#             more header conforming (strip .cdf extension)
-#             change "assigned" to "identified"
-#             no longer output assigned/identified file
+# 2020-08-26:  attempt to deal with more pos/neg sample name typos
+# 2020-08-26:  add Number of non-zero peaks, Percent pre-gap peaks,
+#              Percent non-zero peaks columns
+# 2020-07-24:  add Non-Spikein Identified Flag column to output
+#              begin adding support for El-MAVEN
+# 2020-07-13:  add additional command line options for output file names
+#              more header conforming (strip .cdf extension)
+#              change "assigned" to "identified"
+#              no longer output assigned/identified file
 #
 # 2020-05-19: fix more header conforming
 #
@@ -277,10 +280,14 @@ for ($col = 0; $col < @header_col_array; $col++)
     if ($field =~ / Peak height$/i ||
         $field =~ / Peak area$/i)
     {
-        if (!defined($col_to_remove_hash{$col}) &&
-            $col < $first_abundance_col)
+        if (!defined($col_to_remove_hash{$col}))
         {
-            $first_abundance_col = $col;
+            $sample_col_hash{$col} = 1;
+        
+            if ($col < $first_abundance_col)
+            {
+                $first_abundance_col = $col;
+            }
         }
     }
 }
@@ -292,15 +299,39 @@ if ($first_abundance_col == 9E99)
   {
     $field = $header_col_array[$col];
 
-    if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/)
+    if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/ ||
+        $field =~ /(pos|neg)$/)
     {
-        if (!defined($col_to_remove_hash{$col}) &&
-            $col < $first_abundance_col)
+        if (!defined($col_to_remove_hash{$col}))
         {
-            $first_abundance_col = $col;
+            $sample_col_hash{$col} = 1;
+
+            if ($col < $first_abundance_col)
+            {
+                $first_abundance_col = $col;
+            }
         }
     }
   }
+}
+
+
+@sample_col_array = sort {$a<=>$b} keys %sample_col_hash;
+$n_total = @sample_col_array;
+
+
+# scan for number of detected peaks prior to gap filling
+$pregap_flag = 0;
+for ($col = 0; $col < @header_col_array; $col++)
+{
+    $field = $header_col_array[$col];
+    
+    if ($field =~ /row number of detected peaks/i)
+    {
+        $pregap_flag = 1;
+        
+        $pregap_col = $col;
+    }
 }
 
 
@@ -359,6 +390,14 @@ for ($col = 0; $col < @header_col_array; $col++)
 
     if ($col == $first_abundance_col)
     {
+        print "Number of non-zero peaks\t";
+        
+        if ($pregap_flag)
+        {
+            print "Percent pre-gap peaks\t";
+        }
+        
+        print "Percent non-zero peaks\t";
         print "Spikein Flag\t";
         print "Identified Flag\t";
         print "Non-Spikein Identified Flag\t";
@@ -444,6 +483,38 @@ while(defined($line=<INFILE>))
         print $rowid;
         $print_flag = 1;
     }
+    
+    # count number of non-zero samples
+    $n = 0;
+    foreach $col (@sample_col_array)
+    {
+        $value = $array[$col];
+        
+        if (is_number($value) && $value != 0)
+        {
+            $n++;
+        }
+    }
+    
+    $n_percent = 0;
+    if ($n_total)
+    {
+        $n_percent = 100 * $n / $n_total;
+    }
+
+    $n_pregap = 0;
+    $n_percent_pregap = 0;    
+    if ($pregap_flag && $n_total)
+    {
+        $n_pregap = $array[$pregap_col];
+        
+        if (!is_number($n_pregap))
+        {
+            $n_pregap = 0;
+        }
+    
+        $n_percent_pregap = 100 * $n_pregap / $n_total;
+    }
 
     for ($col = 0; $col < @array; $col++)
     {
@@ -465,6 +536,14 @@ while(defined($line=<INFILE>))
         
         if ($col == $first_abundance_col)
         {
+            print "$n\t";
+            
+            if ($pregap_flag)
+            {
+                print "$n_percent_pregap\t";
+            }
+            
+            print "$n_percent\t";
             print "$spikein_flag\t";
             print "$identified_flag\t";
             print "$nsid_flag\t";
