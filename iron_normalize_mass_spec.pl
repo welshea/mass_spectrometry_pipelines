@@ -2,24 +2,25 @@
 
 use Scalar::Util qw(looks_like_number);
 
-# 2020-08-24 remove --bg background subtraction option, as it is a bad idea
-# 2020-08-03: output scaling factor lines in correct TMT label N/C order
-# 2020-07-27: hack in support for El-MAVEN metabolomics samples
+# 2020-08-26:  attempt to deal with more pos/neg sample labeling typos
+# 2020-08-24:  remove --bg background subtraction option, as it is a bad idea
+# 2020-08-03:  output scaling factor lines in correct TMT label N/C order
+# 2020-07-27:  hack in support for El-MAVEN metabolomics samples
 #
-# 2020-02-28: added --no-log2 --log2 --unlog2 flags
-#             removed old --unlog flag and reimplemented it for --unlog2
-#             prioritize ModificationID over RowIdentifier column for id
-#              this is to catch cases where cleanup is done in the wrong order
+# 2020-02-28:  added --no-log2 --log2 --unlog2 flags
+#              removed old --unlog flag and reimplemented it for --unlog2
+#              prioritize ModificationID over RowIdentifier column for id
+#               this is to catch cases where cleanup is done in the wrong order
 #
-# 2020-03-12: skip "Intensity L" and "Intensity H" summary columns
-#             warning, will not correctly handle case where there are real
-#              samples named H and L together with non-H/L sample names
+# 2020-03-12:  skip "Intensity L" and "Intensity H" summary columns
+#              warning, will not correctly handle case where there are real
+#               samples named H and L together with non-H/L sample names
 #
-# 2020-03-16: fixed support for TMT-###[NC] columns with text in front of them
-# 2020-03-20: don't use .mzXML for identifiying mzmine output anymore
-#             re-enable pre-pending IRON to metabolomics output
+# 2020-03-16:  fixed support for TMT-###[NC] columns with text in front of them
+# 2020-03-20:  don't use .mzXML for identifiying mzmine output anymore
+#              re-enable pre-pending IRON to metabolomics output
 #
-# 2020-04-22: added support for Skyline " Total Area" sample headers
+# 2020-04-22:  added support for Skyline " Total Area" sample headers
 
 # all functions are effectively macros, since there are no local variables
 
@@ -303,7 +304,8 @@ sub read_in_data_file
 
         $count = 0;
 
-        if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i)
+        if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+            $field =~ /(pos|neg)$/i)
         {
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
