@@ -1,15 +1,18 @@
 #!/usr/bin/perl -w
 
-# 2020-07-27:    output metadata in (mostly) original column order
-#                make sure newly added flag metadata columns are last
+# 2020-08-26:  attempt to deal with more pos/neg sample name typos
+# 2020-08-26:  add Number of non-zero peaks, Percent pre-gap peaks,
+#              Percent non-zero peaks columns
+# 2020-07-27:  output metadata in (mostly) original column order
+#              make sure newly added flag metadata columns are last
 #
-# 2020-07-24:    add Non-Spikein Identified Flag column order
-#                begin adding support for El-MAVEN
+# 2020-07-24:  add Non-Spikein Identified Flag column order
+#              begin adding support for El-MAVEN
 #
-# 2020-07-17:    deal with inconsistent case between pos/neg sample headers
+# 2020-07-17:  deal with inconsistent case between pos/neg sample headers
 #
-# 2020-07-13:    deal with changes to expected column header formats
-#                more aggressively strip _pos and _neg related stuff
+# 2020-07-13:  deal with changes to expected column header formats
+#              more aggressively strip _pos and _neg related stuff
 
 
 use Scalar::Util qw(looks_like_number);
@@ -194,7 +197,8 @@ sub read_in_file
         $field = $header_col_array[$col];
 
         if ($field =~ /^IRON /i ||
-            $field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i)
+            $field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+            $field =~ /(pos|neg)$/i)
         {
             $sample_col_hash{$col} = $field;
         }
@@ -218,7 +222,8 @@ sub read_in_file
         {
             # ^pos _pos_ _pos$
             #
-            if (!($sample =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i))
+            if (!($sample =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i ||
+                  $sample =~ s/pos$//i))
             {
                 $all_pos_start_flag = 0;
             }
@@ -226,7 +231,8 @@ sub read_in_file
         }
         elsif ($pos_neg eq 'neg')
         {
-            if (!($sample =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i))
+            if (!($sample =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i ||
+                  $sample =~ s/neg$//i))
             {
                 $all_neg_start_flag = 0;
             }
@@ -270,10 +276,12 @@ sub read_in_file
             if ($all_pos_start_flag)
             {
                 $sample =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i;
+                $sample =~ s/pos$//i;
             }
             elsif ($all_neg_start_flag)
             {
                 $sample =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i;
+                $sample =~ s/neg$//i;
             }
 
             $sample_lc = lc $sample;
@@ -356,7 +364,10 @@ foreach $header (@global_concat_header_array)
     if (!defined($seen_header_hash{$header}) &&
         defined($global_metadata_hash{$header}))
     {
-        if ($header eq 'Spikein Flag' ||
+        if ($header eq 'Number of non-zero peaks' ||
+            $header eq 'Percent pre-gap peaks' ||
+            $header eq 'Percent non-zero peaks' ||
+            $header eq 'Spikein Flag' ||
             $header eq 'Identified Flag' ||
             $header eq 'Non-Spikein Identified Flag')
         {
@@ -376,7 +387,10 @@ foreach $header (@global_concat_header_array)
     if (!defined($seen_header_hash{$header}) &&
         defined($global_metadata_hash{$header}))
     {
-        if ($header eq 'Spikein Flag' ||
+        if ($header eq 'Number of non-zero peaks' ||
+            $header eq 'Percent pre-gap peaks' ||
+            $header eq 'Percent non-zero peaks' ||
+            $header eq 'Spikein Flag' ||
             $header eq 'Identified Flag' ||
             $header eq 'Non-Spikein Identified Flag')
         {
