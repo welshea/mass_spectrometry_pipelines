@@ -299,10 +299,21 @@ strip_metabolomics_columns.pl
   Remove MZMine columns that we don't use
 
   Usage:
-    strip_metabolomics_columns.pl maxquant_file.txt > output.txt
+    strip_metabolomics_columns.pl [options] maxquant_file.txt
+      [unidentified.txt spikeins.txt] > output.txt
+
+    If the last two optional file names are specified, then those file names
+    will be used instead of the default "metabolomics_auto_unidentified.txt"
+    and "metabolomics_auto_spikeins.txt" filenames.
+
+  Options:
+    --discard-single-pregap    discard pre gap-filled single-hit rows (default)
+    --keep-single-pregap       keep pre gap-filled single-hit rows
 
   Output:
-    various uninformative columns are removed
+    Various uninformative columns are removed.
+    "one-hit wonder" rows will also be removed, unless --keep-single-pregap
+     is also specified.
 
 
 
