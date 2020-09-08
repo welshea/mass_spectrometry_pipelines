@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
 # 2020-08-26:  attempt to deal with more pos/neg sample name typos
 # 2020-08-26:  add Number of non-zero peaks, Percent pre-gap peaks,
 #              Percent non-zero peaks columns
@@ -367,7 +368,7 @@ foreach $header (@global_concat_header_array)
         if ($header eq 'Number of non-zero peaks' ||
             $header eq 'Percent pre-gap peaks' ||
             $header eq 'Percent non-zero peaks' ||
-            $header eq 'Spikein Flag' ||
+            $header eq 'Potential Spikein Flag' ||
             $header eq 'Identified Flag' ||
             $header eq 'Non-Spikein Identified Flag')
         {
@@ -390,7 +391,7 @@ foreach $header (@global_concat_header_array)
         if ($header eq 'Number of non-zero peaks' ||
             $header eq 'Percent pre-gap peaks' ||
             $header eq 'Percent non-zero peaks' ||
-            $header eq 'Spikein Flag' ||
+            $header eq 'Potential Spikein Flag' ||
             $header eq 'Identified Flag' ||
             $header eq 'Non-Spikein Identified Flag')
         {
