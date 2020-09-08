@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
 # 2020-08-26:  default to deleting "one-hit wonders" (single pre gap-fill peak)
 # 2020-08-26:  attempt to deal with more pos/neg sample name typos
 # 2020-08-26:  add Number of non-zero peaks, Percent pre-gap peaks,
@@ -447,7 +448,7 @@ for ($col = 0; $col < @header_col_array; $col++)
         }
         
         print "Percent non-zero peaks\t";
-        print "Spikein Flag\t";
+        print "Potential Spikein Flag\t";
         print "Identified Flag\t";
         print "Non-Spikein Identified Flag\t";
     }
