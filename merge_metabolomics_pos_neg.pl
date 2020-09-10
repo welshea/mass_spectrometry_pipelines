@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2020-09-10:  clean up extra/dangling underscores and spaces in sample names
 # 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
 # 2020-08-26:  attempt to deal with more pos/neg sample name typos
 # 2020-08-26:  add Number of non-zero peaks, Percent pre-gap peaks,
@@ -227,6 +228,11 @@ sub read_in_file
                   $sample =~ s/pos$//i))
             {
                 $all_pos_start_flag = 0;
+                
+                # clean up underscores, etc.
+                $sample =~ s/[_ ]+/_/g;
+                $sample =~ s/^[_ ]//;
+                $sample =~ s/[_ ]$//;
             }
             $all_neg_start_flag = 0;
         }
@@ -236,6 +242,11 @@ sub read_in_file
                   $sample =~ s/neg$//i))
             {
                 $all_neg_start_flag = 0;
+
+                # clean up underscores, etc.
+                $sample =~ s/[_ ]+/_/g;
+                $sample =~ s/^[_ ]//;
+                $sample =~ s/[_ ]$//;
             }
             $all_pos_start_flag = 0;
         }
@@ -278,11 +289,21 @@ sub read_in_file
             {
                 $sample =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i;
                 $sample =~ s/pos$//i;
+
+                # clean up underscores, etc.
+                $sample =~ s/[_ ]+/_/g;
+                $sample =~ s/^[_ ]//;
+                $sample =~ s/[_ ]$//;
             }
             elsif ($all_neg_start_flag)
             {
                 $sample =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i;
                 $sample =~ s/neg$//i;
+
+                # clean up underscores, etc.
+                $sample =~ s/[_ ]+/_/g;
+                $sample =~ s/^[_ ]//;
+                $sample =~ s/[_ ]$//;
             }
 
             $sample_lc = lc $sample;
