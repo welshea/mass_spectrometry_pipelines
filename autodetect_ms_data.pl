@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2020-09-10: 2020-08-03 #channels test broke non-TMT data
 # 2020-08-03: fix pY last channel for TMT16, abort on unsupported #channels
 # 2020-07-09: add support for TMT16, add letters to the ends of ALL channels
 #
@@ -338,13 +339,17 @@ if ($py_count > $pst_count)
 #
 # ** DAMN IT, THEY CHANGED IT BACK AGAIN !! **
 #  current code should still handle it, though
-$max_channel -= $min_channel;
 
-if (!defined($channel_map_table[$max_channel+1]))
+if ($tmt_flag)
 {
-    printf STDERR "ABORT -- unsupported number of channels: %d\n",
-        $max_channel+1;
-    exit(1);
+    $max_channel -= $min_channel;
+
+    if ($tmt_flag && !defined($channel_map_table[$max_channel+1]))
+    {
+        printf STDERR "ABORT -- unsupported number of channels: %d\n",
+            $max_channel+1;
+        exit(1);
+    }
 }
 
 $tmt_channel = 'none';
