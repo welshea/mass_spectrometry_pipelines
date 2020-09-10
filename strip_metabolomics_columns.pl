@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2020-09-10:  add check for Excel corruption of values >= 1E7
 # 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
 # 2020-08-26:  default to deleting "one-hit wonders" (single pre gap-fill peak)
 # 2020-08-26:  attempt to deal with more pos/neg sample name typos
@@ -72,7 +73,7 @@ sub reformat_sci
     #
     # If it looks like scientific notation, Excel will automatically
     #  format it as scientific notation.  However, if the magnitude is
-    #  > 1E7, it will also automatically display it set to only 2 digits
+    #  >= 1E7, it will also automatically display it set to only 2 digits
     #  to the right of the decimal (it is still fine internally).  If the
     #  file is re-exported to text, truncation to 3 significant digits
     #  will occur!!!
@@ -464,6 +465,9 @@ open OUTFILE_SPIKEINS,     ">$output_spikeins_filename"     or die "can't open f
 
 
 $row_count = 0;
+$num_excel_large = 0;	# number of potential Excel-corruptible values
+$sum_excel_large = 0;	# sum of number of non-zero last 5 digits
+
 while(defined($line=<INFILE>))
 {
     $row_count++;
@@ -611,4 +615,44 @@ while(defined($line=<INFILE>))
         print $field;
     }
     print "\n";
+
+
+    # scan samples for number of significant digits
+    for ($col = $first_abundance_col; $col < @header_col_array; $col++)
+    {
+        if (defined($col_to_remove_hash{$col}))
+        {
+            next;
+        }
+
+        $value = $array[$col];
+        
+        # largeish numbers succeptible to Excel corruption
+        if (is_number($value) && $value != 0 &&
+            $value >= 1E7)
+        {
+            if ($value =~ /([0-9]{5})$/)
+            {
+                $last_five_digits = $1;
+
+                $num_excel_large += 1;
+
+                @temp_array = ($last_five_digits =~ m/[1-9]/g);
+                $count = @temp_array;
+                
+                $sum_excel_large += $count;
+            }
+        }
+    }
+}
+
+$avg_excel_large = 9E99;
+if ($num_excel_large)
+{
+    $avg_excel_large = $sum_excel_large / $num_excel_large;
+}
+
+if ($avg_excel_large < 3.1)
+{
+    printf STDERR "WARNING -- !!! Excel-corrupted values >= 1E7 detected !!!\n";
 }
