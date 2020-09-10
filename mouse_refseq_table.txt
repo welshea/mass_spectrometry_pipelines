@@ -1,1 +1,0 @@
-/home/welshea/data/genbank/latest/mouse/accession_table.txt
