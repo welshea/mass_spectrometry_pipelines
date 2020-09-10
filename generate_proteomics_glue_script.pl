@@ -1,8 +1,9 @@
 #!/usr/bin/perl -w
 
-# 2020-02-28: clean phosphosites before cleaning TMT
-#              this allows clean TMT to detect phospho data and use
-#              the ModificationID column as the RowIdentifier
+# 2020-09-10:  use different annotation files
+# 2020-02-28:  clean phosphosites before cleaning TMT
+#               this allows clean TMT to detect phospho data and use
+#               the ModificationID column as the RowIdentifier
 
 use File::Spec;
 use File::Basename;
@@ -103,7 +104,9 @@ if ($species =~ /Human/i) { $human_flag = 1; }
 # default to uniprot human annotation
 $annotation_species = 'human';
 $annotation_source  = 'uniprot';
-$annotation_file    = 'ipi_uniprot_annotation_human.txt';
+
+#$annotation_file    = 'ipi_uniprot_annotation_human.txt';
+$annotation_file    = 'merged_protein_annotations_human.txt';
 
 # use refseq instead
 if (defined($autodetect_hash{RefSeq}) &&
@@ -113,6 +116,9 @@ if (defined($autodetect_hash{RefSeq}) &&
     
     # default to human
     $annotation_file   = 'human_refseq_table.txt';
+    
+    # override with combined IPI + Uniprot + Refseq + some Ensembl
+    $annotation_file   = 'merged_protein_annotations_human.txt';
 }
 
 # use mouse annotation
@@ -127,6 +133,9 @@ if ($mouse_flag && $human_flag == 0)
     {
         $annotation_file = 'mouse_refseq_table.txt';
     }
+
+    # override with combined IPI + Uniprot + Refseq + some Ensembl
+    $annotation_file = 'merged_protein_annotations_mouse.txt';
 }
 
 # use human + mouse annotation
@@ -141,6 +150,9 @@ if ($mouse_flag && $human_flag)
     {
         $annotation_file = 'human_mouse_refseq_table.txt';
     }
+
+    # override with combined IPI + Uniprot + Refseq + some Ensembl
+    $annotation_file = 'merged_protein_annotations_human_mouse.txt';
 }
 
 printf STDERR "species:     %s\n", $annotation_species;
