@@ -7,6 +7,8 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2020-09-22: respect --no-debatch flag when combined with --comp-pool
+# 2020-09-22: --comp-pool uses comp pool for scaling, instead of norm pools
 # 2020-08-03: output scaling factors in proper TMT N/C label order
 # 2020-07-15: change TMT-126 to TMT-126C
 # 2020-03-06: replace | with ~ in RowIdentifier column
@@ -586,12 +588,20 @@ sub iron_pools
     {
         $tmt_plex = $tmt_plex_array[$p];
         
-        for ($i = 0; $i < $num_pools; $i++)
+        # use computational pool instead of real pool
+        if ($comp_pool_flag)
         {
-            $pool_ch   = $plex_pool_channels[$p][$i];
-            $pool_samp = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch]};
+            printf INPUT_FOR_IRON "\tcomp_pool_%s", $tmt_plex;
+        }
+        else
+        {
+            for ($i = 0; $i < $num_pools; $i++)
+            {
+                $pool_ch   = $plex_pool_channels[$p][$i];
+                $pool_samp = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch]};
         
-            printf INPUT_FOR_IRON "\t%s", $pool_samp;
+                printf INPUT_FOR_IRON "\t%s", $pool_samp;
+            }
         }
     }
     printf INPUT_FOR_IRON "\n";
@@ -606,21 +616,53 @@ sub iron_pools
         {
             $tmt_plex = $tmt_plex_array[$p];
 
-            for ($i = 0; $i < $num_pools; $i++)
+            # use computational pool instead of real pool
+            if ($comp_pool_flag)
             {
-                $pool_ch = $plex_pool_channels[$p][$i];
-                $pool_samp =
-                    $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch]};
-                $pool_s = $sample_to_condensed_col_hash{$pool_samp};
-                
-                $value = $condensed_data_array[$row][$pool_s];
+                $log_avg = 0;
+                $n = 0;
 
-                if (!defined($value))
+                for ($ch = 0; $ch < $num_channels; $ch++)
                 {
-                    $value = '';
+                    $sample = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
+                    $col = $sample_to_condensed_col_hash{$sample};
+                
+                    $value = $condensed_data_array[$row][$col];
+                    if (defined($value))
+                    {
+                        # data is unlogged, so best to take geometric mean
+                        $log_avg += log($value);
+                        $n++;
+                    }
                 }
                 
+                $value = '';
+                
+                if ($n)
+                {
+                    $value = exp($log_avg / $n);
+                }
+
                 printf INPUT_FOR_IRON "\t%s", $value;
+            }
+            else
+            {
+                for ($i = 0; $i < $num_pools; $i++)
+                {
+                    $pool_ch = $plex_pool_channels[$p][$i];
+                    $pool_samp =
+                        $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch]};
+                    $pool_s = $sample_to_condensed_col_hash{$pool_samp};
+
+                    $value = $condensed_data_array[$row][$pool_s];
+
+                    if (!defined($value))
+                    {
+                        $value = '';
+                    }
+
+                    printf INPUT_FOR_IRON "\t%s", $value;
+                }
             }
         }
         printf INPUT_FOR_IRON "\n";
@@ -1356,8 +1398,7 @@ check_outlier_pools();
 iron_pools();
 iron_samples();
 
-if ($no_debatch_flag == 0 ||
-    $comp_pool_flag)
+if ($no_debatch_flag == 0)
 {
     correct_abundances();
 }
