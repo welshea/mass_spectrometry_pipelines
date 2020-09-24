@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2020-09-24:  add more support for El-MAVEN
 # 2020-09-10:  add check for Excel corruption of values >= 1E7
 # 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
 # 2020-08-26:  default to deleting "one-hit wonders" (single pre gap-fill peak)
@@ -350,8 +351,8 @@ if ($first_abundance_col == 9E99)
   {
     $field = $header_col_array[$col];
 
-    if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/ ||
-        $field =~ /(pos|neg)$/)
+    if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+        $field =~ /(pos|neg)$/i)
     {
         if (!defined($col_to_remove_hash{$col}))
         {
@@ -365,6 +366,8 @@ if ($first_abundance_col == 9E99)
     }
   }
 }
+
+printf STDERR "First abundance col: %s\n", $first_abundance_col;
 
 
 @sample_col_array = sort {$a<=>$b} keys %sample_col_hash;
@@ -385,6 +388,22 @@ for ($col = 0; $col < @header_col_array; $col++)
     }
 }
 
+# it might be an El-Maven file
+if ($has_pregap_flag == 0)
+{
+    for ($col = 0; $col < @header_col_array; $col++)
+    {
+        $field = $header_col_array[$col];
+    
+        if ($field =~ /goodPeakCount/i)
+        {
+            $has_pregap_flag = 1;
+        
+            $pregap_col = $col;
+        }
+    }
+}
+
 
 # we're going to use the compound names to identify spikeins
 # and signal/background peaks
@@ -399,6 +418,10 @@ if (!defined($rowid_col))
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'compound'};
+}
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'compoundId'};
 }
 
 
