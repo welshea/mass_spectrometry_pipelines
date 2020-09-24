@@ -2,6 +2,7 @@
 
 use Scalar::Util qw(looks_like_number);
 
+# 2020-09-24:  add --norm-none flag (has some use for metabolomics pipeline)
 # 2020-08-26:  attempt to deal with more pos/neg sample labeling typos
 # 2020-08-24:  remove --bg background subtraction option, as it is a bad idea
 # 2020-08-03:  output scaling factor lines in correct TMT label N/C order
@@ -501,6 +502,7 @@ sub iron_samples
         $bg_string = '--bg-global';
     }
 
+    # normalize data as usual
     $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" %s %s %s \"%s\" -o \"%s\" |& grep -P \"^GlobalScale\"",
         $median_sample, $exclusions_string, $spikeins_string, $bg_string,
         $iron_input_name, $iron_output_name;
@@ -521,6 +523,18 @@ sub iron_samples
         printf OUTPUT_SCALING "%s\n", $line;
     }
     close OUTPUT_SCALING;
+
+    # we didn't actually want to normalize the data, we only iron'd it to
+    # get the scaling factors
+    if ($norm_none_flag)
+    {
+        printf STDERR "--norm-none; overwriting iron output with unnormalized data\n";
+    
+        $cmd_string = sprintf "iron_generic --proteomics --norm-none \"%s\" -o \"%s\"",
+            $iron_input_name, $iron_output_name;
+        
+        `$cmd_string`;
+    }
 
     # open IRON output for reading
     open OUTPUT_FOR_IRON, "$iron_output_name" or die "ABORT -- can't open $iron_output_name\n";
@@ -707,6 +721,7 @@ $bg_flag                 = 0;
 $strip_sample_names_flag = 1;
 $unlog2_flag             = 0;    # unlog2 the input data
 $no_log2_flag            = 0;   # do not log2 the output data
+$norm_none_flag          = 0;   # do not normalize the data at all
 $global_metabolomics_flag = 0;
 
 for ($i = 0; $i < @ARGV; $i++)
@@ -752,6 +767,10 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--unlog2$/)
         {
             $unlog2_flag = 1;
+        }
+        elsif ($field =~ /^--norm-none$/)
+        {
+            $norm_none_flag = 1;
         }
         else
         {
