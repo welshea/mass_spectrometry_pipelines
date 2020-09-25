@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2020-09-25:  force row identifier header to always print as "row ID"
+# 2020-09-25:  minor code clean up
+# 2020-09-24:  clean up extra/dangling hypens in sample names
 # 2020-09-10:  clean up extra/dangling underscores and spaces in sample names
 # 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
 # 2020-08-26:  attempt to deal with more pos/neg sample name typos
@@ -228,11 +231,6 @@ sub read_in_file
                   $sample =~ s/pos$//i))
             {
                 $all_pos_start_flag = 0;
-                
-                # clean up underscores, etc.
-                $sample =~ s/[_ ]+/_/g;
-                $sample =~ s/^[_ ]//;
-                $sample =~ s/[_ ]$//;
             }
             $all_neg_start_flag = 0;
         }
@@ -242,11 +240,6 @@ sub read_in_file
                   $sample =~ s/neg$//i))
             {
                 $all_neg_start_flag = 0;
-
-                # clean up underscores, etc.
-                $sample =~ s/[_ ]+/_/g;
-                $sample =~ s/^[_ ]//;
-                $sample =~ s/[_ ]$//;
             }
             $all_pos_start_flag = 0;
         }
@@ -292,8 +285,9 @@ sub read_in_file
 
                 # clean up underscores, etc.
                 $sample =~ s/[_ ]+/_/g;
-                $sample =~ s/^[_ ]//;
-                $sample =~ s/[_ ]$//;
+                $sample =~ s/\-+/\-/g;
+                $sample =~ s/^[_ -]//;
+                $sample =~ s/[_ -]$//;
             }
             elsif ($all_neg_start_flag)
             {
@@ -302,8 +296,9 @@ sub read_in_file
 
                 # clean up underscores, etc.
                 $sample =~ s/[_ ]+/_/g;
-                $sample =~ s/^[_ ]//;
-                $sample =~ s/[_ ]$//;
+                $sample =~ s/\-+/\-/g;
+                $sample =~ s/^[_ -]//;
+                $sample =~ s/[_ -]$//;
             }
 
             $sample_lc = lc $sample;
@@ -466,6 +461,12 @@ foreach $header (@global_sample_array)
 for ($i = 0; $i < @global_header_array; $i++)
 {
     $header = $global_header_array_print[$i];
+    
+    # replace El-MAVEN groupID with row ID
+    if ($header eq $global_row_id_str)
+    {
+        $header = 'row ID';
+    }
     
     if ($header =~ /^IRON /)
     {
