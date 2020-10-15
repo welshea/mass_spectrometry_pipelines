@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2020-10-15  keep track of non- species of interest contaminants as well
+
+
 # TODO --
 #  add trypsin exclusion support
 #  add unique + razor maxquant group inclusion/exclusion criteria
@@ -115,6 +118,7 @@ $annotation_headers_to_keep[$i++] = 'Species_flag';
 $annotation_headers_to_keep[$i++] = 'Species_contaminant_flag';
 $annotation_headers_to_keep[$i++] = 'Other_species_flag';
 $annotation_headers_to_keep[$i++] = 'Unknown_species_flag';
+$annotation_headers_to_keep[$i++] = 'Non-Species_contaminant_flag';
 $annotation_headers_to_keep[$i++] = 'Reverse_flag';
 $annotation_headers_to_keep[$i++] = 'Trypsin_flag';
 $annotation_headers_to_keep[$i++] = 'Accession_Condensed';
