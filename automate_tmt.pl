@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2020-10-15: make sure split doesn't remove empty trailing fields
 # 2020-09-22: respect --no-debatch flag when combined with --comp-pool
 # 2020-09-22: --comp-pool uses comp pool for scaling, instead of norm pools
 # 2020-08-03: output scaling factors in proper TMT N/C label order
@@ -109,7 +110,8 @@ sub read_in_data_file
     $line =~ s/[\r\n]+//g;
     $line =~ s/\"//;
 
-    @array = split /\t/, $line;
+    # do NOT strip off trailing empty fields !!
+    @array = split /\t/, $line, -1;
 
     for ($i = 0; $i < @array; $i++)
     {
@@ -198,7 +200,8 @@ sub read_in_data_file
         $line =~ s/[\r\n]+//g;
         $line =~ s/\"//;
 
-        @array = split /\t/, $line;
+        # do NOT strip off trailing empty fields !!
+        @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
@@ -729,7 +732,8 @@ sub iron_pools
                 next;
             }
             
-            @array = split /\t/, $line;
+            # do NOT strip off trailing empty fields !!
+            @array = split /\t/, $line, -1;
             
             $sample          = $array[0];
             $scale           = $array[1];
@@ -772,7 +776,8 @@ sub iron_pools
         $line =~ s/[\r\n]+//g;
         $line =~ s/\"//;
 
-        @array = split /\t/, $line;
+        # do NOT strip off trailing empty fields !!
+        @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
@@ -966,7 +971,8 @@ sub iron_samples
                     next;
                 }
                 
-                @array = split /\t/, $line;
+                # do NOT strip off trailing empty fields !!
+                @array = split /\t/, $line, -1;
                 
                 $sample          = $array[0];
                 $scale           = $array[1];
@@ -1014,7 +1020,8 @@ sub iron_samples
             $line =~ s/[\r\n]+//g;
             $line =~ s/\"//;
 
-            @array = split /\t/, $line;
+            # do NOT strip off trailing empty fields !!
+            @array = split /\t/, $line, -1;
 
             for ($i = 0; $i < @array; $i++)
             {
@@ -1225,7 +1232,8 @@ sub output_final_data
     }
     
     # print header
-    @header_array = split /\t/, $header_line;
+    # do NOT strip off trailing empty fields !!
+    @header_array = split /\t/, $header_line, -1;
     @header_array_new = ();
     for ($i = 0; $i < $num_header_cols; $i++)
     {
