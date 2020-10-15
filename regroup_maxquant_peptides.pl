@@ -3,6 +3,8 @@
 
 # TODO -- write a separate script to keep only the best groups per geneid
 
+# 2020-10-15  fixed bug where unknown species were annotated as known
+#             keep track of non- species of interest contaminants as well
 
 sub cmp_razor
 {
@@ -656,6 +658,7 @@ $header_line_new .= "\t" . 'Species_flag';
 $header_line_new .= "\t" . 'Species_contaminant_flag';
 $header_line_new .= "\t" . 'Other_species_flag';
 $header_line_new .= "\t" . 'Unknown_species_flag';
+$header_line_new .= "\t" . 'Non-Species_contaminant_flag';
 $header_line_new .= "\t" . 'Reverse_flag';
 $header_line_new .= "\t" . 'Trypsin_flag';
 
@@ -699,12 +702,14 @@ while(defined($line=<PEPTIDES>))
     $species_con_flag     = 0;
     $other_species_flag   = 0;
     $unknown_species_flag = 0;
+    $non_species_con_flag = 0;
     $reverse_flag         = 0;
     $trypsin_flag         = 0;
     
     %condensed_accession_hash = ();
     %full_accession_hash = ();
     %tmp_species_hash = ();
+    
     
     # first, build SwissProt <-> Uniprot mapping
     # ** WARNING ** the maxquant data may be woefully out of date, and
@@ -713,6 +718,9 @@ while(defined($line=<PEPTIDES>))
     @subfields = split /;/, $proteins;
     for ($i = 0; $i < @subfields; $i++)
     {
+        $uniprot   = '';
+        $swissprot = '';
+
         $subfield = $subfields[$i];
 
         # handle full uniprot/sp accession format
@@ -854,6 +862,9 @@ while(defined($line=<PEPTIDES>))
     # anything without HUMAN in it will be assumed to be non-human later
     for ($i = 0; $i < @subfields; $i++)
     {
+        $uniprot   = '';
+        $swissprot = '';
+
         $subfield = $subfields[$i];
 
         # clean database stuff
@@ -1028,10 +1039,11 @@ while(defined($line=<PEPTIDES>))
             $condensed_accession_hash{$subfield} = 1;
             $full_accession_hash{$subfield}      = 1;
             
-#            if ($was_con_flag)
-#            {
-#                $unmapped_con_hash{$subfield} = 1;
-#            }
+            if ($was_con_flag)
+            {
+                $non_species_con_flag = 1;
+                # $unmapped_con_hash{$subfield} = 1;
+            }
         }
 
         if ($species ne '')
@@ -1252,6 +1264,7 @@ if (0)
     printf "\t%s", $species_con_flag;
     printf "\t%s", $other_species_flag;
     printf "\t%s", $unknown_species_flag;
+    printf "\t%s", $non_species_con_flag;
     printf "\t%s", $reverse_flag;
     printf "\t%s", $trypsin_flag;
     printf "\n";
