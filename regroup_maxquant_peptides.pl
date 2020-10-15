@@ -1,7 +1,5 @@
 #!/usr/bin/perl -w
 
-# run this before the strip maxquant columns script, since that script
-#  reformats the accessions to remove the sp|| stuff
 
 # TODO -- write a separate script to keep only the best groups per geneid
 
@@ -28,14 +26,16 @@ sub cmp_razor
 
     # this number can be larger than razor + unique
     # I do not know what this means, if the missing peptides are crap or not
-    # so far, this has not made a different in best scoring razor group
+    # so far, this has not made a difference in best scoring razor group
     if ($peptides_a > $peptides_b) { return -1; }
     if ($peptides_a < $peptides_b) { return  1; }
 
 #    if ($unique_a > $unique_b) { return -1; }
 #    if ($unique_a < $unique_b) { return  1; }
     
-    printf STDERR "TIED_POTENTIAL_RAZOR_GROUPS:\t%s\t%s\n", $a, $b;
+    # only need to print when debugging, or if I ever encounter
+    #  final razor group selections that are tied
+    # printf STDERR "TIED_POTENTIAL_RAZOR_GROUPS:\t%s\t%s\n", $a, $b;
     
     return ($a<=>$b);
 }
