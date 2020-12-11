@@ -596,7 +596,10 @@ while(defined($line=<INFILE>))
     # skip "one-hit wonders"
     if ($has_pregap_flag && $keep_single_pregap_flag == 0)
     {
-        if ($n_pregap < 2)
+        # must use == 1 instead of <= 1, since 0 means manually assigned
+        # should I change 0 into the number of manually picked peaks?
+        # or leave 0 as 0, as I am currently doing?
+        if ($n_pregap == 1)
         {
             next;
         }
