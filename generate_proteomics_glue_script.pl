@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2020-12-18:  change behavior/syntax to that of metabolomics glue script
+               use --comp-pool for TMT 100% injection replicates
 # 2020-09-10:  use different annotation files
 # 2020-02-28:  clean phosphosites before cleaning TMT
 #               this allows clean TMT to detect phospho data and use
@@ -8,9 +10,18 @@
 use File::Spec;
 use File::Basename;
 
-$input_filename = shift;
-$species = shift;    # must be 'human' or 'mouse' for the time being
+$input_filename      = shift;
+$output_root_name    = shift;
+
+# optional
+$species             = shift; # must be 'human', 'mouse', or 'human_plus_mouse'
 $autodetect_filename = shift;
+
+
+if (!defined($output_root_name))
+{
+    $output_root_name = 'pipeline';
+}
 
 if (!defined($species))
 {
@@ -21,23 +32,23 @@ if (!defined($species))
 # various other methods return the destination linked path instead,
 #  which we don't want here
 $script_path   = dirname(File::Spec->rel2abs(__FILE__));
-$file_path     = dirname(File::Spec->rel2abs($input_filename));
-$filename_base = basename($input_filename);
+#$file_path     = dirname(File::Spec->rel2abs($input_filename));
+#$filename_base = basename($input_filename);
 
 #$pid = $$;
 #$tmp_path = sprintf "/tmp/proteomics_pipeline_%s/", $pid;
 
 #`mkdir $tmp_path`;
 
-printf STDERR "script_path: %s\n", $script_path;
-printf STDERR "file_path:   %s\n", $file_path;
-printf STDERR "basename:    %s\n", $filename_base;
+#printf STDERR "script_path: %s\n", $script_path;
+#printf STDERR "file_path:   %s\n", $file_path;
+#printf STDERR "basename:    %s\n", $filename_base;
 
 if (!defined($autodetect_filename))
 {
-    $cmd_str = sprintf "\"%s/%s\" \"%s/%s\"",
-        $script_path, 'autodetect_ms_data.pl',
-        $file_path, $filename_base;
+    $cmd_str = sprintf "%s \"%s\"",
+        'autodetect_ms_data.pl',
+        $input_filename;
 }
 else
 {
@@ -73,16 +84,16 @@ foreach $key (@autodetect_key_array)
 
 
 # initial command which will pipe the data into additional future commands
-$pipeline_preprocess_str = sprintf "\"%s/%s\" \"%s/%s\"",
-    $script_path, 'strip_maxquant_columns.pl',
-    $file_path, $filename_base;
+$pipeline_preprocess_str = sprintf "%s \"%s\"",
+    'strip_maxquant_columns.pl',
+    $input_filename;
 
 
 if (defined($autodetect_hash{Modification}) &&
             $autodetect_hash{Modification} eq 'yes')
 {
-    $pipeline_preprocess_str .= sprintf " | \"%s/%s\" -",
-        $script_path, 'reformat_modification_sites.pl';
+    $pipeline_preprocess_str .= sprintf " | %s -",
+        'reformat_modification_sites.pl';
 }
 
 
@@ -90,8 +101,8 @@ if (defined($autodetect_hash{Modification}) &&
 if (defined($autodetect_hash{TMT}) &&
             $autodetect_hash{TMT} ne 'no')
 {
-    $pipeline_preprocess_str .= sprintf " | \"%s/%s\" -",
-        $script_path, 'clean_tmt.pl';
+    $pipeline_preprocess_str .= sprintf " | %s -",
+        'clean_tmt.pl';
 }
 
 
@@ -105,8 +116,8 @@ if ($species =~ /Human/i) { $human_flag = 1; }
 $annotation_species = 'human';
 $annotation_source  = 'uniprot';
 
-#$annotation_file    = 'ipi_uniprot_annotation_human.txt';
-$annotation_file    = 'merged_protein_annotations_human.txt';
+#$annotation_file  = 'ipi_uniprot_annotation_human.txt';
+$annotation_file  = 'merged_protein_annotations_human.txt';
 
 # use refseq instead
 if (defined($autodetect_hash{RefSeq}) &&
@@ -160,14 +171,14 @@ printf STDERR "species:     %s\n", $annotation_species;
 
 
 # run the annotation script
-$pipeline_preprocess_str .= sprintf " | \"%s/%s\" \"%s/%s\" -",
-        $script_path, 'reannotate_proteomics.pl',
+$pipeline_preprocess_str .= sprintf " | %s \"%s/%s\" -",
+        'reannotate_proteomics.pl',
         $script_path, $annotation_file;
 
 
 # output to cleaned_reannotated.txt
-$pipeline_preprocess_str .= sprintf " > \"%s/%s\"",
-    $file_path, 'pipeline_cleaned_reannotated.txt';
+$pipeline_preprocess_str .= sprintf " > %s%s",
+    $output_root_name, '_cleaned_reannotated.txt';
 
 
 
@@ -178,67 +189,79 @@ if (defined($autodetect_hash{Rollup}))
     # single ibaq file, rename iBAQ columns to Intensity columns
     if ($autodetect_hash{Rollup} eq 'ibaq')
     {
-        $pipeline_ibaq_str = sprintf "\"%s/%s\" \"%s/%s\" | sed 's/^iBAQ/Intensity/i' | \"%s/%s\" > \"%s/%s\"",
-            $script_path, 'transpose',
-            $file_path, 'pipeline_cleaned_reannotated.txt',
-            $script_path, 'transpose',
-            $file_path, 'pipeline_orig_ibaq.txt';
+        $pipeline_ibaq_str = sprintf "%s \"%s%s\" | sed 's/^iBAQ/Intensity/i' | %s > \"%s%s\"",
+            'transpose',
+            $output_root_name, '_cleaned_reannotated.txt',
+            'transpose',
+            $output_root_name, '_orig_ibaq.txt';
     }
     # separate intensity and ibaq files
     elsif ($autodetect_hash{Rollup} eq 'intensity_and_ibaq')
     {
-        $pipeline_ibaq_str = sprintf "\"%s/%s\" \"%s/%s\" | grep -v -i '^iBAQ' | \"%s/%s\" > \"%s/%s\"",
-            $script_path, 'transpose',
-            $file_path, 'pipeline_cleaned_reannotated.txt',
-            $script_path, 'transpose',
-            $file_path, 'pipeline_orig_intensity.txt';
+        $pipeline_ibaq_str = sprintf "%s \"%s%s\" | grep -v -i '^iBAQ' | %s > \"%s%s\"",
+            'transpose',
+            $output_root_name, '_cleaned_reannotated.txt',
+            'transpose',
+            $output_root_name, '_orig_intensity.txt';
 
-        $pipeline_ibaq_str .= sprintf "; \"%s/%s\" \"%s/%s\" > \"%s/%s\"",
-            $script_path, 'replace_maxquant_intensity_with_ibaq.pl',
-            $file_path, 'pipeline_cleaned_reannotated.txt',
-            $file_path, 'pipeline_orig_ibaq.txt';
+        $pipeline_ibaq_str .= sprintf "; %s \"%s%s\" > \"%s%s\"",
+            'replace_maxquant_intensity_with_ibaq.pl',
+            $output_root_name, '_cleaned_reannotated.txt',
+            $output_root_name, '_orig_ibaq.txt';
     }
     # copy to intensity file unchanged
     else
     {
-        $pipeline_ibaq_str .= sprintf "cp -a \"%s/%s\" \"%s/%s\"",
-            $file_path, 'pipeline_cleaned_reannotated.txt',
-            $file_path, 'pipeline_orig_intensity.txt';
+        $pipeline_ibaq_str .= sprintf "cp -a \"%s%s\" \"%s%s\"",
+            $output_root_name, '_cleaned_reannotated.txt',
+            $output_root_name, '_orig_intensity.txt';
     }
 }
 # copy to intensity file unchanged
 else
 {
-    $pipeline_ibaq_str .= sprintf "cp -a \"%s/%s\" \"%s/%s\"",
-        $file_path, 'pipeline_cleaned_reannotated.txt',
-        $file_path, 'pipeline_orig_intensity.txt';
+    $pipeline_ibaq_str .= sprintf "cp -a \"%s%s\" \"%s%s\"",
+        $output_root_name, '_cleaned_reannotated.txt',
+        $output_root_name, '_orig_intensity.txt';
 }
 # remove the original cleaned file
-$pipeline_ibaq_str .= sprintf "; rm \"%s/%s\"",
-    $file_path, 'pipeline_cleaned_reannotated.txt';
+$pipeline_ibaq_str .= sprintf "; rm \"%s%s\"",
+    $output_root_name, '_cleaned_reannotated.txt';
 
 
 
 # normalize the data
 
 # default pipeline
-$pipeline_norm_str = sprintf "\"%s/%s\" \"%s/%s\" > \"%s/%s\"",
-    $script_path, 'iron_normalize_mass_spec.pl',
-    $file_path, 'pipeline_orig_intensity.txt',
-    $file_path, 'pipeline_iron_intensity.txt';
+$pipeline_norm_str = sprintf "%s \"%s%s\" > \"%s%s\"",
+    'iron_normalize_mass_spec.pl',
+    $output_root_name, '_orig_intensity.txt',
+    $output_root_name, '_iron_intensity.txt';
 
 if (defined($autodetect_hash{TMT}) &&
             $autodetect_hash{TMT} ne 'no')
 {
+    # multiple plexes
     if ($autodetect_hash{TMT} eq 'multi' &&
         defined($autodetect_hash{TMT_Channel}) &&
                 $autodetect_hash{TMT_Channel} =~ /TMT/)
     {
-        $pipeline_norm_str = sprintf "\"%s/%s\" \"%s/%s\" %s > \"%s/%s\"",
-            $script_path, 'automate_tmt.pl',
-            $file_path, 'pipeline_orig_intensity.txt',
+        $pipeline_norm_str = sprintf "%s \"%s%s\" %s > \"%s%s\"",
+            'automate_tmt.pl',
+            $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
-            $file_path, 'pipeline_iron_intensity.txt';
+            $output_root_name, '_iron_intensity.txt';
+    }
+    # multiple plexes, 100% injection replicates
+    elsif ($autodetect_hash{TMT} eq 'injection' &&
+           defined($autodetect_hash{TMT_Channel}) &&
+                   $autodetect_hash{TMT_Channel} =~ /TMT/)
+    {
+        $pipeline_norm_str = sprintf "%s --comp-pool \"%s%s\" %s > \"%s%s\"",
+            'automate_tmt.pl',
+            $output_root_name, '_orig_intensity.txt',
+            $autodetect_hash{TMT_Channel},
+            $output_root_name, '_iron_intensity.txt';
     }
     # else use default normalization
 }
