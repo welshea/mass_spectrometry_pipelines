@@ -19,7 +19,8 @@ autodetect_ms_data.pl
   Output:
     Modification  [yes/no]         does the data contain modification sites
     RefSeq        [yes/no]         is the data mainly matched against RefSeqs
-    TMT           [single/multi]   one TMT plex present or >= 2
+    TMT           [single/multi/injection]
+                                   1 plex, >=2 plexes, >=2 all injection reps
     TMT_Channel   [auto/TMT-????]  reference channel for IRON normalization
     Rollup        [ibaq/intensity/intensity_and_ibaq]
                                    which type of rollup columns to keep
@@ -140,7 +141,7 @@ generate_proteomics_glue_script.pl
   Assumes human if no species is given.
 
   Usage:
-    generate_proteomics_glue_script.pl maxquant_output.txt [[human/mouse/human_plus_mouse] autodetect.txt] > run_proteomics.sh
+    generate_proteomics_glue_script.pl maxquant_output.txt output_root_name [[human/mouse/human_plus_mouse] autodetect.txt] > run_proteomics.sh
 
   Output:
     .sh file to glue the various scripts together.
