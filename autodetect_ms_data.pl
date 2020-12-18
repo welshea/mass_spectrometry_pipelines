@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2020-12-18: detect multiple injection replicates of a single plex
 # 2020-09-10: 2020-08-03 #channels test broke non-TMT data
 # 2020-08-03: fix pY last channel for TMT16, abort on unsupported #channels
 # 2020-07-09: add support for TMT16, add letters to the ends of ALL channels
@@ -161,6 +162,26 @@ if (defined(%plex_hash))
     if (@plex_array > 1)
     {
         $multi_plex_flag = 1;
+    }
+}
+
+# if we have multiple plexes, check to see if they are 100% injection reps
+# assume injection replicates end in case-insensitive run#
+$injection_plex_flag = 0;
+if ($multi_plex_flag)
+{
+    %temp_hash  = ();
+    
+    foreach $plex (@plex_array)
+    {
+        $plex =~ s/[-_. ]*run[-_. ]*[0-9]+$//i;
+        $temp_hash{$plex} = 1;
+    }
+    
+    @temp_array = sort keys %temp_hash;
+    if (@temp_array == 1)
+    {
+        $injection_plex_flag = 1;
     }
 }
 
@@ -397,6 +418,10 @@ if ($tmt_flag)
 if ($multi_plex_flag)
 {
     $tmt_type = 'multi';
+}
+if ($injection_plex_flag)
+{
+    $tmt_type = 'injection';
 }
 
 $mod_string = 'no';
