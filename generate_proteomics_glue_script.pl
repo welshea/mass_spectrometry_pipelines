@@ -1,7 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2020-12-21:  add missing # in front of --comp-pool changelog line below...
 # 2020-12-18:  change behavior/syntax to that of metabolomics glue script
-               use --comp-pool for TMT 100% injection replicates
+#              use --comp-pool for TMT 100% injection replicates
 # 2020-09-10:  use different annotation files
 # 2020-02-28:  clean phosphosites before cleaning TMT
 #               this allows clean TMT to detect phospho data and use
