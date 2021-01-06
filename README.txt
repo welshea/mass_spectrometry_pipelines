@@ -106,8 +106,15 @@ generate_metabolomics_glue_script.pl
   Generate glue script to launch other scripts involved in the metabolomics
   pipeline.
 
-  Usage:
-    generate_metabolomics_glue_script.pl mzmine_pos.csv mzmine_neg.txt output_root_name > norm_metabolomics.sh
+  Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix
+
+  Options:
+      --discard-heavy            discard heavy labeled rows
+      --discard-unidentified     discard unidentified rows
+
+    options which use the MZmine "row number of detected peaks" column:
+      --discard-single-pregap    discard pre gap-filled single-hit rows (default)
+      --keep-single-pregap       keep pre gap-filled single-hit rows
 
     MZmine output files for positive and negative ion mode acquisitions must
     contain only pos or neg mode data.  The file names themselves must also
@@ -299,17 +306,15 @@ strip_maxquant_columns.pl
 strip_metabolomics_columns.pl
   Remove MZMine columns that we don't use
 
-  Usage:
-    strip_metabolomics_columns.pl [options] maxquant_file.txt
-      [unidentified.txt spikeins.txt] > output.txt
-
-    If the last two optional file names are specified, then those file names
-    will be used instead of the default "metabolomics_auto_unidentified.txt"
-    and "metabolomics_auto_spikeins.txt" filenames.
+  Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]
 
   Options:
-    --discard-single-pregap    discard pre gap-filled single-hit rows (default)
-    --keep-single-pregap       keep pre gap-filled single-hit rows
+      --discard-heavy            discard heavy labeled rows
+      --discard-unidentified     discard unidentified rows
+
+    options which use the MZmine "row number of detected peaks" column:
+      --discard-single-pregap    discard pre gap-filled single-hit rows (default)
+      --keep-single-pregap       keep pre gap-filled single-hit rows
 
   Output:
     Various uninformative columns are removed.
