@@ -1,14 +1,77 @@
 #!/usr/bin/perl -w
 
+# 2021-01-06:  add support for strip_metabolomics_columns.pl command options
 
-$pos_csv_filename = shift;
-$neg_csv_filename = shift;
-$output_root_name = shift;
+$keep_single_pregap_flag   = 0;
+$discard_unidentified_flag = 0;
+$discard_heavy_flag        = 0;
 
-if (!defined($pos_csv_filename) || !defined($neg_csv_filename) ||
+$syntax_error_flag         = 0;
+$num_files                 = 0;
+
+for ($i = 0; $i < @ARGV; $i++)
+{
+    $field = $ARGV[$i];
+
+    if ($field =~ /^--/)
+    {
+        if ($field =~ /^--keep-single-pregap$/)
+        {
+            $keep_single_pregap_flag = 1;
+        }
+        elsif ($field =~ /^--discard-single-pregap$/)
+        {
+            $keep_single_pregap_flag = 0;
+        }
+        elsif ($field =~ /^--discard-unidentified$/)
+        {
+            $discard_unidentified_flag = 1;
+        }
+        elsif ($field =~ /^--discard-heavy$/)
+        {
+            $discard_heavy_flag = 1;
+        }
+        else
+        {
+            printf STDERR "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
+    }
+    else
+    {
+        if ($num_files == 0)
+        {
+            $pos_csv_filename = $field;
+            $num_files++;
+        }
+        elsif ($num_files == 1)
+        {
+            $neg_csv_filename = $field;
+            $num_files++;
+        }
+        elsif ($num_files == 2)
+        {
+            $output_root_name = $field;
+            $num_files++;
+        }
+    }
+}
+
+
+if ($syntax_error_flag ||
+    !defined($pos_csv_filename) || !defined($neg_csv_filename) ||
     !defined($output_root_name))
 {
-    printf STDERR "Usage: automate_metabolomics.pl mzmine_pos.csv mzmine_neg.csv output_prefix\n";
+    printf STDERR "Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix\n";
+    printf STDERR "\n";
+    printf STDERR "Options:\n";
+    printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
+    printf STDERR "    --discard-unidentified     discard unidentified rows\n";
+    printf STDERR "\n";
+    printf STDERR "  options which use the MZmine \"row number of detected peaks\" column:\n";
+    printf STDERR "    --discard-single-pregap    discard pre gap-filled single-hit rows (default)\n";
+    printf STDERR "    --keep-single-pregap       keep pre gap-filled single-hit rows\n";
+
 
     exit(1);
 }
@@ -37,18 +100,40 @@ $merged_filename              = sprintf "%s_iron_merged.txt",
                                    $output_root_name;
 
 
-$cmd_str_strip_pos = sprintf "%s \"%s\" | %s - \"%s\" \"%s\" > \"%s\"",
+# options to pass to strip_metabolomics_columns.pl
+$strip_options_str = '';
+if ($keep_single_pregap_flag)
+{
+    $strip_options_str .= ' --keep-single-pregap';
+}
+else
+{
+    $strip_options_str .= ' --discard-single-pregap';
+}
+if ($discard_unidentified_flag)
+{
+    $strip_options_str .= ' --discard-unidentified';
+}
+if ($discard_heavy_flag)
+{
+    $strip_options_str .= ' --discard-heavy';
+}
+
+
+$cmd_str_strip_pos = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
                          'csv2tab_not_excel.pl',
                          $pos_csv_filename,
                          'strip_metabolomics_columns.pl',
+                         $strip_options_str,
                          $pos_unidentified_output_name,
                          $pos_spikeins_output_name,
                          $pos_cleaned_filename;
 
-$cmd_str_strip_neg = sprintf "%s \"%s\" | %s - \"%s\" \"%s\" > \"%s\"",
+$cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
                          'csv2tab_not_excel.pl',
                          $neg_csv_filename,
                          'strip_metabolomics_columns.pl',
+                         $strip_options_str,
                          $neg_unidentified_output_name,
                          $neg_spikeins_output_name,
                          $neg_cleaned_filename;
