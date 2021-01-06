@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-01-06:  add --discard-unidentified and --discard-heavy flags
+#              change some output column header names and capitalization
 # 2020-09-24:  add more support for El-MAVEN
 # 2020-09-10:  add check for Excel corruption of values >= 1E7
 # 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
@@ -137,10 +139,12 @@ sub is_heavy_labeled
 }
 
 
-$keep_single_pregap_flag = 0;
+$keep_single_pregap_flag   = 0;
+$discard_unidentified_flag = 0;
+$discard_heavy_flag        = 0;
 
-$syntax_error_flag    = 0;
-$num_files            = 0;
+$syntax_error_flag         = 0;
+$num_files                 = 0;
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -155,6 +159,14 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--discard-single-pregap$/)
         {
             $keep_single_pregap_flag = 0;
+        }
+        elsif ($field =~ /^--discard-unidentified$/)
+        {
+            $discard_unidentified_flag = 1;
+        }
+        elsif ($field =~ /^--discard-heavy$/)
+        {
+            $discard_heavy_flag = 1;
         }
         else
         {
@@ -188,10 +200,12 @@ if (!defined($filename) || $syntax_error_flag)
     printf STDERR "Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
+    printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
+    printf STDERR "    --discard-unidentified     discard unidentified rows\n";
+    printf STDERR "\n";
     printf STDERR "  options which use the MZmine \"row number of detected peaks\" column:\n";
     printf STDERR "    --discard-single-pregap    discard pre gap-filled single-hit rows (default)\n";
     printf STDERR "    --keep-single-pregap       keep pre gap-filled single-hit rows\n";
-
     exit(1);
 }
 
@@ -472,9 +486,9 @@ for ($col = 0; $col < @header_col_array; $col++)
         }
         
         print "Percent non-zero peaks\t";
-        print "Potential Spikein Flag\t";
-        print "Identified Flag\t";
-        print "Non-Spikein Identified Flag\t";
+        print "Heavy-labeled flag\t";
+        print "Identified flag\t";
+        print "Non-heavy identified flag\t";
     }
 
     print $header_col_array[$col];
@@ -603,6 +617,17 @@ while(defined($line=<INFILE>))
         {
             next;
         }
+    }
+    
+    # discard unidentified rows
+    if ($discard_unidentified_flag && $identified_flag == 0)
+    {
+        next;
+    }
+    # discard heavy labeled rows
+    if ($discard_heavy_flag && $spikein_flag)
+    {
+        next;
     }
 
     for ($col = 0; $col < @array; $col++)
