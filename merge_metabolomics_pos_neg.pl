@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-01-06:  handle recent changes to strip_metabolomics_columns.pl headers
 # 2020-09-25:  force row identifier header to always print as "row ID"
 # 2020-09-25:  minor code clean up
 # 2020-09-24:  clean up extra/dangling hypens in sample names
@@ -381,12 +382,21 @@ foreach $header (@global_concat_header_array)
     if (!defined($seen_header_hash{$header}) &&
         defined($global_metadata_hash{$header}))
     {
-        if ($header eq 'Number of non-zero peaks' ||
-            $header eq 'Percent pre-gap peaks' ||
-            $header eq 'Percent non-zero peaks' ||
-            $header eq 'Potential Spikein Flag' ||
-            $header eq 'Identified Flag' ||
-            $header eq 'Non-Spikein Identified Flag')
+        # current column headers
+        if ($header =~ /^Number of non-zero peaks$/i ||
+            $header =~ /^Percent pre-gap peaks$/i    ||
+            $header =~ /^Percent non-zero peaks$/i   ||
+            $header =~ /^Heavy-labeled flag$/i       ||
+            $header =~ /^Identified flag$/i          ||
+            $header =~ /^Non-heavy identified flag$/i)
+
+        {
+            next;
+        }
+
+        # older, deprecated column headers
+        if ($header =~ /^Potential Spikein Flag$/i   ||
+            $header =~ /^Non-Spikein Identified Flag$/i)
         {
             next;
         }
@@ -404,12 +414,14 @@ foreach $header (@global_concat_header_array)
     if (!defined($seen_header_hash{$header}) &&
         defined($global_metadata_hash{$header}))
     {
-        if ($header eq 'Number of non-zero peaks' ||
-            $header eq 'Percent pre-gap peaks' ||
-            $header eq 'Percent non-zero peaks' ||
-            $header eq 'Potential Spikein Flag' ||
-            $header eq 'Identified Flag' ||
-            $header eq 'Non-Spikein Identified Flag')
+        if ($header =~ /^Number of non-zero peaks$/i  ||
+            $header =~ /^Percent pre-gap peaks$/i     ||
+            $header =~ /^Percent non-zero peaks$/i    ||
+            $header =~ /^Heavy-labeled flag$/i        ||
+            $header =~ /^Potential Spikein Flag$/i    ||
+            $header =~ /^Identified flag$/i           ||
+            $header =~ /^Non-heavy identified flag$/i ||
+            $header =~ /^Non-Spikein Identified Flag$/i)
         {
             $global_header_array[$index]       = $header;
             $global_header_array_print[$index] = $header;
