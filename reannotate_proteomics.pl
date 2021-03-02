@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-03-02     support various CPTAC expression files
 # 2020-06-09     strip ref|, etc. from accessions, so that reverse/contaminate tracking works again!!
 #
 # 2020-06-03     strip sp|, etc. from accessions, so that reverse/contaminate tracking works again!!
@@ -35,6 +36,12 @@ $header_remap_hash{'REFSEQ_PREDICTED'}   = 'Accession_Protein';
 $header_remap_hash{'REFSEQ_PROVISIONAL'} = 'Accession_Protein';
 $header_remap_hash{'REFSEQ_REVIEWED'}    = 'Accession_Protein';
 $header_remap_hash{'REFSEQ_VALIDATE'}    = 'Accession_Protein';
+
+# support CPTAC expression files
+$header_remap_hash{'Acetylsite'}  = 'Accession';
+$header_remap_hash{'Phosphosite'} = 'Accession';
+$header_remap_hash{'NCBIGeneID'}  = 'GeneID';
+$header_remap_hash{'Gene'}        = 'Symbol';
 
 
 sub is_number
