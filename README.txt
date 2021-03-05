@@ -296,6 +296,26 @@ replace_maxquant_intensity_with_ibaq.pl
 
 
 
+scan_oct.pl
+  Scan positive ion MZmine2 metabolomics output for OCT contamination
+
+  Usage:
+
+    scan_oct.pl mzmine_pos.csv [output_oct_rows.txt [output_oct_metrics.txt]]
+
+    Both CSV and tab-delimited input is accepted.
+    (+) ion mode files yield best results, since OCT doesn't show up in (-).
+    Any (-) ion mode rows detected as OCT are likely false positives.
+
+    If output file names are not specified, default file names will be used:
+      oct_detected_rows.txt oct_sample_metrics.txt
+
+    Output files contain rows identified as potential OCT, and OCT abundance-
+    related metrics, respectively.
+
+
+
+
 strip_maxquant_columns.pl
   Remove columns from MaxQuant data that we don't use
 
