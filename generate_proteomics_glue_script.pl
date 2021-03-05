@@ -62,8 +62,22 @@ $autodetect_output = `$cmd_str`;
 foreach $line (@autodetect_line_array)
 {
     $line =~ s/[\r\n]//g;
+
+    
+    # skip comment lines
+    if ($line =~ /^#/)
+    {
+        next;
+    }
     
     @array = split /\t/, $line;
+
+    # tabs can get clobbered during terminal copy/paste,
+    # try splitting on whitespace instead
+    if (@array == 1)
+    {
+        @array = split /\s+/, $line;
+    }
     
     if (@array == 2)
     {
@@ -76,6 +90,7 @@ foreach $line (@autodetect_line_array)
 
 @autodetect_key_array = sort keys %autodetect_hash;
 
+printf STDERR "# %s\n", $input_filename;
 foreach $key (@autodetect_key_array)
 {
     $value = $autodetect_hash{$key};
@@ -111,6 +126,21 @@ $human_flag = 0;
 $mouse_flag = 0;
 if ($species =~ /Mouse/i) { $mouse_flag = 1; }
 if ($species =~ /Human/i) { $human_flag = 1; }
+
+
+# override with whichever species was provided in the autodetect.txt file
+if (defined($autodetect_filename))
+{
+    $species = $autodetect_hash{Species};
+    
+    if (defined($species))
+    {
+        $human_flag = 0;
+        $mouse_flag = 0;
+        if ($species =~ /Mouse/i) { $mouse_flag = 1; }
+        if ($species =~ /Human/i) { $human_flag = 1; }
+    }
+}
 
 
 # default to uniprot human annotation
@@ -167,8 +197,10 @@ if ($mouse_flag && $human_flag)
     $annotation_file = 'merged_protein_annotations_human_mouse.txt';
 }
 
-printf STDERR "species:     %s\n", $annotation_species;
-
+if (!defined($autodetect_filename))
+{
+    printf STDERR "Species     %s\n", $annotation_species;
+}
 
 
 # run the annotation script
