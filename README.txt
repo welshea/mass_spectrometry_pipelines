@@ -25,6 +25,11 @@ autodetect_ms_data.pl
     Rollup        [ibaq/intensity/intensity_and_ibaq]
                                    which type of rollup columns to keep
 
+  If the output is manually edited for use as an override file for the glue
+  script, the following setting is also supported by the glue script:
+    Species       [human/mouse/human_and_mouse]
+
+
 
 
 automate_tmt.pl
