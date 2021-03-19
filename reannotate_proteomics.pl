@@ -1,11 +1,12 @@
 #!/usr/bin/perl -w
 
-# 2021-03-02     support various CPTAC expression files
-# 2020-06-09     strip ref|, etc. from accessions, so that reverse/contaminate tracking works again!!
+# 2021-03-19  add derived Target_Species_Flag column
+# 2021-03-02  support various CPTAC expression files
+# 2020-06-09  strip ref|, etc. from accessions, so that reverse/contaminate tracking works again!!
 #
-# 2020-06-03     strip sp|, etc. from accessions, so that reverse/contaminate tracking works again!!
-#                always print --- for empty annotation, rather than sometimes blanks
-#                2nd update of the day: when stripping, keep uniprot part instead of swissprot, so reverse/con tracking works properly elsewhere
+# 2020-06-03  strip sp|, etc. from accessions, so that reverse/contaminate tracking works again!!
+#             always print --- for empty annotation, rather than sometimes blanks
+#             2nd update of the day: when stripping, keep uniprot part instead of swissprot, so reverse/con tracking works properly elsewhere
 
 use Scalar::Util qw(looks_like_number);
 use POSIX;
@@ -1594,10 +1595,20 @@ sub print_probeid_annotation
     }
 
 
-    $line_new = sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
+    # flag whether it is likely not a real target species protein or not
+    $target_species_flag = 1;
+    if ($all_reverse ||
+        ($has_contam && !($gene_id_str =~ /[0-9]/)))
+    {
+        $target_species_flag = 0;
+    }
+
+
+    $line_new = sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
                         $has_contam,
                         $all_reverse,
                         $cow_contam,
+                        $target_species_flag,
                         $accession_pruned_str,
                         $gene_id_str,
                         $count_symbols,
@@ -1927,10 +1938,11 @@ for ($i = 0, $j = 0; $i < @temp_array_i; $i++)
 $header_line_data_new = join "\t", @temp_array_j;
 
 printf "%s", $header_line_data_new;
-printf "\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+printf "\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
        'Has_Contaminant_Flag',
        'All_Reverse_Flag',
        'Cow_Contaminant_Flag',
+       'Target_Species_Flag',
        'Accession_Protein',
        'GeneID',
        'NumGenes',
