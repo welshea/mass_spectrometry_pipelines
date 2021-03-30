@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-03-30:  don't convert ' ' to '_' in " Peak height" and " Peak area"
+# 2021-03-30:  strip .raw from end of sample names
 # 2021-01-06:  handle recent changes to strip_metabolomics_columns.pl headers
 # 2020-09-25:  force row identifier header to always print as "row ID"
 # 2020-09-25:  minor code clean up
@@ -301,6 +303,13 @@ sub read_in_file
                 $sample =~ s/^[_ -]//;
                 $sample =~ s/[_ -]$//;
             }
+
+            # strip .raw from end of sample name
+            $sample =~ s/\.raw(?=(\s|[_ ]|$))//;
+            
+            # restore spaces in Peak height/area after conforming
+            $sample =~ s/_Peak_(height|area)/ Peak $1/ig;
+
 
             $sample_lc = lc $sample;
             $sample_lc_to_orig_hash{$sample_lc}{$sample} = 1;
