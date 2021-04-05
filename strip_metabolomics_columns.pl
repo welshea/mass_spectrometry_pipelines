@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-04-05:  El-MAVEN groupID is not unique, create missing identifiers
+# 2021-04-05:  add heavy label detection to El-MAVEN
 # 2021-01-06:  add --discard-unidentified and --discard-heavy flags
 #              change some output column header names and capitalization
 # 2020-09-24:  add more support for El-MAVEN
@@ -338,6 +340,10 @@ for ($col = 0; $col < @header_col_array; $col++)
 }
 
 
+# heavy/light labeled El-MAVEN data
+$isotope_col = $header_col_hash{isotopeLabel};
+
+
 $first_abundance_col = 9E99;
 for ($col = 0; $col < @header_col_array; $col++)
 {
@@ -424,11 +430,6 @@ if ($has_pregap_flag == 0)
 $rowid_col = $header_col_hash{'row ID'};
 $name_col  = $header_col_hash{'row identity (all IDs)'};
 
-# maybe it is an El-MAVEN file
-if (!defined($rowid_col))
-{
-    $rowid_col = $header_col_hash{'groupId'};
-}
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'compound'};
@@ -439,15 +440,16 @@ if (!defined($name_col))
 }
 
 
-#if (!defined($rowid_col))
-#{
-#    printf STDERR "ABORT -- can't find 'row ID' column\n";
-#    exit(1);
-#}
 if (!defined($name_col))
 {
     printf STDERR "ABORT -- can't find 'row identity (all IDs)' column\n";
     exit(1);
+}
+
+
+if (!defined($rowid_col))
+{
+    printf STDERR "No row identifier column found, creating arbitrary identifiers\n";
 }
 
 
@@ -501,10 +503,10 @@ open OUTFILE_UNIDENTIFIED, ">$output_unidentified_filename" or die "can't open f
 open OUTFILE_SPIKEINS,     ">$output_spikeins_filename"     or die "can't open file $output_spikeins_filename for writing\n";
 
 
-$row_count = 0;
 $num_excel_large = 0;	# number of potential Excel-corruptible values
 $sum_excel_large = 0;	# sum of number of non-zero last 5 digits
 
+$row_count = 0;
 while(defined($line=<INFILE>))
 {
     $row_count++;
@@ -536,17 +538,51 @@ while(defined($line=<INFILE>))
         $rowid = $row_count;
     }
 
-    
-    # flag spikeins, store identified/unidentified
+
     $name = $array[$name_col];
-    $spikein_flag = 0;
-    if (is_heavy_labeled($name))
+
+
+    # flag heavy labeled rows (including spike-ins)
+    #
+    # probably MZMine data if there is no isotopeLabel column
+    #  could also be El-MAVEN without heavy labeling enabled,
+    #  in which case is_heavy_labeled() may always return false
+    if (!defined($isotope_col))
     {
-        $spikein_flag = 1;
+        $spikein_flag = 0;
+        if (is_heavy_labeled($name))
+        {
+            $spikein_flag = 1;
         
-        print OUTFILE_SPIKEINS "$rowid\n";
+            print OUTFILE_SPIKEINS "$rowid\n";
+        }
     }
+    # El-MAVEN data
+    else
+    {
+        $isotope = $array[$isotope_col];
+        
+        # C12 PARENT
+        # C13-label-#
+        #
+        # I've only seen C13 experiments so far, so, rather than
+        # make a list of all heavy labels we may see, I'm going to key off
+        # of "PARENT" and "label" instead, to hopefully future-proof it
+        $spikein_flag = 0;
+        if ($isotope =~ /PARENT/i)
+        {
+            $spikein_flag = 0;
+        }
+        elsif ($isotope =~ /label/i)
+        {
+            $spikein_flag = 1;
+
+            print OUTFILE_SPIKEINS "$rowid\n";
+        }
+    }
+
     
+    # store identified/unidentified
     # consider it identified if it has two letters in a row
     # this should result in treating purely chemical formulas as unidentified
     $identified_flag = 0;
@@ -568,13 +604,6 @@ while(defined($line=<INFILE>))
     }
 
 
-    # print missing rowid
-    if (!defined($rowid_col))
-    {
-        print $rowid;
-        $print_flag = 1;
-    }
-    
     # count number of non-zero samples
     $n = 0;
     foreach $col (@sample_col_array)
@@ -628,6 +657,14 @@ while(defined($line=<INFILE>))
     if ($discard_heavy_flag && $spikein_flag)
     {
         next;
+    }
+
+
+    # print missing rowid
+    if (!defined($rowid_col))
+    {
+        print $rowid;
+        $print_flag = 1;
     }
 
     for ($col = 0; $col < @array; $col++)
