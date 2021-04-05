@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-04-05:  fix El-MAVEN support, groupID is *NOT* a unique row identifier
 # 2021-03-30:  don't convert ' ' to '_' in " Peak height" and " Peak area"
 # 2021-03-30:  strip .raw from end of sample names
 # 2021-01-06:  handle recent changes to strip_metabolomics_columns.pl headers
@@ -184,20 +185,19 @@ sub read_in_file
     
     $row_id_col = $header_col_hash{'row ID'};
     
-    # maybe it is an El-MAVEN file
     if (!defined($row_id_col))
     {
-        $row_id_col = $header_col_hash{'groupId'};
+        printf STDERR "No row identifier column found, creating arbitrary identifiers\n";
     }
-    
-    if (!defined($row_id_col))
+
+    if (defined($row_id_col))
+    {    
+        $global_row_id_str = $header_col_array[$row_id_col];
+    }
+    else
     {
-        printf STDERR "ABORT -- can't find \'row ID\' column in file %s\n",
-            $filename;
-        exit(1);
+        $global_row_id_str = 'row ID';
     }
-    
-    $global_row_id_str = $header_col_array[$row_id_col];
 
     # categorize columns
     for ($col = 0; $col < @header_col_array; $col++)
@@ -248,6 +248,7 @@ sub read_in_file
         }
     }
     
+    $row = 0;
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
@@ -260,8 +261,18 @@ sub read_in_file
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
         }
+
+        # row ID exists
+        if (defined($row_id_col))
+        {        
+            $row_id = $array[$row_id_col];
+        }
+        # create out own
+        else
+        {
+            $row_id = $row + 1;
+        }
         
-        $row_id = $array[$row_id_col];
         if (is_number($row_id))
         {
             $row_id = sprintf "%s_%05d", $pos_neg, $row_id;
@@ -270,7 +281,12 @@ sub read_in_file
         {
             $row_id = sprintf "%s_%s", $pos_neg, $row_id;
         }
-        $array[$row_id_col] = $row_id;
+
+        # replace original row ID, if it exists, with new one
+        if (defined($row_id_col))
+        {
+            $array[$row_id_col] = $row_id;
+        }
         
         $global_row_id_hash{$row_id} = 1;
         
@@ -325,6 +341,8 @@ sub read_in_file
                 $global_metadata_hash{$header} = 1;
             }
         }
+        
+        $row++;
     }
 }
 
@@ -478,16 +496,16 @@ foreach $header (@global_sample_array)
 }
 
 
+# insert missing row ID column
+if (!defined($row_id_col))
+{
+    print "row ID\t";
+}
+
 # print header
 for ($i = 0; $i < @global_header_array; $i++)
 {
     $header = $global_header_array_print[$i];
-    
-    # replace El-MAVEN groupID with row ID
-    if ($header eq $global_row_id_str)
-    {
-        $header = 'row ID';
-    }
     
     if ($header =~ /^IRON /)
     {
@@ -507,6 +525,12 @@ print "\n";
 # print merged lines
 foreach $row_id (@global_row_id_array)
 {
+    # insert missing row ID column
+    if (!defined($row_id_col))
+    {
+        print "$row_id\t";
+    }
+
     for ($col = 0; $col < @global_header_array; $col++)
     {
         $header = $global_header_array[$col];
