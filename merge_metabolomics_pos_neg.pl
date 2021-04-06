@@ -288,6 +288,12 @@ sub read_in_file
             $array[$row_id_col] = $row_id;
         }
         
+        if (defined($global_row_id_hash{$row_id}))
+        {
+            print STDERR "ABORT -- row ID indentifiers not unique!\n";
+            exit(2);
+        }
+        
         $global_row_id_hash{$row_id} = 1;
         
         # store data
