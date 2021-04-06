@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-04-06:  check for and uniquify non-unique row IDs
 # 2021-04-05:  fix El-MAVEN support, groupID is *NOT* a unique row identifier
 # 2021-03-30:  don't convert ' ' to '_' in " Peak height" and " Peak area"
 # 2021-03-30:  strip .raw from end of sample names
@@ -267,7 +268,7 @@ sub read_in_file
         {        
             $row_id = $array[$row_id_col];
         }
-        # create out own
+        # create our own
         else
         {
             $row_id = $row + 1;
@@ -282,16 +283,17 @@ sub read_in_file
             $row_id = sprintf "%s_%s", $pos_neg, $row_id;
         }
 
+        if (defined($global_row_id_hash{$row_id}))
+        {
+            print STDERR "WARNING -- row ID indentifiers not unique, appending row number\n";
+            
+            $row_id .= sprintf "_%05d", $row + 1;
+        }
+
         # replace original row ID, if it exists, with new one
         if (defined($row_id_col))
         {
             $array[$row_id_col] = $row_id;
-        }
-        
-        if (defined($global_row_id_hash{$row_id}))
-        {
-            print STDERR "ABORT -- row ID indentifiers not unique!\n";
-            exit(2);
         }
         
         $global_row_id_hash{$row_id} = 1;
