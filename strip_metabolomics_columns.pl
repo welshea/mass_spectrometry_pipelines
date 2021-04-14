@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-04-14:  begin adding support for lipidomics
 # 2021-04-05:  El-MAVEN groupID is not unique, create missing identifiers
 # 2021-04-05:  add heavy label detection to El-MAVEN
 # 2021-01-06:  add --discard-unidentified and --discard-heavy flags
@@ -225,8 +226,25 @@ if (!defined($output_spikeins_filename))
 open INFILE, "$filename" or die "can't open $filename\n";
 
 
+# skip down to first line that has anything on it
+# lipidomics data has this issues sometimes
+while($line=<INFILE>)
+{
+    # skip comment lines
+    if ($line =~ /^#/)
+    {
+        next;
+    }
+
+    # this line isn't purely whitespace, assume it is the header line
+    if ($line =~ /\S/)
+    {
+        last;
+    }
+}
+
+
 # header line
-$line = <INFILE>;
 $line =~ s/[\r\n]+//g;
 $line =~ s/\"//g;
 @array = split /\t/, $line;
@@ -288,11 +306,22 @@ for ($col = 0; $col < @header_col_array; $col++)
         $peak_height_flag = 1;
         next;
     }
-
     if ($field =~ / Peak area$/i)
     {
         $peak_area_flag = 1;
         next;
+    }
+    
+    # lipidomics
+    if ($field =~ /^Area,/i)
+    {
+         $peak_area_flag = 1;
+         next;
+    }
+    if ($field =~ /^Height,/i)
+    {
+         $peak_height_flag = 1;
+         next;
     }
 }
 
@@ -306,17 +335,20 @@ for ($col = 0; $col < @header_col_array; $col++)
         $field =~ /\.cdf[^.]+$/i ||
         $field =~ / Peak \S+$/ ||
         $field =~ /row identity/ ||
-        $field =~ /row comment/)
+        $field =~ /row comment/ ||
+        $field =~ /^Area,/i)
     {
         # always keep peak height
-        if ($field =~ / Peak height$/i)
+        if ($field =~ / Peak height$/i ||
+            $field =~ /^Height,/i)
         {
             next;
         }
-        
+
         # only keep peak area if no peak height
         if ($peak_height_flag == 0 &&
-            $field =~ / Peak area$/i)
+            ($field =~ / Peak area$/i ||
+             $field =~ /^Area,/i))
         {
             next;
         }
@@ -350,7 +382,9 @@ for ($col = 0; $col < @header_col_array; $col++)
     $field = $header_col_array[$col];
 
     if ($field =~ / Peak height$/i ||
-        $field =~ / Peak area$/i)
+        $field =~ / Peak area$/i ||
+        $field =~ /^Area,/i ||
+        $field =~ /^Height,/i)
     {
         if (!defined($col_to_remove_hash{$col}))
         {
@@ -437,6 +471,12 @@ if (!defined($name_col))
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'compoundId'};
+}
+
+#lipidomics
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'IonFormula'};
 }
 
 
@@ -586,7 +626,8 @@ while(defined($line=<INFILE>))
     # consider it identified if it has two letters in a row
     # this should result in treating purely chemical formulas as unidentified
     $identified_flag = 0;
-    if ($name =~ /[A-Za-z][A-Za-z]/ &&
+    if (($name =~ /[A-Za-z][A-Za-z]/ ||
+         $name =~ /[A-Za-z][0-9]/) &&
         !($name =~ /\d m\/z adduct of \d/) &&
         !($name =~ /Complex of [0-9.]+ and \d+/))
     {
