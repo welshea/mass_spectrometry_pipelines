@@ -2,6 +2,7 @@
 
 use Scalar::Util qw(looks_like_number);
 
+# 2021-04-14:  begin adding lipidomics support
 # 2020-09-24:  add --norm-none flag (has some use for metabolomics pipeline)
 # 2020-08-26:  attempt to deal with more pos/neg sample labeling typos
 # 2020-08-24:  remove --bg background subtraction option, as it is a bad idea
@@ -254,8 +255,11 @@ sub read_in_data_file
         }
         
         # check for mzMine abundances
+        # check for lipidomics abundances
         if ($field =~ / Peak height$/i ||
-            $field =~ / Peak area$/i)
+            $field =~ / Peak area$/i ||
+            $field =~ /^Height,/i ||
+            $field =~ /^Area,/i)
         {
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
@@ -627,6 +631,13 @@ sub output_final_data
                 $sample =~ s/\.mzX?ML[^.]+$//i;
                 $sample =~ s/ Peak \S+$//i;
                 
+            }
+            
+            # strip lipidomics stuff
+            elsif ($sample =~ /^Height,/i ||
+                   $sample =~ /^Area,/i)
+            {
+                $sample =~ s/^(Area|Height),\s*//i;
             }
 
             # strip Skyline stuff
