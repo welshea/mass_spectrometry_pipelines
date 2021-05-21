@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-05-21:  add new autodetect_ms_data.pl arguments
 # 2020-12-21:  add missing # in front of --comp-pool changelog line below...
 # 2020-12-18:  change behavior/syntax to that of metabolomics glue script
 #              use --comp-pool for TMT 100% injection replicates
@@ -11,19 +12,77 @@
 use File::Spec;
 use File::Basename;
 
-$input_filename      = shift;
-$output_root_name    = shift;
+
+$input_filename = '';
+$num_non_options = 0;
+$boost_flag = 0;
+$syntax_error_flag = 0;
+for ($i = 0; $i < @ARGV; $i++)
+{
+    $field = $ARGV[$i];
+
+    if ($field =~ /^--/)
+    {
+        if ($field =~ /^--boost$/ ||
+            $field =~ /^--last-ch$/)
+        {
+            $boost_flag = 1;
+        }
+        else
+        {
+            printf "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
+    }
+    else
+    {
+        if ($num_non_options == 0)
+        {
+            $input_filename = $field;
+            $num_non_options++;
+        }
+        elsif ($num_non_options == 1)
+        {
+            $output_root_name = $field;
+            $num_non_options++;
+        }
+        # must be 'human', 'mouse', or 'human_and_mouse'
+        elsif ($num_non_options == 2)
+        {
+            $species = $field;
+            $num_non_options++;
+        }
+        elsif ($num_non_options == 3)
+        {
+            $autodetect_filename = $field;
+            $num_non_options++;
+        }
+    }
+}
+
+
+if ($input_filename eq '')
+{
+    $syntax_error_flag = 1;
+}
+
+if ($syntax_error_flag)
+{
+    printf "Usage: autodetect_ms_data.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
+    printf "\n";
+    printf "  Options:\n";
+    printf "    --boost     use highest channel for normalization\n";
+    printf "    --last-ch   use highest channel for normalization\n";
+    
+    exit(1);
+}
+
 
 # optional
-$species             = shift; # must be 'human', 'mouse', or 'human_plus_mouse'
-$autodetect_filename = shift;
-
-
 if (!defined($output_root_name))
 {
     $output_root_name = 'pipeline';
 }
-
 if (!defined($species))
 {
     $species = '';
@@ -47,9 +106,20 @@ $script_path   = dirname(File::Spec->rel2abs(__FILE__));
 
 if (!defined($autodetect_filename))
 {
-    $cmd_str = sprintf "%s \"%s\"",
-        'autodetect_ms_data.pl',
-        $input_filename;
+    if ($boost_flag)
+    {
+        $cmd_str = sprintf "%s --boost \"%s\" \"%s\"",
+            'autodetect_ms_data.pl',
+            $input_filename,
+            $species;
+    }
+    else
+    {
+        $cmd_str = sprintf "%s \"%s\" \"%s\"",
+            'autodetect_ms_data.pl',
+            $input_filename,
+            $species;
+    }
 }
 else
 {
@@ -62,22 +132,8 @@ $autodetect_output = `$cmd_str`;
 foreach $line (@autodetect_line_array)
 {
     $line =~ s/[\r\n]//g;
-
-    
-    # skip comment lines
-    if ($line =~ /^#/)
-    {
-        next;
-    }
     
     @array = split /\t/, $line;
-
-    # tabs can get clobbered during terminal copy/paste,
-    # try splitting on whitespace instead
-    if (@array == 1)
-    {
-        @array = split /\s+/, $line;
-    }
     
     if (@array == 2)
     {
@@ -90,7 +146,6 @@ foreach $line (@autodetect_line_array)
 
 @autodetect_key_array = sort keys %autodetect_hash;
 
-printf STDERR "# %s\n", $input_filename;
 foreach $key (@autodetect_key_array)
 {
     $value = $autodetect_hash{$key};
@@ -126,21 +181,6 @@ $human_flag = 0;
 $mouse_flag = 0;
 if ($species =~ /Mouse/i) { $mouse_flag = 1; }
 if ($species =~ /Human/i) { $human_flag = 1; }
-
-
-# override with whichever species was provided in the autodetect.txt file
-if (defined($autodetect_filename))
-{
-    $species = $autodetect_hash{Species};
-    
-    if (defined($species))
-    {
-        $human_flag = 0;
-        $mouse_flag = 0;
-        if ($species =~ /Mouse/i) { $mouse_flag = 1; }
-        if ($species =~ /Human/i) { $human_flag = 1; }
-    }
-}
 
 
 # default to uniprot human annotation
@@ -197,10 +237,8 @@ if ($mouse_flag && $human_flag)
     $annotation_file = 'merged_protein_annotations_human_mouse.txt';
 }
 
-if (!defined($autodetect_filename))
-{
-    printf STDERR "Species     %s\n", $annotation_species;
-}
+#printf STDERR "species:     %s\n", $annotation_species;
+
 
 
 # run the annotation script
