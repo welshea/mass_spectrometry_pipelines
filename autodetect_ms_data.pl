@@ -5,6 +5,7 @@
 # 2021-05-21: added --boost and --last-ch flags to force last channel norm
 #             print Usage statement
 #             use last argument as species, default to human
+#             added autodetection of species based on SwissProt annotation
 # 2020-12-18: detect multiple injection replicates of a single plex
 # 2020-09-10: 2020-08-03 #channels test broke non-TMT data
 # 2020-08-03: fix pY last channel for TMT16, abort on unsupported #channels
@@ -135,12 +136,6 @@ if ($syntax_error_flag)
     exit(1);
 }
 
-# default species to human
-if ($species eq '')
-{
-    $species = 'human';
-}
-
 
 open INFILE, "$filename" or die "can't open input file $filename\n";
 
@@ -258,11 +253,28 @@ if ($multi_plex_flag)
 
 # scan for details
 %accession_hash = ();
+$count_human = 0;
+$count_mouse = 0;
+$count_rows = 0;
 while(defined($line=<INFILE>))
 {
     $line =~ s/[\r\n]+//g;
 
     @array = split /\t/, $line;
+    
+    # check for likely SwissProt accession annotation, guess species
+    if ($line =~ /(_human|OS=homo sapiens)/i)
+    {
+        $count_human++;
+    }
+    if ($line =~ /(_mouse|OS\=Mus musculus)/i)
+    {
+        $count_mouse++;
+    }
+    if ($line =~ /\S/)
+    {
+        $count_rows++;
+    }
 
     for ($i = 0; $i < @array; $i++)
     {
@@ -498,6 +510,38 @@ $mod_string = 'no';
 if ($mod_flag) { $mod_string = 'yes'; }
 $refseq_string = 'no';
 if ($refseq_flag) { $refseq_string = 'yes'; }
+
+
+# guess species
+if ($count_rows && $species eq '')
+{
+    $fraction_human = $count_human / $count_rows;
+    $fraction_mouse = $count_mouse / $count_rows;
+    
+    ## printf STDERR "%s\t%s\n", $fraction_human, $fraction_mouse;
+    
+    # default to human
+    $species = 'human';
+    
+    if ($fraction_human > 0.1)
+    {
+        $species = 'human';
+    }
+    if ($fraction_mouse > 0.1)
+    {
+        $species = 'mouse';
+    }
+    if ($fraction_human > 0.1 && $fraction_mouse > 0.1)
+    {
+        $species = 'human_and_mouse';
+    }
+}
+# default to human
+else
+{
+    $species = 'human';
+}
+
 
 printf "Modification\t%s\n",  $mod_string;
 printf "RefSeq\t%s\n",        $refseq_string;
