@@ -152,8 +152,11 @@ generate_proteomics_glue_script.pl
   pipeline.  Makes a few assumptions if no autodetect.txt file is specified.
   Assumes human if no species is given.
 
-  Usage:
-    generate_proteomics_glue_script.pl maxquant_output.txt output_root_name [[human/mouse/human_plus_mouse] autodetect.txt] > run_proteomics.sh
+  Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh
+
+  Options:
+    --boost     use highest channel for normalization
+    --last-ch   use highest channel for normalization
 
   Output:
     .sh file to glue the various scripts together.
