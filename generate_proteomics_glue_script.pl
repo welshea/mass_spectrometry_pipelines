@@ -68,7 +68,7 @@ if ($input_filename eq '')
 
 if ($syntax_error_flag)
 {
-    printf "Usage: autodetect_ms_data.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
+    printf "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
     printf "\n";
     printf "  Options:\n";
     printf "    --boost     use highest channel for normalization\n";
