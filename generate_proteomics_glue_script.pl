@@ -163,7 +163,7 @@ $pipeline_preprocess_str = sprintf "%s \"%s\"",
 if (defined($autodetect_hash{Modification}) &&
             $autodetect_hash{Modification} eq 'yes')
 {
-    $pipeline_preprocess_str .= sprintf " | %s -",
+    $pipeline_preprocess_str .= sprintf " \\\n  | %s -",
         'reformat_modification_sites.pl';
 }
 
@@ -172,7 +172,7 @@ if (defined($autodetect_hash{Modification}) &&
 if (defined($autodetect_hash{TMT}) &&
             $autodetect_hash{TMT} ne 'no')
 {
-    $pipeline_preprocess_str .= sprintf " | %s -",
+    $pipeline_preprocess_str .= sprintf " \\\n  | %s -",
         'clean_tmt.pl';
 }
 
@@ -242,13 +242,13 @@ if ($mouse_flag && $human_flag)
 
 
 # run the annotation script
-$pipeline_preprocess_str .= sprintf " | %s \"%s/%s\" -",
+$pipeline_preprocess_str .= sprintf " \\\n  | %s \"%s/%s\" -",
         'reannotate_proteomics.pl',
         $script_path, $annotation_file;
 
 
 # output to cleaned_reannotated.txt
-$pipeline_preprocess_str .= sprintf " > %s%s",
+$pipeline_preprocess_str .= sprintf " \\\n  > %s%s",
     $output_root_name, '_cleaned_reannotated.txt';
 
 
@@ -260,7 +260,7 @@ if (defined($autodetect_hash{Rollup}))
     # single ibaq file, rename iBAQ columns to Intensity columns
     if ($autodetect_hash{Rollup} eq 'ibaq')
     {
-        $pipeline_ibaq_str = sprintf "%s \"%s%s\" | sed 's/^iBAQ/Intensity/i' | %s > \"%s%s\"",
+        $pipeline_ibaq_str = sprintf "%s \"%s%s\" \\\n  | sed 's/^iBAQ/Intensity/i' \\\n  | %s \\\n  > \"%s%s\"",
             'transpose',
             $output_root_name, '_cleaned_reannotated.txt',
             'transpose',
@@ -269,13 +269,13 @@ if (defined($autodetect_hash{Rollup}))
     # separate intensity and ibaq files
     elsif ($autodetect_hash{Rollup} eq 'intensity_and_ibaq')
     {
-        $pipeline_ibaq_str = sprintf "%s \"%s%s\" | grep -v -i '^iBAQ' | %s > \"%s%s\"",
+        $pipeline_ibaq_str = sprintf "%s \"%s%s\" \\\n  | grep -v -i '^iBAQ' \\\n  | %s \\\n  > \"%s%s\"",
             'transpose',
             $output_root_name, '_cleaned_reannotated.txt',
             'transpose',
             $output_root_name, '_orig_intensity.txt';
 
-        $pipeline_ibaq_str .= sprintf "; %s \"%s%s\" > \"%s%s\"",
+        $pipeline_ibaq_str .= sprintf "\n%s \"%s%s\" \\\n  > \"%s%s\"",
             'replace_maxquant_intensity_with_ibaq.pl',
             $output_root_name, '_cleaned_reannotated.txt',
             $output_root_name, '_orig_ibaq.txt';
@@ -296,7 +296,7 @@ else
         $output_root_name, '_orig_intensity.txt';
 }
 # remove the original cleaned file
-$pipeline_ibaq_str .= sprintf "; rm \"%s%s\"",
+$pipeline_ibaq_str .= sprintf "\nrm \"%s%s\"",
     $output_root_name, '_cleaned_reannotated.txt';
 
 
@@ -304,7 +304,7 @@ $pipeline_ibaq_str .= sprintf "; rm \"%s%s\"",
 # normalize the data
 
 # default pipeline
-$pipeline_norm_str = sprintf "%s \"%s%s\" > \"%s%s\"",
+$pipeline_norm_str = sprintf "%s \"%s%s\" \\\n  > \"%s%s\"",
     'iron_normalize_mass_spec.pl',
     $output_root_name, '_orig_intensity.txt',
     $output_root_name, '_iron_intensity.txt';
@@ -317,7 +317,7 @@ if (defined($autodetect_hash{TMT}) &&
         defined($autodetect_hash{TMT_Channel}) &&
                 $autodetect_hash{TMT_Channel} =~ /TMT/)
     {
-        $pipeline_norm_str = sprintf "%s \"%s%s\" %s > \"%s%s\"",
+        $pipeline_norm_str = sprintf "%s \"%s%s\" %s \\\n  > \"%s%s\"",
             'automate_tmt.pl',
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
@@ -328,7 +328,7 @@ if (defined($autodetect_hash{TMT}) &&
            defined($autodetect_hash{TMT_Channel}) &&
                    $autodetect_hash{TMT_Channel} =~ /TMT/)
     {
-        $pipeline_norm_str = sprintf "%s --comp-pool \"%s%s\" %s > \"%s%s\"",
+        $pipeline_norm_str = sprintf "%s --comp-pool \"%s%s\" %s \\\n  > \"%s%s\"",
             'automate_tmt.pl',
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
@@ -352,7 +352,7 @@ if (defined($autodetect_hash{Rollup}))
         $pipeline_norm_ibaq_str = $pipeline_norm_str;
         $pipeline_norm_ibaq_str =~ s/_intensity\.txt/_ibaq\.txt/g;
         
-        $pipeline_norm_str .= '; ' . $pipeline_norm_ibaq_str;
+        $pipeline_norm_str .= "\n" . $pipeline_norm_ibaq_str;
     }
 }
 
