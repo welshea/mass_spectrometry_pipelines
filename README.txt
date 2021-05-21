@@ -7,28 +7,26 @@ findmedian, iron_generic
 
 
 
-
 autodetect_ms_data.pl
 
   Scan MaxQuant output file to determine (or guess) various parameters to feed
   into generate_proteomics_glue_script.pl:
 
-Usage: autodetect_ms_data.pl [options] maxquant_output.txt [species]
+  Usage: autodetect_ms_data.pl [options] maxquant_output.txt [species]
 
-  Options:
-    --boost     use highest channel for normalization
-    --last-ch   use highest channel for normalization
+    Options:
+      --boost     use highest channel for normalization
+      --last-ch   use highest channel for normalization
 
-  Output:
-    Modification  [yes/no]         does the data contain modification sites
-    RefSeq        [yes/no]         is the data mainly matched against RefSeqs
-    TMT           [single/multi/injection]
-                                   1 plex, >=2 plexes, >=2 all injection reps
-    TMT_Channel   [auto/TMT-????]  reference channel for IRON normalization
-    Rollup        [ibaq/intensity/intensity_and_ibaq]
-                                   which type of rollup columns to keep
-    Species       [human/mouse/human_and_mouse]
-
+    Output:
+      Modification  [yes/no]         does the data contain modification sites
+      RefSeq        [yes/no]         is the data mainly matched against RefSeqs
+      TMT           [single/multi/injection]
+                                     1 plex, >=2 plexes, >=2 all injection reps
+      TMT_Channel   [auto/TMT-????]  reference channel for IRON normalization
+      Rollup        [ibaq/intensity/intensity_and_ibaq]
+                                     which type of rollup columns to keep
+      Species       [human/mouse/human_and_mouse]
 
 
 
@@ -72,7 +70,6 @@ automate_tmt.pl
     
 
 
-
 clean_tmt.pl
 
   Reformat TMT data, removing more unwanted columns, rename channel headers
@@ -83,7 +80,6 @@ clean_tmt.pl
   Output:
     Original file, but with sample columns renamed and various columns
     removed.
-
 
 
 
@@ -102,7 +98,6 @@ csv2tab_not_excel.pl
     cleaned (no escaped fields) simple tab-delimited output.
 
     See comments within script for additonal discussion and rationale.
-
 
 
 
@@ -142,7 +137,6 @@ generate_metabolomics_glue_script.pl
     Running the script will generate IRON normalized, merged pos/neg
     metabolites, with new columns added to denote spike-ins, identified, and
     non-spikein identified rows.
-
 
 
 
@@ -202,8 +196,8 @@ iron_normalize_mass_spec.pl
 
 
 
-
 merge_cleaned_modification_site_files.pl
+
   Merge multiple different cleaned modification site proteomics files together
 
   Usage:
@@ -219,7 +213,6 @@ merge_cleaned_modification_site_files.pl
   Output:
     Various columns are duplicated/conformed/renamed to merge the various
     files together as best as possible.
-
 
 
 
@@ -246,8 +239,8 @@ merge_metabolomics_pos_neg.pl
 
 
 
-
 reannotate_proteomics.pl
+
   Add annotation columns based on various proteomics accession columns
 
   Usage:
@@ -260,8 +253,8 @@ reannotate_proteomics.pl
 
 
 
-
 reformat_modification_sites.pl
+
   Reposition incorrectly reported modification site positions in the
   Maxquant modified sequence string, as well as conform how they are
   represented.
@@ -286,8 +279,8 @@ reformat_modification_sites.pl
 
 
 
-
 replace_maxquant_intensity_with_ibaq.pl
+
   Move iBAQ rollup columns into Intensity columns, so other scripts will work
 
   Usage:
@@ -298,8 +291,8 @@ replace_maxquant_intensity_with_ibaq.pl
 
 
 
-
 scan_oct.pl
+
   Scan positive ion MZmine2 metabolomics output for OCT contamination
 
   Usage:
@@ -318,8 +311,8 @@ scan_oct.pl
 
 
 
-
 strip_maxquant_columns.pl
+
   Remove columns from MaxQuant data that we don't use
 
   Usage:
@@ -330,8 +323,8 @@ strip_maxquant_columns.pl
 
 
 
-
 strip_metabolomics_columns.pl
+
   Remove MZMine columns that we don't use
 
   Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]
@@ -351,8 +344,8 @@ strip_metabolomics_columns.pl
 
 
 
-
 transpose
+
   Transpose row/col tab-delimited text file to col/row.
 
   Usage:
@@ -376,7 +369,6 @@ transpose
 
 
 
-
 Annotation files:
 
 The following text files are soft links to files on the Moffitt unix cluster,
@@ -389,7 +381,6 @@ ipi_uniprot_annotation_human.txt          Human IPI & Uniprot accessions
 ipi_uniprot_annotation_human_mouse.txt    Human+Mouse IPI & Uniprot accessions
 ipi_uniprot_annotation_mouse.txt          Mouse IPI & Uniprot accessions
 mouse_refseq_table.txt                    Mouse NCBI accessions
-
 
 
 
