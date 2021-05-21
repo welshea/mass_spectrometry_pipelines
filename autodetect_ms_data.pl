@@ -2,6 +2,9 @@
 
 # Changelog:
 #
+# 2021-05-21: added --boost and --last-ch flags to force last channel norm
+#             print Usage statement
+#             use last argument as species, default to human
 # 2020-12-18: detect multiple injection replicates of a single plex
 # 2020-09-10: 2020-08-03 #channels test broke non-TMT data
 # 2020-08-03: fix pY last channel for TMT16, abort on unsupported #channels
@@ -67,10 +70,77 @@ $refseq_flag     = 0;
 $mod_flag        = 0;
 $psty_flag       = 0;
 $py_flag         = 0;
+$boost_flag      = 0;
 $tmt_flag        = 0;
 $multi_plex_flag = 0;
+$species         = '';
 
-$filename = shift;
+$filename = '';
+$num_files = 0;
+for ($i = 0; $i < @ARGV; $i++)
+{
+    $field = $ARGV[$i];
+
+    if ($field =~ /^--/)
+    {
+        if ($field =~ /^--boost$/ ||
+            $field =~ /^--last-ch$/)
+        {
+            $boost_flag = 1;
+        }
+        else
+        {
+            printf "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
+    }
+    else
+    {
+        if ($num_files == 0)
+        {
+            $filename = $field;
+            $num_files++;
+        }
+        # treat non-option following filename as the reference species
+        elsif ($species eq '')
+        {
+            $species = $field
+        }
+    }
+}
+
+if ($filename eq '')
+{
+    $syntax_error_flag = 1;
+}
+
+if ($syntax_error_flag)
+{
+    printf "Usage: autodetect_ms_data.pl [options] maxquant_output.txt [species]\n";
+    printf "\n";
+    printf "  Options:\n";
+    printf "    --boost     use highest channel for normalization\n";
+    printf "    --last-ch   use highest channel for normalization\n";
+    printf "\n";
+    printf "  Output:\n";
+    printf "    Modification  [yes/no]         does the data contain modification sites\n";
+    printf "    RefSeq        [yes/no]         is the data mainly matched against RefSeqs\n";
+    printf "    TMT           [single/multi/injection]\n";
+    printf "                                   1 plex, >=2 plexes, >=2 all injection reps\n";
+    printf "    TMT_Channel   [auto/TMT-????]  reference channel for IRON normalization\n";
+    printf "    Rollup        [ibaq/intensity/intensity_and_ibaq]\n";
+    printf "                                   which type of rollup columns to keep\n";
+    printf "    Species       [human/mouse/human_and_mouse]\n";
+
+    exit(1);
+}
+
+# default species to human
+if ($species eq '')
+{
+    $species = 'human';
+}
+
 
 open INFILE, "$filename" or die "can't open input file $filename\n";
 
@@ -383,7 +453,7 @@ if ($tmt_flag && $multi_plex_flag)
     $tmt_channel = 'TMT-' .
                    $channel_map_table[$max_channel+1][0]
 }
-if ($tmt_flag && $py_flag)
+if ($tmt_flag && ($boost_flag || $py_flag))
 {
     $tmt_channel = 'TMT-' . $channel_map_table[$max_channel+1][$max_channel]
 }
@@ -434,3 +504,4 @@ printf "RefSeq\t%s\n",        $refseq_string;
 printf "TMT\t%s\n",           $tmt_type;
 printf "TMT_Channel\t%s\n",   $tmt_channel;
 printf "Rollup\t%s\n",        $rollup;
+printf "Species\t%s\n",       $species;
