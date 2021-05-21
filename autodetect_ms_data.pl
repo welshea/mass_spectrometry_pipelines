@@ -263,11 +263,11 @@ while(defined($line=<INFILE>))
     @array = split /\t/, $line;
     
     # check for likely SwissProt accession annotation, guess species
-    if ($line =~ /(_human|OS=homo sapiens)/i)
+    if ($line =~ /(_human|Homo sapiens)/i)
     {
         $count_human++;
     }
-    if ($line =~ /(_mouse|OS\=Mus musculus)/i)
+    if ($line =~ /(_mouse|Mus musculus)/i)
     {
         $count_mouse++;
     }
