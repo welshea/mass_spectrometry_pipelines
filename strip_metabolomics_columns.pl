@@ -459,6 +459,13 @@ if ($has_pregap_flag == 0)
 }
 
 
+if ($has_pregap_flag == 0)
+{
+    print STDERR "WARNING -- \"one-hit wonder\" detection disabled;\n";
+    print STDERR "           'row number of detected peaks' or 'goodPeakCount' columns not found\n";
+}
+
+
 # we're going to use the compound names to identify spikeins
 # and signal/background peaks
 $rowid_col = $header_col_hash{'row ID'};
