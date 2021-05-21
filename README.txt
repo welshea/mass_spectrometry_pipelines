@@ -13,8 +13,11 @@ autodetect_ms_data.pl
   Scan MaxQuant output file to determine (or guess) various parameters to feed
   into generate_proteomics_glue_script.pl:
 
-  Usage:
-    autodetect_ms_data.pl maxquant_output_file.txt > autodetect.txt
+Usage: autodetect_ms_data.pl [options] maxquant_output.txt [species]
+
+  Options:
+    --boost     use highest channel for normalization
+    --last-ch   use highest channel for normalization
 
   Output:
     Modification  [yes/no]         does the data contain modification sites
@@ -24,9 +27,6 @@ autodetect_ms_data.pl
     TMT_Channel   [auto/TMT-????]  reference channel for IRON normalization
     Rollup        [ibaq/intensity/intensity_and_ibaq]
                                    which type of rollup columns to keep
-
-  If the output is manually edited for use as an override file for the glue
-  script, the following setting is also supported by the glue script:
     Species       [human/mouse/human_and_mouse]
 
 
