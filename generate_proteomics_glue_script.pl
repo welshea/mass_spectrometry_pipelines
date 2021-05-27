@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-05-27:  change default output_root_name
 # 2021-05-21:  add new autodetect_ms_data.pl arguments
 # 2020-12-21:  add missing # in front of --comp-pool changelog line below...
 # 2020-12-18:  change behavior/syntax to that of metabolomics glue script
@@ -81,7 +82,7 @@ if ($syntax_error_flag)
 # optional
 if (!defined($output_root_name))
 {
-    $output_root_name = 'pipeline';
+    $output_root_name = 'proteomics_pipeline';
 }
 if (!defined($species))
 {
