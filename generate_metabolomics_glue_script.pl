@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-05-27:  add default output_root_name
 # 2021-01-06:  add support for strip_metabolomics_columns.pl command options
 
 $keep_single_pregap_flag   = 0;
@@ -59,8 +60,7 @@ for ($i = 0; $i < @ARGV; $i++)
 
 
 if ($syntax_error_flag ||
-    !defined($pos_csv_filename) || !defined($neg_csv_filename) ||
-    !defined($output_root_name))
+    !defined($pos_csv_filename) || !defined($neg_csv_filename))
 {
     printf STDERR "Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix\n";
     printf STDERR "\n";
@@ -74,6 +74,12 @@ if ($syntax_error_flag ||
 
 
     exit(1);
+}
+
+
+if (!defined($output_root_name))
+{
+    $output_root_name = 'metabolomics_pipeline';
 }
 
 
