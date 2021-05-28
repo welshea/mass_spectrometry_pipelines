@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-05-28:  support non-abundance columns inserted at end of file,
+#              output right-aligned contiguous block of sample data
 # 2021-04-14:  begin adding support for lipidomics
 # 2021-04-05:  El-MAVEN groupID is not unique, create missing identifiers
 # 2021-04-05:  add heavy label detection to El-MAVEN
@@ -247,7 +249,7 @@ while($line=<INFILE>)
 # header line
 $line =~ s/[\r\n]+//g;
 $line =~ s/\"//g;
-@array = split /\t/, $line;
+@array = split /\t/, $line;    # skip empty headers at and
 for ($i = 0; $i < @array; $i++)
 {
     $array[$i] =~ s/^\s+//;
@@ -508,10 +510,14 @@ if (!defined($rowid_col))
     $print_flag = 1;
 }
 
-# print header line
+# print header line, non-sample data first
 for ($col = 0; $col < @header_col_array; $col++)
 {
     if (defined($col_to_remove_hash{$col}))
+    {
+        next;
+    }
+    if (defined($sample_col_hash{$col}))
     {
         next;
     }
@@ -525,19 +531,49 @@ for ($col = 0; $col < @header_col_array; $col++)
         $print_flag = 1;
     }
 
-    if ($col == $first_abundance_col)
+    print $header_col_array[$col];
+}
+
+
+# insert new headers
+if ($print_flag == 1)
+{
+    print "\t";
+}
+else
+{
+    $print_flag = 1;
+}
+print "Number of non-zero peaks";
+if ($has_pregap_flag)
+{
+    print "\tPercent pre-gap peaks";
+}
+print "\tPercent non-zero peaks";
+print "\tHeavy-labeled flag";
+print "\tIdentified flag";
+print "\tNon-heavy identified flag";
+
+
+# print sample headers
+for ($col = 0; $col < @header_col_array; $col++)
+{
+    if (defined($col_to_remove_hash{$col}))
     {
-        print "Number of non-zero peaks\t";
-        
-        if ($has_pregap_flag)
-        {
-            print "Percent pre-gap peaks\t";
-        }
-        
-        print "Percent non-zero peaks\t";
-        print "Heavy-labeled flag\t";
-        print "Identified flag\t";
-        print "Non-heavy identified flag\t";
+        next;
+    }
+    if (!defined($sample_col_hash{$col}))
+    {
+        next;
+    }
+    
+    if ($print_flag == 1)
+    {
+        print "\t";
+    }
+    else
+    {
+        $print_flag = 1;
     }
 
     print $header_col_array[$col];
@@ -561,7 +597,7 @@ while(defined($line=<INFILE>))
     $line =~ s/[\r\n]+//g;
     $line =~ s/\"//g;
 
-    @array = split /\t/, $line;
+    @array = split /\t/, $line, -1;    # don't skip empty fields at and
 
     $print_flag = 0;
 
@@ -715,11 +751,16 @@ while(defined($line=<INFILE>))
         $print_flag = 1;
     }
 
+    # print non-sample data
     for ($col = 0; $col < @array; $col++)
     {
         $field = $array[$col];
     
         if (defined($col_to_remove_hash{$col}))
+        {
+            next;
+        }
+        if (defined($sample_col_hash{$col}))
         {
             next;
         }
@@ -733,19 +774,51 @@ while(defined($line=<INFILE>))
             $print_flag = 1;
         }
         
-        if ($col == $first_abundance_col)
+        print $field;
+    }
+
+
+    # insert new fields
+    if ($print_flag == 1)
+    {
+        print "\t";
+    }
+    else
+    {
+        $print_flag = 1;
+    }
+    print "$n";
+    if ($has_pregap_flag)
+    {
+        print "\t$n_percent_pregap";
+    }
+    print "\t$n_percent";
+    print "\t$spikein_flag";
+    print "\t$identified_flag";
+    print "\t$nsid_flag";
+
+
+    # print sample data
+    for ($col = 0; $col < @array; $col++)
+    {
+        $field = $array[$col];
+    
+        if (defined($col_to_remove_hash{$col}))
         {
-            print "$n\t";
-            
-            if ($has_pregap_flag)
-            {
-                print "$n_percent_pregap\t";
-            }
-            
-            print "$n_percent\t";
-            print "$spikein_flag\t";
-            print "$identified_flag\t";
-            print "$nsid_flag\t";
+            next;
+        }
+        if (!defined($sample_col_hash{$col}))
+        {
+            next;
+        }
+    
+        if ($print_flag == 1)
+        {
+            print "\t";
+        }
+        else
+        {
+            $print_flag = 1;
         }
         
         print $field;
@@ -754,14 +827,13 @@ while(defined($line=<INFILE>))
 
 
     # scan samples for number of significant digits
-    for ($col = $first_abundance_col; $col < @header_col_array; $col++)
+    foreach $col (@sample_col_array)
     {
-        if (defined($col_to_remove_hash{$col}))
+        $value = $array[$col];
+        if (!defined($value))
         {
             next;
         }
-
-        $value = $array[$col];
         
         # largeish numbers succeptible to Excel corruption
         if (is_number($value) && $value != 0 &&
