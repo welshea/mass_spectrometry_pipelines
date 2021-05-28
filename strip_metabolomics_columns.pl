@@ -293,6 +293,7 @@ for ($col = 0; $col < @header_col_array; $col++)
 
     $header_col_array[$col] = $field;
 }
+$num_header_cols = @header_col_array;
 
 
 # scan for peak height and peak area
@@ -752,10 +753,8 @@ while(defined($line=<INFILE>))
     }
 
     # print non-sample data
-    for ($col = 0; $col < @array; $col++)
+    for ($col = 0; $col < $num_header_cols; $col++)
     {
-        $field = $array[$col];
-    
         if (defined($col_to_remove_hash{$col}))
         {
             next;
@@ -763,6 +762,12 @@ while(defined($line=<INFILE>))
         if (defined($sample_col_hash{$col}))
         {
             next;
+        }
+
+        $field = $array[$col];
+        if (!defined($field))
+        {
+            $field = '';
         }
     
         if ($print_flag == 1)
@@ -799,10 +804,8 @@ while(defined($line=<INFILE>))
 
 
     # print sample data
-    for ($col = 0; $col < @array; $col++)
+    for ($col = 0; $col < $num_header_cols; $col++)
     {
-        $field = $array[$col];
-    
         if (defined($col_to_remove_hash{$col}))
         {
             next;
@@ -810,6 +813,12 @@ while(defined($line=<INFILE>))
         if (!defined($sample_col_hash{$col}))
         {
             next;
+        }
+
+        $field = $array[$col];
+        if (!defined($field))
+        {
+            $field = '';
         }
     
         if ($print_flag == 1)
