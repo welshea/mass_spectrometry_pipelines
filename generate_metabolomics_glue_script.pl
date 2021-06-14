@@ -1,7 +1,12 @@
 #!/usr/bin/perl -w
 
+# 2021-06-14:  add annotate_metabolomics.pl script
 # 2021-05-27:  add default output_root_name
 # 2021-01-06:  add support for strip_metabolomics_columns.pl command options
+
+use File::Spec;
+use File::Basename;
+
 
 $keep_single_pregap_flag   = 0;
 $discard_unidentified_flag = 0;
@@ -9,6 +14,13 @@ $discard_heavy_flag        = 0;
 
 $syntax_error_flag         = 0;
 $num_files                 = 0;
+
+
+# this correctly doesn't follow symlinked scripts, so you get the right path
+# various other methods return the destination linked path instead,
+#  which we don't want here
+$script_path   = dirname(File::Spec->rel2abs(__FILE__));
+
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -158,10 +170,13 @@ $cmd_str_iron_neg  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\"
                          $neg_cleaned_filename,
                          $neg_iron_filename;
 
-$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" > \"%s\"",
+$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" | %s \"%s/%s\" - > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
                          $pos_iron_filename,
                          $neg_iron_filename,
+                         'annotate_metabolomics.pl',
+                         $script_path,
+                         'metabolite_database_latest.txt',
                          $merged_filename;
 
 $cmd_str_rm        = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
