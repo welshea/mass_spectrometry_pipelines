@@ -862,12 +862,12 @@ for ($i = 0; $i < @array; $i++)
     $header = $array[$i];
 
     if (!defined($data_mz_col) &&
-        $header =~ /m\/z/i)
+        $header =~ /m\/*z/i)
     {
         $data_mz_col = $i;
     }
     elsif (!defined($data_name_col) &&
-           $header =~ /identity/i)
+           $header =~ /(identity|compound)/i)
     {
         $data_name_col = $i;
     }
