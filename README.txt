@@ -7,6 +7,39 @@ findmedian, iron_generic
 
 
 
+annotate_metabolomics.pl
+
+  Annotate MZMine (and eventually other software's) metabolomics data with
+  external identifiers and updated metabolite names.  Automatically removes
+  untrustworthy MZMine peak identifications with m/z error > 10 PPM. Warns of
+  unmatched rows, different m/z, and retention times > +/-1 minute from
+  reference.
+
+  Usage: annotate_metabolomics.pl identifier_mapping.txt cleaned_mzmine.txt
+
+  Mapped fields are | (vertical bar) delimited, rather than ; delimited.
+  Multiple | delimited subfields have 1:1 correspondence across mapped
+  fields.  Original name ("identity") usually exhibits 1:1 correspondence
+  with newly mapped name ("Identity Mapped"), but not always, such as when
+  multiple original names map to the same metabolite.  There are currently
+  no 1:many original:new mappings that have been observed, but many:1 can
+  ocasionally occur in older datasets (this is intended behavior).
+
+  Mapping Type field legend:
+    1A: exact match, original m/z
+    1B: conformed,   original m/z
+    2A: exact match, pos/neg  m/z
+    2B: conformed,   pos/neg  m/z
+    3A: exact_match, all rows, regardless of m/z
+    3B: conformed,   all rows, regardless of m/z
+    4A: fuzzy,       original m/z, one candidate
+    4B: fuzzy,       original m/z, >= 2 candidates
+    5A: fuzzy,       pos/neg  m/z, one candidate
+    5B: fuzzy,       pos/neg  m/z, >= 2 candidates
+    unmapped rows leave this field blank
+
+
+
 autodetect_ms_data.pl
 
   Scan MaxQuant output file to determine (or guess) various parameters to feed
