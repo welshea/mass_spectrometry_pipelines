@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-06-16:  improved is_heavy_labeled() function
 # 2021-05-28:  support non-abundance columns inserted at end of file,
 #              output right-aligned contiguous block of sample data
 # 2021-04-14:  begin adding support for lipidomics
@@ -137,8 +138,9 @@ sub is_heavy_labeled
 {
     my $string = $_[0];
     
-    if ($string =~ /\b13C[0-9]+\b/) { return 1; }
-    if ($string =~ /\bD[0-9]+\b/)   { return 1; }
+    if ($string =~ /\([^()]*13C[0-9]*[^()]*\)/) { return 1; }
+    if ($string =~ /\([^()]*14N[0-9]*[^()]*\)/) { return 1; }
+    if ($string =~ /\([^()]*D[0-9]*[^()]*\)/)   { return 1; }
     
     return 0;
 }
