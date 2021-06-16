@@ -9,7 +9,7 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 use align_text;    # text string alignment module
 
-$mz_tol_ppm = 10;    # 10 ppm
+$mz_tol_ppm = 15;    # 10 ppm
 $rt_tol     = 1.0;   # minutes
 
 sub is_number
@@ -979,9 +979,11 @@ while(defined($line=<DATA>))
         {
             $mz_db = $annotation_hash{$row}{mz};
             
-            $ppm    = 1000000 * abs(($mz - $mz_db) / $mz_db);
-            $ppm_m2 = 1000000 * abs(($mz - $mz_db - 2.014552) / $mz_db);
-            $ppm_p2 = 1000000 * abs(($mz - $mz_db + 2.014552) / $mz_db);
+            $ppm    = 1000000 * abs(( $mz_db             - $mz) / $mz_db);
+            $ppm_m2 = 1000000 * abs((($mz_db - 2.014552) - $mz) /
+                                    ( $mz_db - 2.014552));
+            $ppm_p2 = 1000000 * abs((($mz_db + 2.014552) - $mz) /
+                                    ( $mz_db + 2.014552));
             
             # check only given m/z
             if ($ppm <= $mz_tol_ppm)
