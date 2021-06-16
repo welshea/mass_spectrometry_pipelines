@@ -9,7 +9,7 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 use align_text;    # text string alignment module
 
-$mz_tol_ppm = 15;    # 10 ppm
+$mz_tol_ppm = 10;    # 10 ppm
 $rt_tol     = 1.0;   # minutes
 
 sub is_number
