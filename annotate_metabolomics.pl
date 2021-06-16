@@ -345,9 +345,9 @@ sub is_heavy_labeled
 {
     my $string = $_[0];
     
-    if ($string =~ /\([^()]*13C[0-9]*[^()]*\)/) { return 1; }
-    if ($string =~ /\([^()]*14N[0-9]*[^()]*\)/) { return 1; }
-    if ($string =~ /\([^()]*D[0-9]*[^()]*\)/)   { return 1; }
+    if ($string =~ /\([^()]*\b13C[0-9]*\b[^()]*\)/) { return 1; }
+    if ($string =~ /\([^()]*\b14N[0-9]*\b[^()]*\)/) { return 1; }
+    if ($string =~ /\([^()]*\bD[0-9]*\b[^()]*\)/)   { return 1; }
     
     return 0;
 }
@@ -964,7 +964,9 @@ while(defined($line=<DATA>))
 
 
     # scan for match(es) in annotation database
-    if (is_number($mz) && $name =~ /\S/)
+    # skip heavy labeled metabolites
+    if (is_number($mz) && $name =~ /\S/ &&
+        !is_heavy_labeled($name))
     {
         %candidate_row_mz_hash      = ();
         %candidate_row_pos_neg_hash = ();
