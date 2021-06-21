@@ -1,10 +1,11 @@
 #!/usr/bin/perl -w
 
+# 2021-06-21:  updated csv2tsv_not_excel to handle "" by themselves
 # 2021-03-05:  expand usage help message
 # 2020-08-05:  more robust csb2tab_not_excel() function
 # 2020-07-31:  faster and more robust csb2tab_not_excel() function
-# 2020-07-28:  optimize csv2tab_not_excel() function
-# 2020-07-24:  fix csv2tab, was condensing multiple tabs in front of quotes
+# 2020-07-28:  optimize csv2tsv_not_excel() function
+# 2020-07-24:  fix csv2tsv, was condensing multiple tabs in front of quotes
 
 
 use Scalar::Util qw(looks_like_number);
@@ -236,6 +237,18 @@ sub csv2tsv_not_excel
     # replace remaining tabs with spaces so text doesn't abutt together
     $line =~ s/($tab)+/ /g;
 
+    # Special case "" in a field by itself.
+    #
+    # This generally results from lazily-coded csv writers that enclose
+    #  every single field in "", even empty fields, whether they need them
+    #  or not.
+    #
+    # \K requires Perl >= v5.10.0 (2007-12-18)
+    #   (?: *)\K is faster than replacing ( *) with $1
+    $line =~ s/(?:(?<=\t)|^)(?: *)\K""( *)(?=\t)/$1/g;  # start|tabs "" tabs
+    $line =~    s/(?<=\t)(?: *)\K""( *)(?=\t|$)/$1/g;   # tabs  "" tabs|end
+    $line =~          s/^(?: *)\K""( *)$/$1/g;          # start "" end
+
     # strip enclosing double-quotes, preserve leading/trailing spaces
     #
     # \K requires Perl >= v5.10.0 (2007-12-18)
@@ -244,6 +257,7 @@ sub csv2tsv_not_excel
 
     # unescape escaped double-quotes
     $line =~ s/""/"/g;
+
     
     return $line;
 }
