@@ -1,10 +1,11 @@
 #!/usr/bin/perl -w
 
-# 2020-08-05    modify split regex to handle a few more invalid edge cases
-# 2020-08-04    modify split regex to handle a few more invalid edge cases
-# 2020-07-31    more improvements to robustness and optimizations
-# 2020-07-28    speed up by replacing more quick and easy cases first
-# 2020-07-24    fix, was condensing multiple tabs ahead of quoted field
+# 2021-06-21  special case "" in a field by itself
+# 2020-08-05  modify split regex to handle a few more invalid edge cases
+# 2020-08-04  modify split regex to handle a few more invalid edge cases
+# 2020-07-31  more improvements to robustness and optimizations
+# 2020-07-28  speed up by replacing more quick and easy cases first
+# 2020-07-24  fix, was condensing multiple tabs ahead of quoted field
 
 
 # This function was written to handle invalid CSV escaping in a consistent
@@ -219,6 +220,18 @@ sub csv2tsv_not_excel
     # replace remaining tabs with spaces so text doesn't abutt together
     $line =~ s/($tab)+/ /g;
 
+    # Special case "" in a field by itself.
+    #
+    # This generally results from lazily-coded csv writers that enclose
+    #  every single field in "", even empty fields, whether they need them
+    #  or not.
+    #
+    # \K requires Perl >= v5.10.0 (2007-12-18)
+    #   (?: *)\K is faster than replacing ( *) with $1
+    $line =~ s/(?:(?<=\t)|^)(?: *)\K""( *)(?=\t)/$1/g;  # start|tabs "" tabs
+    $line =~    s/(?<=\t)(?: *)\K""( *)(?=\t|$)/$1/g;   # tabs  "" tabs|end
+    $line =~          s/^(?: *)\K""( *)$/$1/g;          # start "" end
+
     # strip enclosing double-quotes, preserve leading/trailing spaces
     #
     # \K requires Perl >= v5.10.0 (2007-12-18)
@@ -227,6 +240,7 @@ sub csv2tsv_not_excel
 
     # unescape escaped double-quotes
     $line =~ s/""/"/g;
+
     
     return $line;
 }
