@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-06-22:  fallback to 'row identity (main ID)' if (all IDs) not found
 # 2021-06-16:  improved is_heavy_labeled() function
 # 2021-05-28:  support non-abundance columns inserted at end of file,
 #              output right-aligned contiguous block of sample data
@@ -331,6 +332,26 @@ for ($col = 0; $col < @header_col_array; $col++)
 }
 
 
+# we're going to use the compound names to identify spikeins
+# and signal/background peaks
+$rowid_col = $header_col_hash{'row ID'};
+$name_col  = $header_col_hash{'row identity (all IDs)'};
+
+
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'row identity (main ID)'};
+}
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'compound'};
+}
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'compoundId'};
+}
+
+
 # flag columns to remove, as they clutter up the file
 for ($col = 0; $col < @header_col_array; $col++)
 {
@@ -358,8 +379,8 @@ for ($col = 0; $col < @header_col_array; $col++)
             next;
         }
         
-        # only keep row identity (all IDs)
-        if ($field eq 'row identity (all IDs)')
+        # only keep the chosen row identify column
+        if ($col eq $name_col)
         {
             next;
         }
@@ -471,19 +492,6 @@ if ($has_pregap_flag == 0)
 }
 
 
-# we're going to use the compound names to identify spikeins
-# and signal/background peaks
-$rowid_col = $header_col_hash{'row ID'};
-$name_col  = $header_col_hash{'row identity (all IDs)'};
-
-if (!defined($name_col))
-{
-    $name_col = $header_col_hash{'compound'};
-}
-if (!defined($name_col))
-{
-    $name_col = $header_col_hash{'compoundId'};
-}
 
 #lipidomics
 if (!defined($name_col))
