@@ -959,6 +959,7 @@ while(defined($line=<DATA>))
     
     # keep track of originally incorrectly identified metabolites
     %bad_mz_name_hash  = ();
+    %bad_mz_row_hash   = ();
     $has_bad_mz_flag   = 0;
     $has_good_mz_flag  = 0;
 
@@ -1144,6 +1145,7 @@ while(defined($line=<DATA>))
                         $match_type = '3A';
                         
                         $bad_mz_name_hash{$name_oc} = $row;
+                        $bad_mz_row_hash{$row}      = $name_oc;
                         $has_bad_mz_flag            = 1;
                 
                         # store each row only once per row
@@ -1180,6 +1182,7 @@ while(defined($line=<DATA>))
                         $match_type = '3B';
 
                         $bad_mz_name_hash{$name_oc} = $row;
+                        $bad_mz_row_hash{$row}      = $name_oc;
                         $has_bad_mz_flag            = 1;
                     
                         # store each row only once per row
@@ -1479,6 +1482,7 @@ while(defined($line=<DATA>))
         }
         @matched_row_array  = @new_matched_row_array;
         @matched_type_array = @new_matched_type_array;
+        $num_matches        = $j;
     }
 
 
@@ -1517,11 +1521,10 @@ while(defined($line=<DATA>))
         $j = 0;
         for ($i = 0; $i < $num_matches; $i++)
         {
-            $row        = $matched_row_array[$i];
-            $match_type = $matched_type_array[$i];
+            $row = $matched_row_array[$i];
 
             # store only good matches
-            if (!($match_type =~ /3/))
+            if (!defined($bad_mz_row_hash{$row}))
             {
                 $new_matched_row_array[$j]  = $row;
                 $new_matched_type_array[$j] = $matched_type_array[$i];
@@ -1531,6 +1534,7 @@ while(defined($line=<DATA>))
         }
         @matched_row_array  = @new_matched_row_array;
         @matched_type_array = @new_matched_type_array;
+        $num_matches        = $j;
     }
     
     
