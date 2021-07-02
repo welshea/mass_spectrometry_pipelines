@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-07-02:  issue a warning for "main ID" files, only one hit reported
 # 2021-06-22:  fallback to 'row identity (main ID)' if (all IDs) not found
 # 2021-06-16:  improved is_heavy_labeled() function
 # 2021-05-28:  support non-abundance columns inserted at end of file,
@@ -341,6 +342,11 @@ $name_col  = $header_col_hash{'row identity (all IDs)'};
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'row identity (main ID)'};
+    
+    if (defined($name_col))
+    {
+        printf STDERR "WARNING -- (main ID) name used, will miss multiple hits per row\n";
+    }
 }
 if (!defined($name_col))
 {
