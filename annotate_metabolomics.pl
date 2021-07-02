@@ -871,6 +871,11 @@ for ($i = 0; $i < @array; $i++)
            $header =~ /(identity|compound)/i)
     {
         $data_name_col = $i;
+        
+        if ($header =~ /main ID/i)
+        {
+            printf STDERR "WARNING -- (main id) used instead of (all ids), will miss hits\n";
+        }
     }
     elsif (!defined($data_rt_col) &&
            $header =~ /retention time/i)
