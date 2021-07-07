@@ -262,7 +262,11 @@ sub bless_delimiter_bar_metabolomics
     $n = @temp_array - 2;
     for ($i = -2; $i < $n;)
     {
-        $temp_array[$i += 2] =~ tr/\;/\|/;
+        $i += 2;
+        $temp_array[$i] =~ tr/\;/\|/;
+
+        # / can also be a delimiter in some much older metabolomics data
+        $temp_array[$i] =~ tr/\//\|/;
     }
     $text = join '', @temp_array;
 
@@ -270,6 +274,7 @@ sub bless_delimiter_bar_metabolomics
     $text =~ s/\|+/\|/g;
     $text =~ s/^\|//;
     $text =~ s/\|$//;
+    
     
     # clean up spaces
     $text =~ s/^\s+//;
