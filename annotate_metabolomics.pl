@@ -1428,12 +1428,15 @@ while(defined($line=<DATA>))
                         if ($delta > $rt_tol &&
                             !defined($rt_ok_hash{$name_db}))
                         {
+                          if (defined($bad_mz_row_hash{$row}))
+                          {
                             printf STDERR "WARNING -- rt differ:\t%f\t%f\t%s\t%s\t%f\t%f\n",
                                 $mz,
                                 $annotation_hash{$row}{mz},
                                 $name_delim,
                                 $annotation_hash{$row}{name},
                                 $rt_data, $rt_db;
+                          }
                         }
                     }
                 }
