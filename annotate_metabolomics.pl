@@ -1,6 +1,10 @@
 #!/usr/bin/perl -w
 
 
+# TODO -- deal with multiple matches to the same metabolite per row,
+#         set match type to worst of the multiple matches for QC purposes
+
+
 # set lib search path to directory the script is run from
 use File::Basename;
 use lib dirname (__FILE__);
@@ -951,6 +955,9 @@ while(defined($line=<DATA>))
         $array[$col] = reformat_sci($array[$col]);
     }
 
+    # assume first field is row identifier for error reporting
+    $first_field = $array[0];
+
     $mz   = $array[$data_mz_col];
     $name = $array[$data_name_col];
     
@@ -998,7 +1005,7 @@ while(defined($line=<DATA>))
                                     ( $mz_db - 2.014552));
             $ppm_p2 = 1000000 * abs((($mz_db + 2.014552) - $mz) /
                                     ( $mz_db + 2.014552));
-            
+
             # check only given m/z
             if ($ppm <= $mz_tol_ppm)
             {
@@ -1015,7 +1022,7 @@ while(defined($line=<DATA>))
         
         # original and +/- ~2 m/z row arrays
         @row_mz_array      = sort {$a<=>$b} keys %candidate_row_mz_hash;
-        @row_pos_neg_array = sort {$a<=>$b} keys %candidate_row_mz_hash;
+        @row_pos_neg_array = sort {$a<=>$b} keys %candidate_row_pos_neg_hash;
         
         # support multiple ;-delimited names per data row
         $name_delim = $name;
@@ -1165,7 +1172,8 @@ while(defined($line=<DATA>))
                             $matched_type_array[$num_matches] = $match_type;
                             $num_matches++;
 
-                            printf STDERR "WARNING -- mz differ:\t%f\t%f\t%s\t%s\n",
+                            printf STDERR "WARNING -- mz differ:\t%s\t%f\t%f\t%s\t%s\n",
+                                $first_field,
                                 $mz,
                                 $annotation_hash{$row}{mz},
                                 $name_delim,
@@ -1202,7 +1210,8 @@ while(defined($line=<DATA>))
                             $matched_type_array[$num_matches] = $match_type;
                             $num_matches++;
 
-                            printf STDERR "WARNING -- mz differ:\t%f\t%f\t%s\t%s\n",
+                            printf STDERR "WARNING -- mz differ:\t%s\t%f\t%f\t%s\t%s\n",
+                                $first_field,
                                 $mz,
                                 $annotation_hash{$row}{mz},
                                 $name_delim,
@@ -1291,7 +1300,8 @@ while(defined($line=<DATA>))
                             $name_db_conformed =
                                 preprocess_name($annotation_hash{$row}{name});
 
-                            printf STDERR "%s   %s   %s   %s   %0.4f   %s|%s\n",
+                            printf STDERR "%s   %s   %s   %s   %s   %0.4f   %s|%s\n",
+                                $first_field,
                                 $row_data,
                                 $match_type,
                                 $mz, $mz_db,
@@ -1303,7 +1313,8 @@ while(defined($line=<DATA>))
             }
 
             # 5A/5B: fuzzy,       pos/neg  m/z
-            if ($match_flag == 0)
+            # currently too prone to mis-mappings, disable it
+            if (0 && $match_flag == 0)
             {
                 %candidate_name_hash = ();
                 %temp_row_score_hash = ();
@@ -1380,7 +1391,8 @@ while(defined($line=<DATA>))
                             $name_db_conformed =
                                 preprocess_name($annotation_hash{$row}{name});
 
-                            printf STDERR "%s   %s   %s   %s   %0.4f   %s|%s\n",
+                            printf STDERR "%s   %s   %s   %s   %s   %0.4f   %s|%s\n",
+                                $first_field,
                                 $row_data,
                                 $match_type,
                                 $mz, $mz_db,
@@ -1395,8 +1407,8 @@ while(defined($line=<DATA>))
             if ($match_flag == 0)
             {
                 $match_type = '9X';
-                printf STDERR "UNMATCHED   %s   %s   %s\n",
-                              $mz, $name, $name_oc;
+                printf STDERR "UNMATCHED   %s   %s   %s   %s\n",
+                              $first_field, $mz, $name, $name_oc;
 
                 $bad_mz_name_hash{$name_oc} = 'unmatched';
                 $has_bad_mz_flag            = 1;
@@ -1439,7 +1451,8 @@ while(defined($line=<DATA>))
                         {
                           if (defined($bad_mz_row_hash{$row}))
                           {
-                            printf STDERR "WARNING -- rt differ:\t%f\t%f\t%s\t%s\t%f\t%f\n",
+                            printf STDERR "WARNING -- rt differ:\t%s\t%f\t%f\t%s\t%s\t%f\t%f\n",
+                                $first_field,
                                 $mz,
                                 $annotation_hash{$row}{mz},
                                 $name_delim,
@@ -1521,8 +1534,8 @@ while(defined($line=<DATA>))
         }
         $name_corrected = join ';', @name_array_new;
 
-        printf STDERR "CORRECTION -- remove poor ids:\t%s --> %s\n",
-            $name, $name_corrected;
+        printf STDERR "CORRECTION -- remove poor ids:\t%s\t%s --> %s\n",
+            $first_field, $name, $name_corrected;
         
         # convert clean | delimited text back to ; delimited
         $name_corrected =~ s/\|/\;/g;
