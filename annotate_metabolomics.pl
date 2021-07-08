@@ -1,10 +1,6 @@
 #!/usr/bin/perl -w
 
 
-# TODO -- deal with multiple matches to the same metabolite per row,
-#         set match type to worst of the multiple matches for QC purposes
-
-
 # set lib search path to directory the script is run from
 use File::Basename;
 use lib dirname (__FILE__);
@@ -971,6 +967,7 @@ while(defined($line=<DATA>))
 
     # matched (mapped) rows
     %matched_row_hash  = ();
+    %matched_row_type_hash = ();
     @matched_row_array = ();
     $num_matches       = 0;
     
@@ -1068,6 +1065,7 @@ while(defined($line=<DATA>))
                         $num_matches++;
                     }
                     $matched_row_hash{$row} = 1;
+                    $matched_row_type_hash{$row}{$match_type} = 1;
                 }
             }
 
@@ -1094,6 +1092,7 @@ while(defined($line=<DATA>))
                             $num_matches++;
                         }
                         $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
                     }
                 }
             }
@@ -1118,6 +1117,7 @@ while(defined($line=<DATA>))
                             $num_matches++;
                         }
                         $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
                     }
                 }
             }
@@ -1145,6 +1145,7 @@ while(defined($line=<DATA>))
                             $num_matches++;
                         }
                         $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
                     }
                 }
             }
@@ -1180,6 +1181,7 @@ while(defined($line=<DATA>))
                                 $annotation_hash{$row}{name},
                         }
                         $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
                     }
                 }
             }
@@ -1218,6 +1220,7 @@ while(defined($line=<DATA>))
                                 $annotation_hash{$row}{name},
                         }
                         $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
                     }
                 }
             }
@@ -1293,6 +1296,7 @@ while(defined($line=<DATA>))
                             $num_matches++;
                         }
                         $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
 
                         if (0)
                         {
@@ -1384,6 +1388,7 @@ while(defined($line=<DATA>))
                             $num_matches++;
                         }
                         $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
 
                         if (0)
                         {
@@ -1513,6 +1518,25 @@ while(defined($line=<DATA>))
         @matched_row_array  = @new_matched_row_array;
         @matched_type_array = @new_matched_type_array;
         $num_matches        = $j;
+    }
+    
+    
+    # set match type to worst observed per row
+    if ($num_matches >= 1)
+    {
+        for ($i = 0; $i < $num_matches; $i++)
+        {
+            $row = $matched_row_array[$i];
+            
+            @temp_array = sort {$b cmp $a}
+                          keys %{$matched_row_type_hash{$row}};
+            $temp_str = join ';', @temp_array;
+
+            if (@temp_array > 1)
+            {
+                $matched_type_array[$i] = $temp_array[0];
+            }
+        }
     }
 
 
