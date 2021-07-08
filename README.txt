@@ -36,7 +36,8 @@ annotate_metabolomics.pl
     4B: fuzzy,       original m/z, >= 2 candidates
     5A: fuzzy,       pos/neg  m/z, one candidate
     5B: fuzzy,       pos/neg  m/z, >= 2 candidates
-    unmapped rows leave this field blank
+    9X: identified row not matched to search database
+        (usually a bad identification)
 
 
 
