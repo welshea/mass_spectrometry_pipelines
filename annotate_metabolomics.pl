@@ -1395,7 +1395,11 @@ while(defined($line=<DATA>))
             if ($match_flag == 0)
             {
                 $match_type = '9X';
-                printf STDERR "UNMATCHED   %s   %s\n", $mz, $name;
+                printf STDERR "UNMATCHED   %s   %s   %s\n",
+                              $mz, $name, $name_oc;
+
+                $bad_mz_name_hash{$name_oc} = 'unmatched';
+                $has_bad_mz_flag            = 1;
             }
             
 
@@ -1517,7 +1521,7 @@ while(defined($line=<DATA>))
         }
         $name_corrected = join ';', @name_array_new;
 
-        printf STDERR "CORRECTION -- remove poor id:\t%s --> %s\n",
+        printf STDERR "CORRECTION -- remove poor ids:\t%s --> %s\n",
             $name, $name_corrected;
         
         # convert clean | delimited text back to ; delimited
@@ -1627,6 +1631,14 @@ while(defined($line=<DATA>))
             if ($kegg_str       eq '|') { $kegg_str       = ''; }
             if ($hmdb_str       eq '|') { $hmdb_str       = ''; }
             if ($pubchem_str    eq '|') { $pubchem_str    = ''; }
+
+
+            # no matches found for this row
+            # report match type of 9X
+            if ($name =~ /\S/ && $match_type_str eq '')
+            {
+                $match_type_str = '9X';
+            }
 
 
             printf "\t%s", $name_db_str;
