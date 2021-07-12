@@ -1523,19 +1523,20 @@ while(defined($line=<DATA>))
                 $hmdb    = $annotation_hash{$row}{hmdb};
                 $pubchem = $annotation_hash{$row}{pubchem};
 
-                if (!defined($name_db)) { $name_db = ''; }
+                if (!defined($name_db)) { $name_db    = ''; }
                 if (!defined($formula)) { $formula_db = ''; }
                 if (!defined($kegg))    { $kegg_db    = ''; }
                 if (!defined($hmdb))    { $hmdb_db    = ''; }
                 if (!defined($pubchem)) { $pubchem_db = ''; }
             }
 
-            
+
             $temp_id = sprintf "%s|%s|%s|%s|%s",
                 $name_db, $formula, $kegg, $hmdb, $pubchem;
 
+
             # store only matches we haven't encountered yet
-            if ($temp_id ne '' && !defined($seen_match_hash{$temp_id}))
+            if ($row == $bad_row_id || !defined($seen_match_hash{$temp_id}))
             {
                 $new_matched_row_array[$j]  = $row;
                 $new_matched_type_array[$j] = $matched_type_array[$i];
