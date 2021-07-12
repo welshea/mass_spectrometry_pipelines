@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-07-12:  more lipidomics support
 # 2021-07-02:  issue a warning for "main ID" files, only one hit reported
 # 2021-06-22:  fallback to 'row identity (main ID)' if (all IDs) not found
 # 2021-06-16:  improved is_heavy_labeled() function
@@ -355,6 +356,12 @@ if (!defined($name_col))
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'compoundId'};
+}
+
+# lipidomics
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'LipidIon'};
 }
 
 
