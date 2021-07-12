@@ -1415,8 +1415,8 @@ while(defined($line=<DATA>))
                 printf STDERR "UNMATCHED   %s   %s   %s   %s\n",
                               $first_field, $mz, $name, $name_oc;
 
-                $bad_mz_name_hash{$name_oc} = 'unmatched';
-                $has_bad_mz_flag            = 1;
+                #$bad_mz_name_hash{$name_oc} = 'unmatched';
+                #$has_bad_mz_flag            = 1;
             }
             
 
