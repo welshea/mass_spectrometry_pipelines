@@ -12,6 +12,8 @@ use align_text;    # text string alignment module
 $mz_tol_ppm = 10;    # 10 ppm
 $rt_tol     = 1.0;   # minutes
 
+$bad_row_id = 9E99;
+
 sub is_number
 {
     # use what Perl thinks is a number first
@@ -810,6 +812,16 @@ while(defined($line=<ANNOTATION>))
 #$row_count = $row;
 
 
+# bogus row for unmapped hits
+$annotation_hash{$bad_row_id}{mz}      = '';
+$annotation_hash{$bad_row_id}{formula} = '';
+$annotation_hash{$bad_row_id}{name}    = '';
+$annotation_hash{$bad_row_id}{kegg}    = '';
+$annotation_hash{$bad_row_id}{hmdb}    = '';
+$annotation_hash{$bad_row_id}{pubchem} = '';
+$annotation_hash{$bad_row_id}{rt}      = '';
+
+
 # all rows, to be used when looking for matches regardless of m/z
 @row_all_array = sort {$a <=> $b} keys %annotation_hash;
 
@@ -1415,6 +1427,13 @@ while(defined($line=<DATA>))
                 printf STDERR "UNMATCHED   %s   %s   %s   %s\n",
                               $first_field, $mz, $name, $name_oc;
 
+                $matched_row_array[$num_matches]  = $bad_row_id;
+                $matched_type_array[$num_matches] = $match_type;
+                $num_matches++;
+
+                $matched_row_hash{$bad_row_id} = 1;
+                $matched_row_type_hash{$bad_row_id}{$match_type} = 1;
+
                 #$bad_mz_name_hash{$name_oc} = 'unmatched';
                 #$has_bad_mz_flag            = 1;
             }
@@ -1488,24 +1507,35 @@ while(defined($line=<DATA>))
         $j = 0;
         for ($i = 0; $i < $num_matches; $i++)
         {
-            $row        = $matched_row_array[$i];
+            $row     = $matched_row_array[$i];
 
-            $name_db    = $annotation_hash{$row}{name};
-            $formula    = $annotation_hash{$row}{formula};
-            $kegg       = $annotation_hash{$row}{kegg};
-            $hmdb       = $annotation_hash{$row}{hmdb};
-            $pubchem    = $annotation_hash{$row}{pubchem};
+            $name_db = '';
+            $formula = '';
+            $kegg    = '';
+            $hmdb    = '';
+            $pubchem = '';
 
-            if (!defined($formula)) { $formula_db = ''; }
-            if (!defined($kegg))    { $kegg_db    = ''; }
-            if (!defined($hmdb))    { $hmdb_db    = ''; }
-            if (!defined($pubchem)) { $pubchem_db = ''; }
+            if (defined($annotation_hash{$row}))
+            {
+                $name_db = $annotation_hash{$row}{name};
+                $formula = $annotation_hash{$row}{formula};
+                $kegg    = $annotation_hash{$row}{kegg};
+                $hmdb    = $annotation_hash{$row}{hmdb};
+                $pubchem = $annotation_hash{$row}{pubchem};
+
+                if (!defined($name_db)) { $name_db = ''; }
+                if (!defined($formula)) { $formula_db = ''; }
+                if (!defined($kegg))    { $kegg_db    = ''; }
+                if (!defined($hmdb))    { $hmdb_db    = ''; }
+                if (!defined($pubchem)) { $pubchem_db = ''; }
+            }
+
             
             $temp_id = sprintf "%s|%s|%s|%s|%s",
                 $name_db, $formula, $kegg, $hmdb, $pubchem;
 
             # store only matches we haven't encountered yet
-            if (!defined($seen_match_hash{$temp_id}))
+            if ($temp_id ne '' && !defined($seen_match_hash{$temp_id}))
             {
                 $new_matched_row_array[$j]  = $row;
                 $new_matched_type_array[$j] = $matched_type_array[$i];
@@ -1530,7 +1560,6 @@ while(defined($line=<DATA>))
             
             @temp_array = sort {$b cmp $a}
                           keys %{$matched_row_type_hash{$row}};
-            $temp_str = join ';', @temp_array;
 
             if (@temp_array > 1)
             {
