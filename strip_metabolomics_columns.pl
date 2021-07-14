@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-07-14:  conform with buest guess when no standard height/peak found
 # 2021-07-12:  more lipidomics support
 # 2021-07-02:  issue a warning for "main ID" files, only one hit reported
 # 2021-06-22:  fallback to 'row identity (main ID)' if (all IDs) not found
@@ -330,6 +331,75 @@ for ($col = 0; $col < @header_col_array; $col++)
     {
          $peak_height_flag = 1;
          next;
+    }
+}
+
+
+# uh oh, no data columns found
+# conform them so that Area or Height start at the beginning or end
+if ($peak_height_flag == 0 && $peak_area_flag == 0)
+{
+    printf STDERR "WARNING -- non-standard Height/Area nomenclature, conforming with best guess\n";
+
+    for ($col = 0; $col < @header_col_array; $col++)
+    {
+        $field = $header_col_array[$col];
+
+        if ($field =~ /([^A-Za-z0-9]*Height[^A-Za-z0-9]*)/i)
+        {
+            $height_area_str = $1;
+        
+            # conform the sample header
+            $field =~ s/$height_area_str/_/;
+            
+            # deal with inserted _ at beginning/end
+            if ($field =~ /^(_+)/)
+            {
+                $count_underscores_new  = length $1;
+                $count_underscores_orig = 0;
+                
+                if ($header_col_array[$col] =~ /^(_+)/)
+                {
+                    $count_underscores_orig = length $1;
+                }
+                
+                if ($count_underscores_new != $count_underscores_orig)
+                {
+                    $field =~ s/^_//;
+                }
+            }
+            if ($field =~ /(_+)$/)
+            {
+                $count_underscores_new  = length $1;
+                $count_underscores_orig = 0;
+                
+                if ($header_col_array[$col] =~ /(_+)$/)
+                {
+                    $count_underscores_orig = length $1;
+                }
+                
+                if ($count_underscores_new != $count_underscores_orig)
+                {
+                    $field =~ s/_$//;
+                }
+            }
+            
+            $field .= ' Peak height';
+
+            $header_col_array[$col] = $field;
+            $peak_height_flag = 1;
+        }
+        if ($field =~ /([^A-Za-z0-9]*Area[^A-Za-z0-9]*)/i)
+        {
+            $height_area_str = $1;
+        
+            # conform the sample header
+            $field =~ s/$height_area_str/_/;
+            $field .= ' Peak area';
+
+            $header_col_array[$col] = $field;
+            $peak_area_flag = 1;
+        }
     }
 }
 
