@@ -395,6 +395,39 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
         
             # conform the sample header
             $field =~ s/$height_area_str/_/;
+
+            # deal with inserted _ at beginning/end
+            if ($field =~ /^(_+)/)
+            {
+                $count_underscores_new  = length $1;
+                $count_underscores_orig = 0;
+                
+                if ($header_col_array[$col] =~ /^(_+)/)
+                {
+                    $count_underscores_orig = length $1;
+                }
+                
+                if ($count_underscores_new != $count_underscores_orig)
+                {
+                    $field =~ s/^_//;
+                }
+            }
+            if ($field =~ /(_+)$/)
+            {
+                $count_underscores_new  = length $1;
+                $count_underscores_orig = 0;
+                
+                if ($header_col_array[$col] =~ /(_+)$/)
+                {
+                    $count_underscores_orig = length $1;
+                }
+                
+                if ($count_underscores_new != $count_underscores_orig)
+                {
+                    $field =~ s/_$//;
+                }
+            }
+
             $field .= ' Peak area';
 
             $header_col_array[$col] = $field;
