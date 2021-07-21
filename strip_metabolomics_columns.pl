@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-07-21:  zero out any data with a value < 10 as bad data
 # 2021-07-14:  conform with buest guess when no standard height/peak found
 # 2021-07-12:  more lipidomics support
 # 2021-07-02:  issue a warning for "main ID" files, only one hit reported
@@ -156,6 +157,8 @@ $discard_heavy_flag        = 0;
 
 $syntax_error_flag         = 0;
 $num_files                 = 0;
+
+$floor_cutoff              = 10;    # absurdly low abundance, floor to zero
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -717,6 +720,7 @@ $num_excel_large = 0;	# number of potential Excel-corruptible values
 $sum_excel_large = 0;	# sum of number of non-zero last 5 digits
 
 $row_count = 0;
+$too_low_count = 0;
 while(defined($line=<INFILE>))
 {
     $row_count++;
@@ -946,6 +950,16 @@ while(defined($line=<INFILE>))
         {
             $field = '';
         }
+        
+        # check for bad data
+        # mass spec data is generally at least in the 1000's
+        # a value < 10 is almost certainly garbage
+        if (is_number($field) && $field < 10)
+        {
+            $field = '0';
+        
+            $too_low_count++;
+        }
     
         if ($print_flag == 1)
         {
@@ -988,6 +1002,14 @@ while(defined($line=<INFILE>))
         }
     }
 }
+
+
+if ($too_low_count)
+{
+    printf STDERR "WARNING -- %d values < %d were floored to zero\n",
+        $too_low_count, $floor_cutoff;
+}
+
 
 $avg_excel_large = 9E99;
 if ($num_excel_large)
