@@ -454,9 +454,17 @@ for ($i = 0; $i < @array; $i++)
     # this is *ROYALLY*screwing everything up
     #
     # I am just going to conform all the capitalization here
-    # If a word is >= 3 long ,and the first letter of a word isn't
+    # If a word is >= 3 long, and the first letter of a word isn't
     #  already capitalized, capitalize it
     #
+    # 2021-07-22 Maxquant broke capitalization yet again, this time with
+    #  Desthiobiotin vs. DesthioBiotin
+    # HACK: conform DesthioBiotin to Desthiobiotin,
+    #  since DesthioBiotin is poorly capitalized anyways
+    #  they've spelled in wrong in the past too, so fix that typo as well
+    #
+    $array[$i] =~ s/DesthioBiotin/Desthiobiotin/ig;
+    $array[$i] =~ s/Dethiobiotin/Desthiobiotin/ig;
     @word_array = split /\s+/, $array[$i];
     for ($j = 0; $j < @word_array; $j++)
     {
