@@ -599,66 +599,66 @@ if (!defined($probSTY_col))
 
 #if (!defined($modified_sequence_col))
 #{
-#    die "Sequence window column not found in file1\n";
+#    die "Sequence window column not found in file $filename\n";
 #}
 #if (!defined($charge_col))
 #{
-#    die "Charge column not found in file1\n";
+#    die "Charge column not found in file $filename\n";
 #}
 if (!defined($pep_col))
 {
-    die "PEP column not found in file1\n";
+    die "PEP column not found in file $filename\n";
 }
 if (!defined($score_col))
 {
-    die "Score column not found in file1\n";
+    die "Score column not found in file $filename\n";
 }
 if (!defined($mass_err_col))
 {
-    die "Mass Error [ppm] column not found in file1\n";
+    die "Mass Error [ppm] column not found in file $filename\n";
 }
 
 if (!defined($positions_prot_col))
 {
-    die "Positions column not found in file1\n";
+    die "Positions column not found in file $filename\n";
 }
 if (!defined($leading_prot_col))
 {
-    die "Leading Proteins column not found in file1\n";
+    die "Leading Proteins column not found in file $filename\n";
 }
 
 #if (!defined($numSTY_col))
 #{
-#    die "Number of Phospho (STY) column not found in file1\n";
+#    die "Number of Phospho (STY) column not found in file $filename\n";
 #}
 if (!defined($position_pep_col))
 {
-    die "Position in peptide column not found in file1\n";
+    die "Position in peptide column not found in file $filename\n";
 }
 if (!defined($window_col))
 {
-    die "Sequence Window column not found in file1\n";
+    die "Sequence Window column not found in file $filename\n";
 }
 if (!defined($probSTY_col))
 {
-    die "Phospho (STY) Probabilities column not found in file1\n";
+    die "Phospho (STY) Probabilities column not found in file $filename\n";
 }
 if (!defined($diffSTY_col))
 {
-    die "Phospho (STY) Score Diffs column not found in file1\n";
+    die "Phospho (STY) Score Diffs column not found in file $filename\n";
 }
 if (!defined($proteins_col))
 {
-    die "Proteins column not found in file1\n";
+    die "Proteins column not found in file $filename\n";
 }
 
 if (!defined($reverse_col))
 {
-    die "Reverse column not found in file1\n";
+    die "Reverse column not found in file $filename\n";
 }
 if (!defined($contaminant_col))
 {
-    die "Contaminant column not found in file1\n";
+    die "Contaminant column not found in file $filename\n";
 }
 
 
