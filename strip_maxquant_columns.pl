@@ -1,12 +1,11 @@
 #!/usr/bin/perl -w
 
-# 2020-06-15: fix broken TMT handling introduced in heavy/light changes
-#
-# 2020-04-07: remove even more SILAC-related summary columns and ratios
-#
-# 2020-03-12: skip "Intensity L" and "Intensity H" summary columns
-#             warning, will not correctly handle case where there are real
-#              samples named H and L together with non-H/L sample names
+# 2021-07-22:  add re-capitalization code from reformat_modification_sites.pl
+# 2020-06-15:  fix broken TMT handling introduced in heavy/light changes
+# 2020-04-07:  remove even more SILAC-related summary columns and ratios
+# 2020-03-12:  skip "Intensity L" and "Intensity H" summary columns
+#              warning, will not correctly handle case where there are real
+#               samples named H and L together with non-H/L sample names
 
 $filename = shift;
 
@@ -21,6 +20,35 @@ for ($i = 0; $i < @array; $i++)
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
+
+
+    # damn it, Maxquant keeps changing case between versions...
+    # this is *ROYALLY*screwing everything up
+    #
+    # I am just going to conform all the capitalization here
+    # If a word is >= 3 long, and the first letter of a word isn't
+    #  already capitalized, capitalize it
+    #
+    # 2021-07-22 Maxquant broke capitalization yet again, this time with
+    #  Desthiobiotin vs. DesthioBiotin
+    # HACK: conform DesthioBiotin to Desthiobiotin,
+    #  since DesthioBiotin is poorly capitalized anyways
+    #  they've spelled in wrong in the past too, so fix that typo as well
+    #
+    $array[$i] =~ s/DesthioBiotin/Desthiobiotin/ig;
+    $array[$i] =~ s/Dethiobiotin/Desthiobiotin/ig;
+    @word_array = split /\s+/, $array[$i];
+    for ($j = 0; $j < @word_array; $j++)
+    {
+        $c = substr $word_array[$j], 0, 1;
+        if (length $word_array[$j] >= 3 && $c =~ /[a-z]/)
+        {
+            $c = uc($c);
+            $word_array[$j] =~ s/^([a-z])/$c/;
+        }
+    }
+    $array[$i] = join ' ', @word_array;
+
     
     $field = $array[$i];
     $header_col_hash{$field} = $i;
