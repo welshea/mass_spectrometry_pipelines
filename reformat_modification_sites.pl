@@ -1126,7 +1126,7 @@ while(defined($line=<INFILE>))
 
     if    ($mod_type eq 'p') { $mod_type = 'Phosphorylation (STY)'; }
     elsif ($mod_type eq 'o') { $mod_type = 'Oxidation (M)'; }
-    elsif ($mod_type eq 'd') { $mod_type = 'Desthibiotin-ATP'; }
+    elsif ($mod_type eq 'd') { $mod_type = 'Desthiobiotin-ATP'; }
     elsif ($mod_type eq 'g') { $mod_type = 'GlyGly (K)'; }
     elsif ($mod_type eq 'a') { $mod_type = 'Acetyl (K)'; }
     else                     { $mod_type = 'Unknown' };
