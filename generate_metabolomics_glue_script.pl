@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
 # 2021-06-14:  add annotate_metabolomics.pl script
 # 2021-05-27:  add default output_root_name
 # 2021-01-06:  add support for strip_metabolomics_columns.pl command options
@@ -104,7 +105,7 @@ $pos_spikeins_output_name     = sprintf "%s_pos_spikeins.txt",
                                    $output_root_name;
 $pos_cleaned_filename         = sprintf "%s_pos_cleaned.txt",
                                    $output_root_name;
-$pos_iron_filename            = sprintf "%s_pos_iron.txt",
+$pos_iron_filename            = sprintf "%s_pos_iron_log2.txt",
                                    $output_root_name;
 $neg_unidentified_output_name = sprintf "%s_neg_unidentified.txt",
                                    $output_root_name;
@@ -112,9 +113,9 @@ $neg_spikeins_output_name     = sprintf "%s_neg_spikeins.txt",
                                    $output_root_name;
 $neg_cleaned_filename         = sprintf "%s_neg_cleaned.txt",
                                    $output_root_name;
-$neg_iron_filename            = sprintf "%s_neg_iron.txt",
+$neg_iron_filename            = sprintf "%s_neg_iron_log2.txt",
                                    $output_root_name;
-$merged_filename              = sprintf "%s_iron_merged.txt",
+$merged_filename              = sprintf "%s_iron_log2_merged.txt",
                                    $output_root_name;
 
 
