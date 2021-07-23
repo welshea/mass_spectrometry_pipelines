@@ -158,7 +158,7 @@ $discard_heavy_flag        = 0;
 $syntax_error_flag         = 0;
 $num_files                 = 0;
 
-$floor_cutoff              = 50;    # absurdly low abundance, floor to zero
+$floor_cutoff              = 1000;    # absurdly low abundance, floor to zero
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -954,7 +954,7 @@ while(defined($line=<INFILE>))
         # check for bad data
         # mass spec data is generally at least in the 1000's
         # a value < 10 is almost certainly garbage
-        if (is_number($field) && $field < 10)
+        if (is_number($field) && $field > 0 && $field < $floor_cutoff)
         {
             $field = '0';
         
