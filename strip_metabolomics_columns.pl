@@ -158,7 +158,7 @@ $discard_heavy_flag        = 0;
 $syntax_error_flag         = 0;
 $num_files                 = 0;
 
-$floor_cutoff              = 10;    # absurdly low abundance, floor to zero
+$floor_cutoff              = 50;    # absurdly low abundance, floor to zero
 
 for ($i = 0; $i < @ARGV; $i++)
 {
