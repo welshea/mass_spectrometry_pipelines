@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
 # 2021-05-27:  change default output_root_name
 # 2021-05-21:  add new autodetect_ms_data.pl arguments
 # 2020-12-21:  add missing # in front of --comp-pool changelog line below...
@@ -308,7 +309,7 @@ $pipeline_ibaq_str .= sprintf "\nrm \"%s%s\"",
 $pipeline_norm_str = sprintf "%s \"%s%s\" \\\n  > \"%s%s\"",
     'iron_normalize_mass_spec.pl',
     $output_root_name, '_orig_intensity.txt',
-    $output_root_name, '_iron_intensity.txt';
+    $output_root_name, '_iron_log2_intensity.txt';
 
 if (defined($autodetect_hash{TMT}) &&
             $autodetect_hash{TMT} ne 'no')
@@ -322,7 +323,7 @@ if (defined($autodetect_hash{TMT}) &&
             'automate_tmt.pl',
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
-            $output_root_name, '_iron_intensity.txt';
+            $output_root_name, '_iron_log2_intensity.txt';
     }
     # multiple plexes, 100% injection replicates
     elsif ($autodetect_hash{TMT} eq 'injection' &&
@@ -333,7 +334,7 @@ if (defined($autodetect_hash{TMT}) &&
             'automate_tmt.pl',
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
-            $output_root_name, '_iron_intensity.txt';
+            $output_root_name, '_iron_log2_intensity.txt';
     }
     # else use default normalization
 }
