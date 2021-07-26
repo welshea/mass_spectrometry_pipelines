@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2021-07-26:  issue separate floor warnings for blank and non-blank samples
+# 2021-07-23:  raise noise floor to 1000, report correct # floored peaks
+# 2021-07-23:  raise noise floor to 50
 # 2021-07-21:  zero out any data with a value < 10 as bad data
 # 2021-07-14:  conform with buest guess when no standard height/peak found
 # 2021-07-12:  more lipidomics support
@@ -719,8 +722,10 @@ open OUTFILE_SPIKEINS,     ">$output_spikeins_filename"     or die "can't open f
 $num_excel_large = 0;	# number of potential Excel-corruptible values
 $sum_excel_large = 0;	# sum of number of non-zero last 5 digits
 
-$row_count = 0;
-$too_low_count = 0;
+$row_count               = 0;
+$too_low_blank_count     = 0;
+$too_low_non_blank_count = 0;
+
 while(defined($line=<INFILE>))
 {
     $row_count++;
@@ -958,7 +963,18 @@ while(defined($line=<INFILE>))
         {
             $field = '0';
         
-            $too_low_count++;
+            $sample_lc  = lc $header_col_array[$col];
+
+            # don't warn about blank samples
+            if ($sample_lc =~ /(^|[^a-z0-9])(blank|blk|blnk)[^a-z0-9]/ ||
+                $sample_lc =~ /[^a-z0-9](blank|blk|blnk)($|[^a-z0-9])/)
+            {
+                $too_low_blank_count++;
+            }
+            else
+            {
+                $too_low_non_blank_count++;
+            }
         }
     
         if ($print_flag == 1)
@@ -1004,10 +1020,15 @@ while(defined($line=<INFILE>))
 }
 
 
-if ($too_low_count)
+if ($too_low_blank_count)
 {
-    printf STDERR "WARNING -- %d values < %d were floored to zero\n",
-        $too_low_count, $floor_cutoff;
+    printf STDERR "NOWORRY -- %d value(s) < %d were floored to zero in blank samples\n",
+        $too_low_blank_count, $floor_cutoff;
+}
+if ($too_low_non_blank_count)
+{
+    printf STDERR "WARNING -- %d value(s) < %d were floored to zero in non-blank samples\n",
+        $too_low_non_blank_count, $floor_cutoff;
 }
 
 
