@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2021-07-28: respect species argument override, autodetect if non-mouse/human
 # 2021-05-21: added --boost and --last-ch flags to force last channel norm
 #             print Usage statement
 #             use last argument as species, default to human
@@ -513,7 +514,8 @@ if ($refseq_flag) { $refseq_string = 'yes'; }
 
 
 # guess species
-if ($count_rows && $species eq '')
+if ($count_rows &&
+    !($species =~ /Human/i || $species =~ /Mouse/i))
 {
     $fraction_human = $count_human / $count_rows;
     $fraction_mouse = $count_mouse / $count_rows;
@@ -535,6 +537,11 @@ if ($count_rows && $species eq '')
     {
         $species = 'human_and_mouse';
     }
+}
+# use the given species override
+elsif ($species =~ /Human/i || $species =~ /Mouse/i)
+{
+    $species = $species;
 }
 # default to human
 else
