@@ -1,7 +1,7 @@
 Brief overview of running the proteomics and metabolomics pipelines:
 
 
-  syntax:
+  Usage:
     generate_proteomics_glue_script.pl
       input_maxquant_file.txt output_filenames_prefix [[species] autodetect.txt]
        > run_stuff.sh
@@ -164,7 +164,7 @@ clean_tmt.pl
 
   Reformat TMT data, removing more unwanted columns, rename channel headers
 
-  Syntax:
+  Usage:
     clean_tmt.pl maxquant_output_file.txt > output.txt
 
   Output:
@@ -177,7 +177,7 @@ csv2tab_not_excel.pl
 
   Convert CSV text files to tab-delimited text.
 
-  Syntax;
+  Usage;
     csv2tab_not_excel.pl input.csv > output_tab_delimited.txt
 
   Output:
