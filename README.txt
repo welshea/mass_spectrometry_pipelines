@@ -1,3 +1,59 @@
+Brief overview of running the proteomics and metabolomics pipelines:
+
+
+  syntax:
+    generate_proteomics_glue_script.pl
+      input_maxquant_file.txt output_filenames_prefix [[species] autodetect.txt]
+       > run_stuff.sh
+
+      # -- or --
+
+    generate_metabolomics_glue_script.pl
+      POS_mzmine_output.csv NEG_mzmine_output.csv output_filenames_prefix
+       > run_stuff.sh
+
+    # -- followed by: --
+    sh run_stuff.sh
+
+
+  Species and edited auto-detect parameters file arguments are optional and
+  usually not needed.
+
+  See additional documentation for each glue script command further below,
+  where the scripts are documented in alphabetical order.
+
+
+Species will default to auto-detection based on the presence of the species
+within the sequence annotation provided by MaxQuant.  If species auto-
+detection fails (no or little species annotation present), or the provided
+species argument doesn't contain human or mouse, the species will default to
+human.  If the wrong species is used, the wrong annotation file will be used,
+and the output Target_Species_Flag column will be incorrect as well.  Use
+"human_and_mouse", or any string containing both human and mouse within it
+somewhere (ie: "mouse-human", "human-bear-pig-mouse") for a mouse human-
+xenograph experiment.  This should be auto-detected correctly most of the
+time as well, so you generally shouldn't need to manually override the
+species auto-detection.
+
+Sometimes, the auto-detection (guessing) of all the various parameters fails
+to choose the correct TMT channel for normalization (TMT-126, when the pool
+was loaded in the last channel instead).  You'll need to do one of the
+following:
+
+ A) re-run generate_proteomics_glue_script.pl with --last-ch or --boost flags
+ B) edit (or sed -i) the resulting script to replace the incorrect channel
+ C) Copy/paste the auto-detect results into a file and re-generate the script.
+    Since I was lazy in my command line parsing, you *MUST* specify the
+    species in order to then read in the autodetect.txt (or whatever you named
+    the file containing the edited auto-detect output) parameters.
+
+    "generate_proteomics_glue_script.pl input.txt output_prefix species autodetext.txt > run_stuff.sh"
+
+ Generally, --last-ch or --boost is going to be the easiest/best solution.
+
+
+
+
 Documentation for individual programs within the pipeline:
 
 
