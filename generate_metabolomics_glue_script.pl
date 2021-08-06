@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-06:  support naming of output merged sample table
 # 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
 # 2021-06-14:  add annotate_metabolomics.pl script
 # 2021-05-27:  add default output_root_name
@@ -117,6 +118,8 @@ $neg_iron_filename            = sprintf "%s_neg_iron_log2.txt",
                                    $output_root_name;
 $merged_filename              = sprintf "%s_iron_log2_merged.txt",
                                    $output_root_name;
+$sample_table_filename        = sprintf "%s_sample_table.txt",
+                                   $output_root_name;
 
 
 # options to pass to strip_metabolomics_columns.pl
@@ -171,10 +174,11 @@ $cmd_str_iron_neg  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\"
                          $neg_cleaned_filename,
                          $neg_iron_filename;
 
-$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" | %s \"%s/%s\" - > \"%s\"",
+$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s | %s \"%s/%s\" - > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
                          $pos_iron_filename,
                          $neg_iron_filename,
+                         $sample_table_filename,
                          'annotate_metabolomics.pl',
                          $script_path,
                          'metabolite_database_latest.txt',
