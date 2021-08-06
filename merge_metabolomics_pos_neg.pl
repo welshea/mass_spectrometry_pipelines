@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2021-08-06:  export file name mapping, warn on unmatched / duped pairs
+# 2021-08-06:  export auto-shortened sample names to sample name mapping table
+# 2021-08-06:  export sample name mapping, warn on unmatched / duped pairs
 # 2021-04-06:  check for and uniquify non-unique row IDs
 # 2021-04-05:  fix El-MAVEN support, groupID is *NOT* a unique row identifier
 # 2021-03-30:  don't convert ' ' to '_' in " Peak height" and " Peak area"
@@ -564,6 +565,101 @@ foreach $header (@global_sample_array)
 
 
 
+# guess at common prefix and/or suffix
+%common_prefix_hash = ();
+%common_suffix_hash = ();
+for ($i = 0; $i < @global_sample_array; $i++)
+{
+    $sample_1     = $global_sample_array[$i];
+    $sample_1_rev = reverse $sample_1;
+
+    for ($j = $i+1; $j < @global_sample_array; $j++)
+    {
+        $sample_2     = $global_sample_array[$j];
+        $sample_2_rev = reverse $sample_2;
+        
+        # find common prefix, Perl "dark magic"
+        $xor = "$sample_1" ^ "$sample_2";
+        $xor =~ /^\0*/;
+        $len = $+[0];
+        $common_prefix = substr $sample_1, 0, $len;
+
+        # find common suffix, Perl "dark magic"
+        $xor = "$sample_1_rev" ^ "$sample_2_rev";
+        $xor =~ /^\0*/;
+        $len = $+[0];
+        $common_suffix = substr $sample_1_rev, 0, $len;
+        $common_suffix = reverse $common_suffix;
+        
+        # strip them to begin/end with a non- alphanumeric character
+        $common_prefix =~ s/([^A-Za-z0-9]+)[A-Za-z0-9]+$/$1/;
+        $common_suffix =~ s/^[A-Za-z0-9]+([^A-Za-z0-9]+)/$1/;
+        
+        # blank them if they still don't begin/end in a non- alphanumeric
+        if (!($common_prefix =~ /[^A-Za-z0-9]$/))
+        {
+            $common_prefix = '';
+        }
+        if (!($common_suffix =~ /^[^A-Za-z0-9]/))
+        {
+            $common_suffix = '';
+        }
+        
+        if ($common_prefix ne '')
+        {
+            $common_prefix_hash{$common_prefix} = 1;
+        }
+        if ($common_suffix ne '')
+        {
+            $common_suffix_hash{$common_suffix} = 1;
+        }
+    }
+}
+
+@common_prefix_array = sort keys %common_prefix_hash;
+@common_suffix_array = sort keys %common_suffix_hash;
+$count_sample_total  = @global_sample_array;
+$common_prefix_all   = '';
+$common_suffix_all   = '';
+
+$count = 0;
+foreach $common_prefix (@common_prefix_array)
+{
+    foreach $sample (@global_sample_array)
+    {
+        if ($sample =~ /^$common_prefix/)
+        {
+            $count++;
+        }
+    }
+    
+    if ($count == $count_sample_total)
+    {
+        $common_prefix_all = $common_prefix;
+        last;
+    }
+}
+
+$count = 0;
+foreach $common_suffix (@common_suffix_array)
+{
+    foreach $sample (@global_sample_array)
+    {
+        if ($sample =~ /$common_suffix$/)
+        {
+            $count++;
+        }
+    }
+    
+    if ($count == $count_sample_total)
+    {
+        $common_suffix_all = $common_suffix;
+        last;
+    }
+}
+
+
+
 # output sample mapping table
 # take first of duplicate samples (should never occur)
 #
@@ -581,6 +677,7 @@ open OUTFILE, ">$outfile_name" or die "ABORT -- cannot open $outfile_name for wr
 printf OUTFILE "%s",   'Sample';
 printf OUTFILE "\t%s", 'SamplePOS';
 printf OUTFILE "\t%s", 'SampleNEG';
+printf OUTFILE "\t%s", 'SampleAutoShortened';
 printf OUTFILE "\n";
 
 foreach $header (@global_sample_array)
@@ -595,6 +692,10 @@ foreach $header (@global_sample_array)
     $sample_case = $chosen_header_case_hash{$header};
     $pos_sample  = '';
     $neg_sample  = '';
+
+    $sample_short = $sample_case;
+    $sample_short =~ s/^$common_prefix_all//i;
+    $sample_short =~ s/$common_suffix_all$//i;
     
     if ($count_pos_matches)
     {
@@ -605,8 +706,8 @@ foreach $header (@global_sample_array)
         $neg_sample = $neg_sample_matches[0];
     }
     
-    printf OUTFILE "%s\t%s\t%s\n",
-        $sample_case, $pos_sample, $neg_sample;
+    printf OUTFILE "%s\t%s\t%s\t%s\n",
+        $sample_case, $pos_sample, $neg_sample, $sample_short;
 }
 close OUTFILE;
 
