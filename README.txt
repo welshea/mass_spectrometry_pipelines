@@ -312,7 +312,7 @@ merge_metabolomics_pos_neg.pl
   together
 
   Usage:
-    merge_metabolomics_pos_neg.pl mzmine_pos_file.txt mzmine_neg_file.txt
+    merge_metabolomics_pos_neg.pl mzmine_pos_file.txt mzmine_neg_file.txt [output_sample_table.txt]
 
     !!! NOTE -- files must be tab-delimited, not the original csv files !!!
 
@@ -326,6 +326,11 @@ merge_metabolomics_pos_neg.pl
     separate pos/neg columns in the merged output.  It is up to the user to
     make sure that sample naming conventions are the same between the pos and
     neg sample names.
+
+    A sample name mapping table is exported to a default file name of
+    "pipeline_metabolomics_sample_table.txt".  An optional 3rd agument
+    overrides the default output sample table file name with the string
+    given in the argument.
 
 
 
