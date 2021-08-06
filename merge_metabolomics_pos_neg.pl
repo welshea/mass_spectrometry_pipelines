@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-06:  export file name mapping, warn on unmatched / duped pairs
 # 2021-04-06:  check for and uniquify non-unique row IDs
 # 2021-04-05:  fix El-MAVEN support, groupID is *NOT* a unique row identifier
 # 2021-03-30:  don't convert ' ' to '_' in " Peak height" and " Peak area"
@@ -301,8 +302,9 @@ sub read_in_file
         # store data
         foreach $sample_col (@sample_col_array)
         {
-            $sample = $header_col_array[$sample_col];
-            $sample =~ s/^IRON //;
+            $sample          = $header_col_array[$sample_col];
+            $sample          =~ s/^IRON //;
+            $sample_origname = $sample;
             
             # strip pos/neg from sample name
             if ($all_pos_start_flag)
@@ -336,7 +338,16 @@ sub read_in_file
 
 
             $sample_lc = lc $sample;
-            $sample_lc_to_orig_hash{$sample_lc}{$sample} = 1;
+            $sample_lc_to_origcase_hash{$sample_lc}{$sample} = 1;
+            
+            if ($all_pos_start_flag)
+            {
+                $sample_lc_to_origpos_hash{$sample_lc}{$sample_origname} = 1;
+            }
+            elsif ($all_neg_start_flag)
+            {
+                $sample_lc_to_origneg_hash{$sample_lc}{$sample_origname} = 1;
+            }
             
             $global_data_hash{$row_id}{$sample_lc} = $array[$sample_col];
             $global_sample_hash{$sample_lc} = 1;
@@ -354,8 +365,13 @@ sub read_in_file
     }
 }
 
-$filename_pos = shift;
-$filename_neg = shift;
+
+
+# begin main()
+
+$filename_pos   = shift;
+$filename_neg   = shift;
+$outname_user   = shift;    # optional, user-provided sample table filename
 
 if ($filename_pos =~ /neg/i &&
     !($filename_pos =~ /pos/i))
@@ -468,9 +484,51 @@ foreach $header (@global_concat_header_array)
 }
 
 
+# warn on unmatched pairs
 foreach $header (@global_sample_array)
 {
-    @temp_array = sort keys %{$sample_lc_to_orig_hash{$header}};
+    @temp_array = sort keys %{$sample_lc_to_origcase_hash{$header}};
+
+    @pos_sample_matches = sort keys %{$sample_lc_to_origpos_hash{$header}};
+    @neg_sample_matches = sort keys %{$sample_lc_to_origneg_hash{$header}};
+    $count_pos_matches  = @pos_sample_matches;
+    $count_neg_matches  = @neg_sample_matches;
+    
+    if ($count_pos_matches > 1)
+    {
+        $dupe_str = join "\t", @pos_sample_matches;
+
+        printf STDERR "WARNING -- duplicate samples:\t%s\n", $dupe_str;
+    }
+    if ($count_neg_matches > 1)
+    {
+        $dupe_str = join "\t", @neg_sample_matches;
+
+        printf STDERR "WARNING -- duplicate samples:\t%s\n", $dupe_str;
+    }
+    
+    foreach $pos_sample (@pos_sample_matches)
+    {
+        if ($count_neg_matches == 0)
+        {
+            printf STDERR "WARNING -- unmatched pos/neg sample:\t%s\n",
+                $pos_sample;
+        }
+    }
+    foreach $neg_sample (@neg_sample_matches)
+    {
+        if ($count_pos_matches == 0)
+        {
+            printf STDERR "WARNING -- unmatched pos/neg sample:\t%s\n",
+                $neg_sample;
+        }
+    }
+}
+
+
+foreach $header (@global_sample_array)
+{
+    @temp_array = sort keys %{$sample_lc_to_origcase_hash{$header}};
     
     $header_chosen = $temp_array[0];
     
@@ -498,10 +556,60 @@ foreach $header (@global_sample_array)
 
     $global_header_array[$index]       = $header;
     $global_header_array_print[$index] = $header_chosen;
+    $chosen_header_case_hash{$header}  = $header_chosen;
     $index++;
 
     $seen_header_hash{$header} = 1;
 }
+
+
+
+# output sample mapping table
+# take first of duplicate samples (should never occur)
+#
+if (defined($outname_user))
+{
+    $outfile_name = $outname_user;
+}
+else
+{
+    $outfile_name = 'pipeline_metabolomics_sample_table.txt';
+}
+
+open OUTFILE, ">$outfile_name" or die "ABORT -- cannot open $outfile_name for writing\n";
+
+printf OUTFILE "%s",   'Sample';
+printf OUTFILE "\t%s", 'SamplePOS';
+printf OUTFILE "\t%s", 'SampleNEG';
+printf OUTFILE "\n";
+
+foreach $header (@global_sample_array)
+{
+    @temp_array = sort keys %{$sample_lc_to_origcase_hash{$header}};
+
+    @pos_sample_matches = sort keys %{$sample_lc_to_origpos_hash{$header}};
+    @neg_sample_matches = sort keys %{$sample_lc_to_origneg_hash{$header}};
+    $count_pos_matches  = @pos_sample_matches;
+    $count_neg_matches  = @neg_sample_matches;
+
+    $sample_case = $chosen_header_case_hash{$header};
+    $pos_sample  = '';
+    $neg_sample  = '';
+    
+    if ($count_pos_matches)
+    {
+        $pos_sample = $pos_sample_matches[0];
+    }
+    if ($count_neg_matches)
+    {
+        $neg_sample = $neg_sample_matches[0];
+    }
+    
+    printf OUTFILE "%s\t%s\t%s\n",
+        $sample_case, $pos_sample, $neg_sample;
+}
+close OUTFILE;
+
 
 
 # insert missing row ID column
