@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-09:  fix sample name terminal period, underscore, space typos
 # 2021-08-09:  automatically fix ..mzXML (double-dot) typos
 # 2021-07-26:  issue separate floor warnings for blank and non-blank samples
 # 2021-07-23:  raise noise floor to 1000, report correct # floored peaks
@@ -293,16 +294,17 @@ for ($col = 0; $col < @header_col_array; $col++)
     $field = $header_col_array[$col];
 
     # strip mzXML from sample names
-    $field =~ s/\.+mzX?ML( Peak \S+)$/$1/i;
-    $field =~ s/\.+cdf( Peak \S+)$/$1/i;
+    $field =~ s/\.mzX?ML( Peak \S+)$/$1/i;
+    $field =~ s/\.cdf( Peak \S+)$/$1/i;
 
     if ($field =~ / Peak (\S+)$/i)
     {
 
         $second_word = $1;
         $second_word = lc $second_word;
-        $field =~ s/ Peak (\S+)$/ Peak $second_word/i;
+        $field =~ s/[ ._]+Peak (\S+)$/ Peak $second_word/i;
     }
+    $field =~ s/[ ._]+$//;
 
     $header_col_array[$col] = $field;
 }
