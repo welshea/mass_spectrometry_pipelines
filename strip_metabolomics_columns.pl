@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-10:  more lipidomics molecule name header aliases
 # 2021-08-09:  fix sample name terminal period, underscore, space typos
 # 2021-08-09:  automatically fix ..mzXML (double-dot) typos
 # 2021-07-26:  issue separate floor warnings for blank and non-blank samples
@@ -622,6 +623,10 @@ if ($has_pregap_flag == 0)
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'IonFormula'};
+}
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'LipidMolec'};
 }
 
 
