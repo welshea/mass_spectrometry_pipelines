@@ -629,7 +629,7 @@ foreach $common_prefix (@common_prefix_array)
 {
     foreach $sample (@global_sample_array)
     {
-        if ($sample =~ /processing_bla?n?k$/i ||
+        if ($sample =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
             $sample =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
         {
             $count_blank++;
