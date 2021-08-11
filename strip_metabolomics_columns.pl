@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-08-11:  improve sample blank detection
+# 2021-08-11:  change low signal value warning messages
 # 2021-08-10:  more lipidomics molecule name header aliases
 # 2021-08-09:  fix sample name terminal period, underscore, space typos
 # 2021-08-09:  automatically fix ..mzXML (double-dot) typos
@@ -974,8 +976,8 @@ while(defined($line=<INFILE>))
             $sample_lc  = lc $header_col_array[$col];
 
             # don't warn about blank samples
-            if ($sample_lc =~ /(^|[^a-z0-9])(blank|blk|blnk)[^a-z0-9]/ ||
-                $sample_lc =~ /[^a-z0-9](blank|blk|blnk)($|[^a-z0-9])/)
+            if ($sample_lc =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
+                $sample_lc =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
             {
                 $too_low_blank_count++;
             }
@@ -1030,12 +1032,12 @@ while(defined($line=<INFILE>))
 
 if ($too_low_blank_count)
 {
-    printf STDERR "NOWORRY -- %d value(s) < %d were floored to zero in blank samples\n",
+    printf STDERR "NOPROBLEM -- %d value(s) < %d were floored to zero in blank samples\n",
         $too_low_blank_count, $floor_cutoff;
 }
 if ($too_low_non_blank_count)
 {
-    printf STDERR "WARNING -- %d value(s) < %d were floored to zero in non-blank samples\n",
+    printf STDERR "LOWSIGNAL -- %d value(s) < %d were floored to zero in non-blank samples\n",
         $too_low_non_blank_count, $floor_cutoff;
 }
 
