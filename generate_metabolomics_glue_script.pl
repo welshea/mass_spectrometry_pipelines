@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-11:  add QC script, delete sample, scaling factor, findmedian files
 # 2021-08-06:  support naming of output merged sample table
 # 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
 # 2021-06-14:  add annotate_metabolomics.pl script
@@ -120,6 +121,18 @@ $merged_filename              = sprintf "%s_iron_log2_merged.txt",
                                    $output_root_name;
 $sample_table_filename        = sprintf "%s_sample_table.txt",
                                    $output_root_name;
+$sample_qc_filename           = sprintf "%s_sample_qc_table.txt",
+                                   $output_root_name;
+
+
+$pos_sf_filename              = sprintf "%s_pos_cleaned_scaling_factors.txt",
+                                   $output_root_name;
+$neg_sf_filename              = sprintf "%s_neg_cleaned_scaling_factors.txt",
+                                   $output_root_name;
+$pos_fm_filename              = sprintf "%s_pos_cleaned_findmedian.txt",
+                                   $output_root_name;
+$neg_fm_filename              = sprintf "%s_neg_cleaned_findmedian.txt",
+                                   $output_root_name;
 
 
 # options to pass to strip_metabolomics_columns.pl
@@ -184,7 +197,16 @@ $cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s | %s \"%s/%s\" - > \"%s\"",
                          'metabolite_database_latest.txt',
                          $merged_filename;
 
-$cmd_str_rm        = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
+$cmd_str_qc        = sprintf "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" > \"%s\"",
+                         'metabolomics_qc.pl',
+                         $sample_table_filename,
+                         $pos_sf_filename,
+                         $neg_sf_filename,
+                         $pos_fm_filename,
+                         $neg_fm_filename,
+                         $sample_qc_filename;
+
+$cmd_str_rm        = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
                          $pos_unidentified_output_name,
                          $pos_spikeins_output_name,
                          $pos_cleaned_filename,
@@ -192,7 +214,12 @@ $cmd_str_rm        = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\
                          $neg_unidentified_output_name,
                          $neg_spikeins_output_name,
                          $neg_cleaned_filename,
-                         $neg_iron_filename;
+                         $neg_iron_filename,
+                         $sample_table_filename,
+                         $pos_sf_filename,
+                         $neg_sf_filename,
+                         $pos_fm_filename,
+                         $neg_fm_filename,
 
 
 print "$cmd_str_strip_pos\n";
@@ -200,4 +227,5 @@ print "$cmd_str_strip_neg\n";
 print "$cmd_str_iron_pos\n";
 print "$cmd_str_iron_neg\n";
 print "$cmd_str_merge\n";
+print "$cmd_str_qc\n";
 print "$cmd_str_rm\n";
