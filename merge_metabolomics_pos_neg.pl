@@ -10,7 +10,7 @@
 # 2021-01-06:  handle recent changes to strip_metabolomics_columns.pl headers
 # 2020-09-25:  force row identifier header to always print as "row ID"
 # 2020-09-25:  minor code clean up
-# 2020-09-24:  clean up extra/dangling hypens in sample names
+# 2020-09-24:  clean up extra/dangling hyphens in sample names
 # 2020-09-10:  clean up extra/dangling underscores and spaces in sample names
 # 2020-09-08:  rename Spikein Flag header to Potential Spikein Flag
 # 2020-08-26:  attempt to deal with more pos/neg sample name typos
