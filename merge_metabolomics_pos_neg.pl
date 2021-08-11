@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-11:  support auto-shortening when blank samples break naming convention
 # 2021-08-06:  export auto-shortened sample names to sample name mapping table
 # 2021-08-06:  export sample name mapping, warn on unmatched / duped pairs
 # 2021-04-06:  check for and uniquify non-unique row IDs
@@ -622,9 +623,19 @@ $count_sample_total  = @global_sample_array;
 $common_prefix_all   = '';
 $common_suffix_all   = '';
 
-$count = 0;
+$count           = 0;
+$count_blank     = 0;
 foreach $common_prefix (@common_prefix_array)
 {
+    foreach $sample (@global_sample_array)
+    {
+        if ($sample =~ /processing_bla?n?k$/i ||
+            $sample =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
+        {
+            $count_blank++;
+        }
+    }
+
     foreach $sample (@global_sample_array)
     {
         if ($sample =~ /^$common_prefix/)
@@ -633,7 +644,7 @@ foreach $common_prefix (@common_prefix_array)
         }
     }
     
-    if ($count == $count_sample_total)
+    if ($count >= $count_sample_total - $count_blank)
     {
         $common_prefix_all = $common_prefix;
         last;
