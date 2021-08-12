@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2021-08-12: change deprecated "if (defined(%plex_hash))" to "if (%plex_hash)"
 # 2021-07-28: respect species argument override, autodetect if non-mouse/human
 # 2021-05-21: added --boost and --last-ch flags to force last channel norm
 #             print Usage statement
@@ -221,7 +222,7 @@ for($i = 0; $i < @header_array; $i++)
 
 
 # check to see if we have multiple plexes
-if (defined(%plex_hash))
+if (%plex_hash)
 {
     @plex_array = sort keys %plex_hash;
     
