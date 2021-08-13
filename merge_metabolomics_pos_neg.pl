@@ -378,23 +378,17 @@ $outname_user   = shift;    # optional, user-provided sample table filename
 if ($filename_pos =~ /neg/i &&
     !($filename_pos =~ /pos/i))
 {
-    printf STDERR "ABORT -- check file names to remove pos/neg ambiguity\n";
-    printf STDERR "required input order: iron_pos iron_neg\n";
-    exit(1);
+    printf STDERR "WARNING -- pos/neg file names may be swapped\n";
 }
 if ($filename_neg =~ /pos/i &&
     !($filename_neg =~ /neg/i))
 {
-    printf STDERR "ABORT -- check file names to remove pos/neg ambiguity\n";
-    printf STDERR "required input order: iron_pos iron_neg\n";
-    exit(1);
+    printf STDERR "WARNING -- pos/neg file names may be swapped\n";
 }
 if (!($filename_pos =~ /pos/i) ||
     !($filename_neg =~ /neg/i))
 {
-    printf STDERR "ABORT -- check file names to remove pos/neg ambiguity\n";
-    printf STDERR "required input order: iron_pos iron_neg\n";
-    exit(1);
+    printf STDERR "WARNING -- pos/neg file names do not contain pos/neg\n";
 }
 
 @global_concat_header_array = ();
