@@ -4,6 +4,8 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 use File::Basename;
 
+# 2021-08-13:  fix typo in median sample indexing for odd N
+
 
 sub is_number
 {
@@ -601,7 +603,7 @@ sub score_qc
     # earlier of the two middle samples
     else
     {
-        $sample_median = $sample_array[@sample_array >> 1] - 1;
+        $sample_median = $sample_array[(@sample_array >> 1) - 1];
     }
     
     # adjust merged metrics relative to median sample
