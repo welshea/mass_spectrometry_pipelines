@@ -4,6 +4,7 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 use File::Basename;
 
+# 2021-08-13:  print samples sorted by worst score first
 # 2021-08-13:  fix typo in median sample indexing for odd N
 
 
@@ -118,7 +119,17 @@ sub cmp_sample
     my $value_a;
     my $value_b;
     
-    $value_a = $
+    # HACK -- sort on score (worst first), if they exit at this point
+    #
+    # We want to bring the worst samples to the top before printing
+    #
+    $value_a = $sample_merged_hash{$sample_a}{merged}{score};
+    $value_b = $sample_merged_hash{$sample_b}{merged}{score};
+    if (defined($value_a) && defined($value_b))
+    {
+        if ($value_a < $value_b) { return -1; }
+        if ($value_a > $value_b) { return  1; }
+    }
 
     $value_a = $sample_merged_hash{$sample_a}{merged}{log2scale};
     $value_b = $sample_merged_hash{$sample_b}{merged}{log2scale};
@@ -671,7 +682,7 @@ sub print_qc
     my @sample_array;
     
 
-    @sample_array = sort keys %sample_merged_hash;
+    @sample_array = sort cmp_sample keys %sample_merged_hash;
 
     printf "%s",   'Sample';
     printf "\t%s", 'SamplePOS';
