@@ -129,6 +129,10 @@
 #   6) After removing enclosing double-quotes, "" are unescaped back into ",
 #      regardless of where they are located within the field.
 #
+#   7) Fields consisting solely of "" are special-cased as empty fields.
+#      I have now observed the aforementioned hypothetical poorly coded
+#      CSV double-quoting behavior in the wild and had to deal with it....
+#
 sub csv2tsv_not_excel
 {
     my $line = $_[0];
