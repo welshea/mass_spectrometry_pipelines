@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2021-08-17:  begin adding auto heavy label matching support
 # 2021-08-17:  add --ppm flag to set m/z PPM tolerance
 
 
@@ -870,7 +871,7 @@ $annotation_hash{$bad_row_id}{rt}      = '';
 # read in data file
 
 # skip down to first line that has anything on it
-# lipidomics data has this issues sometimes
+# lipidomics data has this issue sometimes
 while($line=<DATA>)
 {
     # skip comment lines
@@ -939,6 +940,14 @@ for ($i = 0; $i < @array; $i++)
            $header =~ /retention time/i)
     {
         $data_rt_col = $i;
+    }
+    # heavy labeled flag, added by the Moffitt pipeline
+    # the heavy labeled detection is best left to other scripts,
+    # since it can get complicated, especially for El-MAVEN
+    elsif (!defined($data_heavy_col) &&
+           $header =~ /Heavy-labeled flag/i)
+    {
+        $data_heavy_col = $i;
     }
 }
 
