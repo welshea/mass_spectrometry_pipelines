@@ -567,6 +567,9 @@ if (!defined($data_filename) || !defined($annotation_filename) ||
     $syntax_error_flag)
 {
     print STDERR "Usage: annotate_metabolomics.pl identifier_mapping.txt cleaned_mzmine.txt\n";
+    print STDERR "\n";
+    print STDERR "Options:\n";
+    print STDERR "    --ppm N          override default m/z PPM tolerance\n";
     exit(1);
 }
 
