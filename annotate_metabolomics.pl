@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
 
+# 2021-08-17:  add --ppm flag to set m/z PPM tolerance
+
+
 # set lib search path to directory the script is run from
 use File::Basename;
 use lib dirname (__FILE__);
@@ -505,8 +508,43 @@ for ($i = 0; $i < @ARGV; $i++)
 
     if ($field =~ /^--/)
     {
-        printf STDERR "ABORT -- unknown option %s\n", $field;
-        $syntax_error_flag = 1;
+        # override default PPM tolerance
+        if ($field eq '--ppm' ||
+            $field =~ /^--ppm\=/)
+        {
+            $ppm_arg = '';
+            
+            if ($field eq '--ppm')
+            {
+                if ($i + 1 < @ARGV)
+                {
+                    $i++;
+                    $ppm_arg = $ARGV[$i];
+                }
+            }
+            elsif ($field =~ /^--ppm=(.*)/)
+            {
+                $ppm_arg = $1;
+            }
+            
+            if (is_number($ppm_arg))
+            {
+                $mz_tol_ppm = $ppm_arg;
+                
+                printf STDERR "Overiding default m/z PPM tolerance of 10:\t%s\n",
+                    $mz_tol_ppm;
+            }
+            else
+            {
+                printf STDERR "ABORT -- you must specify a numeric value after --ppm\n";
+                $syntax_error_flag = 1;
+            }
+        }
+        else
+        {
+            printf STDERR "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
     }
     else
     {
