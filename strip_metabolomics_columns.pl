@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-18:  add new --scale-heavy and --no-scale-heavy flags
 # 2021-08-11:  improve sample blank detection
 # 2021-08-11:  change low signal value warning messages
 # 2021-08-10:  more lipidomics molecule name header aliases
@@ -162,6 +163,8 @@ sub is_heavy_labeled
 $keep_single_pregap_flag   = 0;
 $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
+$scale_heavy_flag          = 1;
+$seen_heavy_flag           = 0;
 
 $syntax_error_flag         = 0;
 $num_files                 = 0;
@@ -190,6 +193,14 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $discard_heavy_flag = 1;
         }
+        elsif ($field =~ /^--scale-heavy$/)
+        {
+            $scale_heavy_flag = 1;
+        }
+        elsif ($field =~ /^--no-scale-heavy$/)
+        {
+            $scale_heavy_flag = 0;
+        }
         else
         {
             printf STDERR "ABORT -- unknown option %s\n", $field;
@@ -205,7 +216,7 @@ for ($i = 0; $i < @ARGV; $i++)
         }
         elsif ($num_files == 1)
         {
-            $output_unidentified_filename = $field;
+            $output_exclusions_filename = $field;
             $num_files++;
         }
         elsif ($num_files == 2)
@@ -222,6 +233,10 @@ if (!defined($filename) || $syntax_error_flag)
     printf STDERR "Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
+    printf STDERR "    --no-scale-heavy           do *NOT* normalize heavy labeled rows\n";
+    printf STDERR "    --scale-heavy              normalize heavy labeled rows as well (default)\n";
+    printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
+    printf STDERR "\n";
     printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
     printf STDERR "    --discard-unidentified     discard unidentified rows\n";
     printf STDERR "\n";
@@ -232,9 +247,9 @@ if (!defined($filename) || $syntax_error_flag)
 }
 
 
-if (!defined($output_unidentified_filename))
+if (!defined($output_exclusions_filename))
 {
-    $output_unidentified_filename = 'metabolomics_auto_unidentified.txt';
+    $output_exclusions_filename = 'metabolomics_auto_unidentified.txt';
 }
 if (!defined($output_spikeins_filename))
 {
@@ -725,8 +740,8 @@ print "\n";
 
 
 
-open OUTFILE_UNIDENTIFIED, ">$output_unidentified_filename" or die "can't open file $output_unidentified_filename for writing\n";
-open OUTFILE_SPIKEINS,     ">$output_spikeins_filename"     or die "can't open file $output_spikeins_filename for writing\n";
+open OUTFILE_EXCLUSIONS, ">$output_exclusions_filename" or die "can't open file $output_exclusions_filename for writing\n";
+open OUTFILE_SPIKEINS,   ">$output_spikeins_filename"   or die "can't open file $output_spikeins_filename for writing\n";
 
 
 $num_excel_large = 0;	# number of potential Excel-corruptible values
@@ -776,14 +791,17 @@ while(defined($line=<INFILE>))
     # probably MZMine data if there is no isotopeLabel column
     #  could also be El-MAVEN without heavy labeling enabled,
     #  in which case is_heavy_labeled() may always return false
+    $heavy_flag = 0;
     if (!defined($isotope_col))
     {
-        $spikein_flag = 0;
         if (is_heavy_labeled($name))
         {
-            $spikein_flag = 1;
+            $heavy_flag = 1;
         
-            print OUTFILE_SPIKEINS "$rowid\n";
+            if ($scale_heavy_flag == 0)
+            {
+                print OUTFILE_SPIKEINS "$rowid\n";
+            }
         }
     }
     # El-MAVEN data
@@ -797,16 +815,18 @@ while(defined($line=<INFILE>))
         # I've only seen C13 experiments so far, so, rather than
         # make a list of all heavy labels we may see, I'm going to key off
         # of "PARENT" and "label" instead, to hopefully future-proof it
-        $spikein_flag = 0;
         if ($isotope =~ /PARENT/i)
         {
-            $spikein_flag = 0;
+            $heavy_flag = 0;
         }
         elsif ($isotope =~ /label/i)
         {
-            $spikein_flag = 1;
+            $heavy_flag = 1;
 
-            print OUTFILE_SPIKEINS "$rowid\n";
+            if ($scale_heavy_flag == 0)
+            {
+                print OUTFILE_SPIKEINS "$rowid\n";
+            }
         }
     }
 
@@ -814,6 +834,9 @@ while(defined($line=<INFILE>))
     # store identified/unidentified
     # consider it identified if it has two letters in a row
     # this should result in treating purely chemical formulas as unidentified
+    #
+    # include heavy labeled metabolites in the unidentified list, since
+    # we're going to use that for iron training exclusions
     $identified_flag = 0;
     if (($name =~ /[A-Za-z][A-Za-z]/ ||
          $name =~ /[A-Za-z][0-9]/) &&
@@ -821,14 +844,19 @@ while(defined($line=<INFILE>))
         !($name =~ /Complex of [0-9.]+ and \d+/))
     {
         $identified_flag = 1;
+        
+        if ($heavy_flag)
+        {
+            print OUTFILE_EXCLUSIONS "$rowid\n";
+        }
     }
     else
     {
-        print OUTFILE_UNIDENTIFIED "$rowid\n";
+        print OUTFILE_EXCLUSIONS "$rowid\n";
     }
     
     $nsid_flag = 0;
-    if ($spikein_flag == 0 && $identified_flag == 1)
+    if ($heavy_flag == 0 && $identified_flag == 1)
     {
         $nsid_flag = 1;
     }
@@ -884,9 +912,16 @@ while(defined($line=<INFILE>))
         next;
     }
     # discard heavy labeled rows
-    if ($discard_heavy_flag && $spikein_flag)
+    if ($discard_heavy_flag && $heavy_flag)
     {
         next;
+    }
+    
+    
+    # set seen heavy flag if any heavy metabolites made it through
+    if ($heavy_flag)
+    {
+        $seen_heavy_flag = 1;
     }
 
 
@@ -943,7 +978,7 @@ while(defined($line=<INFILE>))
         print "\t$n_percent_pregap";
     }
     print "\t$n_percent";
-    print "\t$spikein_flag";
+    print "\t$heavy_flag";
     print "\t$identified_flag";
     print "\t$nsid_flag";
 
@@ -1051,4 +1086,10 @@ if ($num_excel_large)
 if ($avg_excel_large < 3.1)
 {
     printf STDERR "WARNING -- !!! Excel-corrupted values >= 1E7 detected !!!\n";
+}
+
+if ($seen_heavy_flag && $scale_heavy_flag)
+{
+    printf STDERR "WARNING -- heavy labeled metabolites detected, normalized by default\n";
+    printf STDERR "           consider using --no-scale-heavy if they are all spike-ins\n";
 }
