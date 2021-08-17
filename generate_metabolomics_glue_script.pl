@@ -1,5 +1,11 @@
 #!/usr/bin/perl -w
 
+# 2021-08-18:  add new --scale-heavy and --no-scale-heavy flags
+# 2021-08-18:  add --ppm flag to set m/z ppm tolerance
+# 2021-08-18:  implement new --scale-heavy and --no-scale-heavy flags
+# 2021-08-17:  changed default behavior to scale heavy labeled metabolites;
+#              it was too easy to mess up and forget to scale them in tracer
+#              experiments
 # 2021-08-11:  add QC script, delete sample, scaling factor, findmedian files
 # 2021-08-06:  support naming of output merged sample table
 # 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
@@ -7,6 +13,7 @@
 # 2021-05-27:  add default output_root_name
 # 2021-01-06:  add support for strip_metabolomics_columns.pl command options
 
+use Scalar::Util qw(looks_like_number);
 use File::Spec;
 use File::Basename;
 
@@ -14,6 +21,8 @@ use File::Basename;
 $keep_single_pregap_flag   = 0;
 $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
+$scale_heavy_flag          = 1;    # normalize heavy metabolites
+$mz_tol_ppm                = '';   # '' means no --ppm argument specified
 
 $syntax_error_flag         = 0;
 $num_files                 = 0;
@@ -24,6 +33,53 @@ $num_files                 = 0;
 #  which we don't want here
 $script_path   = dirname(File::Spec->rel2abs(__FILE__));
 
+
+sub is_number
+{
+    # use what Perl thinks is a number first
+    # this is purely for speed, since the more complicated REGEX below should
+    #  correctly handle all numeric cases
+    if (looks_like_number($_[0]))
+    {
+        # Perl treats infinities as numbers, Excel does not
+        if ($_[0] =~ /^[-+]*inf/)
+        {
+            return 0;
+        }
+        
+        return 1;
+    }
+
+    # optional + or - sign at beginning
+    # then require either:
+    #  a number followed by optional comma stuff, then optional decimal stuff
+    #  mandatory decimal, followed by optional digits
+    # then optional exponent stuff
+    #
+    # Perl cannot handle American comma separators within long numbers.
+    # Excel does, so we have to check for it.
+    # Excel doesn't handle European dot separators, at least not when it is
+    #  set to the US locale (my test environment).  I am going to leave this
+    #  unsupported for now.
+    #
+    if ($_[0] =~ /^([-+]?)([0-9]+(,[0-9]{3,})*\.?[0-9]*|\.[0-9]*)([Ee]([-+]?[0-9]+))?$/)
+    {
+        # current REGEX can treat '.' as a number, check for that
+        if ($_[0] eq '.')
+        {
+            return 0;
+        }
+        
+        return 1;
+    }
+    
+    return 0;
+}
+
+
+
+
+# begin main()
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -46,6 +102,43 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--discard-heavy$/)
         {
             $discard_heavy_flag = 1;
+        }
+        elsif ($field =~ /^--scale-heavy$/)
+        {
+            $scale_heavy_flag = 1;
+        }
+        elsif ($field =~ /^--no-scale-heavy$/)
+        {
+            $scale_heavy_flag = 0;
+        }
+        # override default PPM tolerance
+        elsif ($field eq '--ppm' ||
+               $field =~ /^--ppm\=/)
+        {
+            $ppm_arg = '';
+            
+            if ($field eq '--ppm')
+            {
+                if ($i + 1 < @ARGV)
+                {
+                    $i++;
+                    $ppm_arg = $ARGV[$i];
+                }
+            }
+            elsif ($field =~ /^--ppm=(.*)/)
+            {
+                $ppm_arg = $1;
+            }
+            
+            if (is_number($ppm_arg))
+            {
+                $mz_tol_ppm = $ppm_arg;
+            }
+            else
+            {
+                printf STDERR "ABORT -- you must specify a numeric value after --ppm\n";
+                $syntax_error_flag = 1;
+            }
         }
         else
         {
@@ -80,6 +173,10 @@ if ($syntax_error_flag ||
     printf STDERR "Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
+    printf STDERR "    --no-scale-heavy           do *NOT* normalize heavy labeled rows\n";
+    printf STDERR "    --scale-heavy              normalize heavy labeled rows as well (default)\n";
+    printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
+    printf STDERR "\n";
     printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
     printf STDERR "    --discard-unidentified     discard unidentified rows\n";
     printf STDERR "\n";
@@ -153,7 +250,21 @@ if ($discard_heavy_flag)
 {
     $strip_options_str .= ' --discard-heavy';
 }
+if ($scale_heavy_flag)
+{
+    $strip_options_str .= ' --scale-heavy';
+}
+else
+{
+    $strip_options_str .= ' --no-scale-heavy';
+}
 
+
+$annotate_options_str = '';
+if ($mz_tol_ppm ne '')
+{
+    $annotate_options_str = '--ppm ' . $mz_tol_ppm;
+}
 
 $cmd_str_strip_pos = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
                          'csv2tab_not_excel.pl',
@@ -173,26 +284,47 @@ $cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
                          $neg_spikeins_output_name,
                          $neg_cleaned_filename;
 
-$cmd_str_iron_pos  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
-                         'iron_normalize_mass_spec.pl',
-                         $pos_unidentified_output_name,
-                         $pos_spikeins_output_name,
-                         $pos_cleaned_filename,
-                         $pos_iron_filename;
 
-$cmd_str_iron_neg  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
-                         'iron_normalize_mass_spec.pl',
-                         $neg_unidentified_output_name,
-                         $neg_spikeins_output_name,
-                         $neg_cleaned_filename,
-                         $neg_iron_filename;
+# do not treat heavy labeled rows as spike-ins, include them in the normalization
+if ($scale_heavy_flag)
+{
+    $cmd_str_iron_pos  = sprintf "%s --iron-exclusions=\"%s\" \"%s\" > \"%s\"",
+                             'iron_normalize_mass_spec.pl',
+                             $pos_unidentified_output_name,
+                             $pos_cleaned_filename,
+                             $pos_iron_filename;
 
-$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s | %s \"%s/%s\" - > \"%s\"",
+    $cmd_str_iron_neg  = sprintf "%s --iron-exclusions=\"%s\" \"%s\" > \"%s\"",
+                             'iron_normalize_mass_spec.pl',
+                             $neg_unidentified_output_name,
+                             $neg_cleaned_filename,
+                             $neg_iron_filename;
+}
+# treat heavy labeled rows as spike-ins, do not scale them
+else
+{
+    $cmd_str_iron_pos  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
+                             'iron_normalize_mass_spec.pl',
+                             $pos_unidentified_output_name,
+                             $pos_spikeins_output_name,
+                             $pos_cleaned_filename,
+                             $pos_iron_filename;
+
+    $cmd_str_iron_neg  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
+                             'iron_normalize_mass_spec.pl',
+                             $neg_unidentified_output_name,
+                             $neg_spikeins_output_name,
+                             $neg_cleaned_filename,
+                             $neg_iron_filename;
+}
+
+$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s | %s %s \"%s/%s\" - > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
                          $pos_iron_filename,
                          $neg_iron_filename,
                          $sample_table_filename,
                          'annotate_metabolomics.pl',
+                         $annotate_options_str,
                          $script_path,
                          'metabolite_database_latest.txt',
                          $merged_filename;
