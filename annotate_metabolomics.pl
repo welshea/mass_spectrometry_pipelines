@@ -983,7 +983,7 @@ for ($i = 0; $i < @data_header_col_array; $i++)
     {
         printf "\t%s", 'Identity Mapped';
         printf "\t%s", 'Mapping Type';
-        printf "\t%s", 'Formula';
+        printf "\t%s", 'FormulaMapped';
         printf "\t%s", 'KEGG';
         printf "\t%s", 'HMDB';
         printf "\t%s", 'PubChem';
