@@ -916,6 +916,14 @@ if ($data_header_col_array[0] =~ /^id$/i)
 }
 
 
+$elmaven_isotope_flag = 0;
+if (defined($data_header_col_hash{'isotopeLabel'}) &&
+    defined($data_header_col_hash{'parent'}))
+{
+    $elmaven_isotope_flag = 1;
+}
+
+
 # important data column headers
 for ($i = 0; $i < @array; $i++)
 {
@@ -950,6 +958,14 @@ for ($i = 0; $i < @array; $i++)
         $data_heavy_col = $i;
     }
 }
+
+
+# use parent m/z if it is El-MAVEN isotope data
+if ($elmaven_isotope_flag)
+{
+    $data_mz_col = $data_header_col_hash{'parent'};
+}
+
 
 if (!defined($data_mz_col))
 {
