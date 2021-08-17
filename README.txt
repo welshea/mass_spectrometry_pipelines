@@ -73,6 +73,9 @@ annotate_metabolomics.pl
 
   Usage: annotate_metabolomics.pl identifier_mapping.txt cleaned_mzmine.txt
 
+  Options:
+      --ppm N          override default m/z PPM tolerance
+
   Mapped fields are | (vertical bar) delimited, rather than ; delimited.
   Multiple | delimited subfields have 1:1 correspondence across mapped
   fields.  Original name ("identity") usually exhibits 1:1 correspondence
@@ -199,6 +202,10 @@ generate_metabolomics_glue_script.pl
   Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix
 
   Options:
+      --no-scale-heavy           do *NOT* normalize heavy labeled rows
+      --scale-heavy              normalize heavy labeled rows as well (default)
+      --ppm N                    override default m/z PPM tolerance
+
       --discard-heavy            discard heavy labeled rows
       --discard-unidentified     discard unidentified rows
 
@@ -425,6 +432,10 @@ strip_metabolomics_columns.pl
   Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]
 
   Options:
+      --no-scale-heavy           do *NOT* normalize heavy labeled rows
+      --scale-heavy              normalize heavy labeled rows as well (default)
+      --ppm N                    override default m/z PPM tolerance
+
       --discard-heavy            discard heavy labeled rows
       --discard-unidentified     discard unidentified rows
 
