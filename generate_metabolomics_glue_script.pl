@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
-# 2021-08-18:  add new --scale-heavy and --no-scale-heavy flags
+# 2021-08-19:  change default back to leaving heavy unscaled
+# 2021-08-19:  --scale-heavy --no-scale-heavy to --heavy-tracer --heavy-spikein
+# 2021-08-19:  add --norm-none flag to disable normalization
+# 2021-08-18:  add --scale-heavy --no-scale-heavy flags
 # 2021-08-18:  add --ppm flag to set m/z ppm tolerance
 # 2021-08-18:  implement new --scale-heavy and --no-scale-heavy flags
 # 2021-08-17:  changed default behavior to scale heavy labeled metabolites;
@@ -21,8 +24,9 @@ use File::Basename;
 $keep_single_pregap_flag   = 0;
 $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
-$scale_heavy_flag          = 1;    # normalize heavy metabolites
+$scale_heavy_flag          = 0;    # control normalization of heavy rows
 $mz_tol_ppm                = '';   # '' means no --ppm argument specified
+$norm_none_flag            = 0;    # disable normalization
 
 $syntax_error_flag         = 0;
 $num_files                 = 0;
@@ -103,13 +107,17 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $discard_heavy_flag = 1;
         }
-        elsif ($field =~ /^--scale-heavy$/)
+        elsif ($field =~ /^--heavy-tracer$/)
         {
             $scale_heavy_flag = 1;
         }
-        elsif ($field =~ /^--no-scale-heavy$/)
+        elsif ($field =~ /^--heavy-spikein$/)
         {
             $scale_heavy_flag = 0;
+        }
+        elsif ($field =~ /^--norm-none$/)
+        {
+            $norm_none_flag = 1;
         }
         # override default PPM tolerance
         elsif ($field eq '--ppm' ||
@@ -173,8 +181,9 @@ if ($syntax_error_flag ||
     printf STDERR "Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
-    printf STDERR "    --no-scale-heavy           do *NOT* normalize heavy labeled rows\n";
-    printf STDERR "    --scale-heavy              normalize heavy labeled rows as well (default)\n";
+    printf STDERR "    --heavy-spikein            heavy rows are spikeins, leave unscaled (default)\n";
+    printf STDERR "    --heavy-tracer             heavy rows are biological, normalize them\n";
+    printf STDERR "    --norm-none                disable normalization; use on targeted panels\n";
     printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
     printf STDERR "\n";
     printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
@@ -252,19 +261,13 @@ if ($discard_heavy_flag)
 }
 if ($scale_heavy_flag)
 {
-    $strip_options_str .= ' --scale-heavy';
+    $strip_options_str .= ' --heavy-tracer';
 }
 else
 {
-    $strip_options_str .= ' --no-scale-heavy';
+    $strip_options_str .= ' --heavy-spikein';
 }
 
-
-$annotate_options_str = '';
-if ($mz_tol_ppm ne '')
-{
-    $annotate_options_str = '--ppm ' . $mz_tol_ppm;
-}
 
 $cmd_str_strip_pos = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
                          'csv2tab_not_excel.pl',
@@ -285,17 +288,26 @@ $cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
                          $neg_cleaned_filename;
 
 
-# do not treat heavy labeled rows as spike-ins, include them in the normalization
+$norm_extra_options_str = '';
+if ($norm_none_flag)
+{
+    # disable normalization
+    $norm_extra_options_str = '--norm-none';
+}
+
+# do not treat heavy labeled rows as spike-ins, normalize them
 if ($scale_heavy_flag)
 {
-    $cmd_str_iron_pos  = sprintf "%s --iron-exclusions=\"%s\" \"%s\" > \"%s\"",
+    $cmd_str_iron_pos  = sprintf "%s %s --iron-exclusions=\"%s\" \"%s\" > \"%s\"",
                              'iron_normalize_mass_spec.pl',
+                             $norm_extra_options_str,
                              $pos_unidentified_output_name,
                              $pos_cleaned_filename,
                              $pos_iron_filename;
 
-    $cmd_str_iron_neg  = sprintf "%s --iron-exclusions=\"%s\" \"%s\" > \"%s\"",
+    $cmd_str_iron_neg  = sprintf "%s %s --iron-exclusions=\"%s\" \"%s\" > \"%s\"",
                              'iron_normalize_mass_spec.pl',
+                             $norm_extra_options_str,
                              $neg_unidentified_output_name,
                              $neg_cleaned_filename,
                              $neg_iron_filename;
@@ -303,19 +315,28 @@ if ($scale_heavy_flag)
 # treat heavy labeled rows as spike-ins, do not scale them
 else
 {
-    $cmd_str_iron_pos  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
+    $cmd_str_iron_pos  = sprintf "%s %s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
                              'iron_normalize_mass_spec.pl',
+                             $norm_extra_options_str,
                              $pos_unidentified_output_name,
                              $pos_spikeins_output_name,
                              $pos_cleaned_filename,
                              $pos_iron_filename;
 
-    $cmd_str_iron_neg  = sprintf "%s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
+    $cmd_str_iron_neg  = sprintf "%s %s --iron-exclusions=\"%s\" --iron-spikeins=\"%s\" \"%s\" > \"%s\"",
                              'iron_normalize_mass_spec.pl',
+                             $norm_extra_options_str,
                              $neg_unidentified_output_name,
                              $neg_spikeins_output_name,
                              $neg_cleaned_filename,
                              $neg_iron_filename;
+}
+
+
+$annotate_options_str = '';
+if ($mz_tol_ppm ne '')
+{
+    $annotate_options_str = '--ppm ' . $mz_tol_ppm;
 }
 
 $cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s | %s %s \"%s/%s\" - > \"%s\"",
