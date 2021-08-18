@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-08-19:  change default back to leaving heavy unscaled
+# 2021-08-19:  --scale-heavy --no-scale-heavy to --heavy-tracer --heavy-spikein
 # 2021-08-18:  add new --scale-heavy and --no-scale-heavy flags
 # 2021-08-11:  improve sample blank detection
 # 2021-08-11:  change low signal value warning messages
@@ -163,7 +165,7 @@ sub is_heavy_labeled
 $keep_single_pregap_flag   = 0;
 $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
-$scale_heavy_flag          = 1;
+$scale_heavy_flag          = 0;
 $seen_heavy_flag           = 0;
 
 $syntax_error_flag         = 0;
@@ -193,11 +195,11 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $discard_heavy_flag = 1;
         }
-        elsif ($field =~ /^--scale-heavy$/)
+        elsif ($field =~ /^--heavy-tracer$/)
         {
             $scale_heavy_flag = 1;
         }
-        elsif ($field =~ /^--no-scale-heavy$/)
+        elsif ($field =~ /^--heavy-spikein$/)
         {
             $scale_heavy_flag = 0;
         }
@@ -233,8 +235,8 @@ if (!defined($filename) || $syntax_error_flag)
     printf STDERR "Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
-    printf STDERR "    --no-scale-heavy           do *NOT* normalize heavy labeled rows\n";
-    printf STDERR "    --scale-heavy              normalize heavy labeled rows as well (default)\n";
+    printf STDERR "    --heavy-spikein            treat heavy rows as spike-ins\n";
+    printf STDERR "    --heavy-tracer             treat heavy rows as biological\n";
     printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
     printf STDERR "\n";
     printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
@@ -1088,8 +1090,13 @@ if ($avg_excel_large < 3.1)
     printf STDERR "WARNING -- !!! Excel-corrupted values >= 1E7 detected !!!\n";
 }
 
-if ($seen_heavy_flag && $scale_heavy_flag)
+if ($seen_heavy_flag && $scale_heavy_flag == 0)
 {
-    printf STDERR "WARNING -- heavy labeled metabolites detected, normalized by default\n";
-    printf STDERR "           consider using --no-scale-heavy if they are all spike-ins\n";
+    printf STDERR "CAREFUL -- treating heavy rows as spike-ins: leave unnormalized\n";
+    printf STDERR "           use --heavy-tracer in isotope tracer experiments\n";
+}
+if ($seen_heavy_flag && $scale_heavy_flag == 1)
+{
+    printf STDERR "CAREFUL -- treating heavy rows as biological: normalize them\n";
+    printf STDERR "           use --heavy-spikein if they are all spike-ins\n";
 }
