@@ -1092,11 +1092,11 @@ if ($avg_excel_large < 3.1)
 
 if ($seen_heavy_flag && $scale_heavy_flag == 0)
 {
-    printf STDERR "CAREFUL -- treating heavy rows as spike-ins: leave unnormalized\n";
+    printf STDERR "CAUTION -- treating heavy rows as spike-ins: leave unnormalized\n";
     printf STDERR "           use --heavy-tracer in isotope tracer experiments\n";
 }
 if ($seen_heavy_flag && $scale_heavy_flag == 1)
 {
-    printf STDERR "CAREFUL -- treating heavy rows as biological: normalize them\n";
+    printf STDERR "CAUTION -- treating heavy rows as biological: normalize them\n";
     printf STDERR "           use --heavy-spikein if they are all spike-ins\n";
 }
