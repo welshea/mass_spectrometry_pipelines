@@ -202,8 +202,9 @@ generate_metabolomics_glue_script.pl
   Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix
 
   Options:
-      --no-scale-heavy           do *NOT* normalize heavy labeled rows
-      --scale-heavy              normalize heavy labeled rows as well (default)
+      --heavy-spikein            heavy rows are spikeins, leave unscaled (default)
+      --heavy-tracer             heavy rows are biological, normalize them
+      --norm-none                disable normalization; use on targeted panels
       --ppm N                    override default m/z PPM tolerance
 
       --discard-heavy            discard heavy labeled rows
@@ -432,8 +433,8 @@ strip_metabolomics_columns.pl
   Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]
 
   Options:
-      --no-scale-heavy           do *NOT* normalize heavy labeled rows
-      --scale-heavy              normalize heavy labeled rows as well (default)
+      --heavy-spikein            treat heavy rows as spike-ins
+      --heavy-tracer             treat heavy rows as biological
       --ppm N                    override default m/z PPM tolerance
 
       --discard-heavy            discard heavy labeled rows
