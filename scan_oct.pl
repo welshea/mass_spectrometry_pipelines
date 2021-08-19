@@ -1,11 +1,11 @@
 #!/usr/bin/perl -w
 
-# 2021-06-21:  updated csv2tsv_not_excel to handle "" by themselves
+# 2021-08-19:  update csv2tsv_not_excel() function
 # 2021-03-05:  expand usage help message
 # 2020-08-05:  more robust csb2tab_not_excel() function
 # 2020-07-31:  faster and more robust csb2tab_not_excel() function
-# 2020-07-28:  optimize csv2tsv_not_excel() function
-# 2020-07-24:  fix csv2tsv, was condensing multiple tabs in front of quotes
+# 2020-07-28:  optimize csv2tab_not_excel() function
+# 2020-07-24:  fix csv2tab, was condensing multiple tabs in front of quotes
 
 
 use Scalar::Util qw(looks_like_number);
@@ -140,12 +140,63 @@ sub cmp_row_rt
 # newlines (one line wrapped onto multiple lines), as well as how this script
 # handles invalid CSV fields, the resulting tab-delimited text file may not
 # load into Excel the same as if the .csv file had been loaded directly into
-# Excel.  Thus the _not_excel.pl part of the script name.  The resulting tsv
+# Excel.  Thus the _not_excel part of the function name.  The resulting tsv
 # file could, depending on how its quotes are arranged, result in strange
 # Excel behavior.  The output should be fine for most other programs that read
 # tab-delimited text, which is mainly what I wrote this for.  If you need
 # something with better Excel compatability, I suggest using Python's
 # csv.reader and csv.writer set to "dialect=csv.excel_tab".
+#
+#
+# This implementation results in the following behavior:
+#
+#   1) One or more embedded tab characters (not escaped as \t) in a row are
+#      either removed (at beginning/end of field or space on either side),
+#      or replaced with a single space (if removing would otherwise merge
+#      non-space text together).  Existing spaces are preserved, only
+#      multiple unescaped tabs in a row are stripped/condensed.
+#
+#      While not exactly standards compliant (is there even a standard for
+#      for how to handle embedded tabs??), I have observed this to be closest
+#      to original intent in the wild, where embedded tabs are almost always
+#      due to user input error (such as pressing the tab key in an attempt to
+#      advance to the next field/line in a form, etc.) and improper validation
+#      or sanitizing of the data prior to storing it in a database.
+#
+#      Internal \r and \n that are not part of the EOL are treated the same
+#      way as we treat embedded tabs, since they usually arise from similar
+#      issues.  This behavior can be disabled by commenting out a single
+#      substitution line in the function below.
+#
+#      Feel free to modify the handling of embedded tabs at the bottom of the
+#      function below if you desire different tab handling behavior.
+#
+#   2) Leading/trailing spaces are ignored for the purposes of determining
+#      if a field is enclosed in double-quotes.
+#
+#   3) "" is treated as escaped double-quotes, regardless of the position
+#      within the field.  This includes the beginning/end of the field (with
+#      or without leading/trailing spaces).  Therefore, in order to be
+#      considered enclosed, the beginning/end of the field (after ignoring
+#      leading/trailing spaces) must have an odd number of double-quotes,
+#      so that the outer double-quote on each end is not treated as escaped.
+#
+#        !! ""aa,bb"" is not considered to be enclosed in double-quotes !!
+#
+#   4) Fields consisting solely of "", with or without leading/trailing
+#      spaces, are special-cased as empty text.  I have now observed this
+#      empty field double-quoting behavior in the wild, where it was clearly
+#      meant to indicate an empty field.
+#
+#   5) Enclosing double-quotes are stripped from the output fields, along
+#      with any leading/trailing spaces surrounding them.  Unenclosed
+#      leading/trailing spaces are left as-is.
+#
+#   6) After removing enclosing double-quotes, "" are unescaped back into ",
+#      regardless of where they are located within the field.
+#
+#   7) *MOST*, but not all, white space is preserved.  See 1) and 5).
+#
 sub csv2tsv_not_excel
 {
     my $line = $_[0];
@@ -253,7 +304,12 @@ sub csv2tsv_not_excel
     #
     # \K requires Perl >= v5.10.0 (2007-12-18)
     #   (?: *)\K is faster than replacing ( *) with $1
-    $line =~ s/(?:(?<=\t)|^)(?: *)\K"([^\t]+)"(?=\t|[\r\n]*$)/$1/g;
+    #
+    #$line =~ s/(?:(?<=\t)|^)(?: *)\K"([^\t]+)"( *)(?=\t|[\r\n]*$)/$1$2/g;
+
+    # remove enclosing spaces, to support space-justified quoted fields
+    #   ( *) might be faster without () grouping, but left in for clarity
+    $line =~ s/(?:(?<=\t)|^)( *)"([^\t]+)"( *)(?=\t|[\r\n]*$)/$2/g;
 
     # unescape escaped double-quotes
     $line =~ s/""/"/g;
