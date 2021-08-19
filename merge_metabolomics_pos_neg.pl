@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-19:  better support for samples missing pos/neg in their names
 # 2021-08-11:  support auto-shortening when blank samples break naming convention
 # 2021-08-06:  export auto-shortened sample names to sample name mapping table
 # 2021-08-06:  export sample name mapping, warn on unmatched / duped pairs
@@ -342,11 +343,11 @@ sub read_in_file
             $sample_lc = lc $sample;
             $sample_lc_to_origcase_hash{$sample_lc}{$sample} = 1;
             
-            if ($all_pos_start_flag)
+            if ($pos_neg eq 'pos')
             {
                 $sample_lc_to_origpos_hash{$sample_lc}{$sample_origname} = 1;
             }
-            elsif ($all_neg_start_flag)
+            elsif ($pos_neg eq 'neg')
             {
                 $sample_lc_to_origneg_hash{$sample_lc}{$sample_origname} = 1;
             }
