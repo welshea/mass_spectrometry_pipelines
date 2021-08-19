@@ -260,7 +260,7 @@ sub read_in_scaling_factors_file
 
             if (!defined($sample_merged))
             {
-                printf "ABORT -- scaling factors %s not mapped to merged sample name\n",
+                printf STDERR "ABORT -- scaling factors %s not mapped to merged sample name\n",
                     $sampleid;
 
                 exit(3);
@@ -272,7 +272,7 @@ sub read_in_scaling_factors_file
 
             if (!defined($sample_merged))
             {
-                printf "ABORT -- scaling factors %s not mapped to merged sample name\n",
+                printf STDERR "ABORT -- scaling factors %s not mapped to merged sample name\n",
                     $sampleid;
 
                 exit(3);
@@ -385,7 +385,7 @@ sub read_in_findmedian_file
 
             if (!defined($sample_merged))
             {
-                printf "ABORT -- findmedian %s not mapped to merged sample name\n",
+                printf STDERR "ABORT -- findmedian %s not mapped to merged sample name\n",
                     $sample;
 
                 exit(3);
@@ -397,7 +397,7 @@ sub read_in_findmedian_file
 
             if (!defined($sample_merged))
             {
-                printf "ABORT -- findmedian %s not mapped to merged sample name\n",
+                printf STDERR "ABORT -- findmedian %s not mapped to merged sample name\n",
                     $sample;
 
                 exit(3);
