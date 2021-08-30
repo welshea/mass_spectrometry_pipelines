@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-08-30  generate new ModificationID from new sorted accession order
+# 2021-08-30  remove columns-to-remove code; all in another script now
 # 2021-03-19  add derived Target_Species_Flag column
 # 2021-03-02  support various CPTAC expression files
 # 2020-06-09  strip ref|, etc. from accessions, so that reverse/contaminate tracking works again!!
@@ -1604,6 +1606,103 @@ sub print_probeid_annotation
     }
 
 
+    # re-order ModificationID fields to match new sorted accession order
+    if (defined($modificationid_col))
+    {
+        @array = split /\t/, $probe_id;
+    
+        $modificationid = $array[$modificationid_col];
+        %temp_seen_hash = ();
+        @index_array    = ();
+        $count_new      = 0;
+
+        # mod_acc1;acc2:pos1;pos2
+        if ($modificationid =~ /([^_]+)_([^:]+):(.*)/)
+        {
+            $mod_type    = $1;
+            $mod_acc_str = $2;
+            $mod_pos_str = $3;
+            
+            @accession_mod_array = split ';', $mod_acc_str;
+            @position_mod_array  = split ';', $mod_pos_str;
+
+            # scan through new accession order
+            foreach $accession_new (@accession_pruned_array)
+            {
+                # scan ModificationID accessions, add it to new list
+                for ($i = 0; $i < @accession_mod_array; $i++)
+                {
+                    $accession_mod = $accession_mod_array[$i];
+
+                    # exact match, assume we've already cleaned the versions, etc.
+                    if ($accession_mod eq $accession_new)
+                    {
+                        $index_array[$count_new] = $i;
+                        $count_new++;
+                        
+                        $temp_seen_hash{$i} = 1;
+
+                        last;
+                    }
+                }
+            }
+
+            # add in remaining ModificationID accessions
+            # this should be mostly CON_ and REV_
+            for ($i = 0; $i < @accession_mod_array; $i++)
+            {
+                if (!defined($temp_seen_hash{$i}))
+                {
+                    $index_array[$count_new] = $i;
+                    $count_new++;
+
+                    $temp_seen_hash{$i} = 1;
+                }
+            }
+            
+            # generate new accession portion
+            $modificationid_new = $mod_type . '_';
+            for ($i = 0; $i < $count_new; $i++)
+            {
+                $index         = $index_array[$i];
+                $accession_mod = $accession_mod_array[$index];
+                
+                if ($i)
+                {
+                    $modificationid_new .= ';';
+                }
+                
+                $modificationid_new .= $accession_mod;
+            }
+
+            # generate new positions portion
+            $modificationid_new .= ':';
+            for ($i = 0; $i < $count_new; $i++)
+            {
+                $index        = $index_array[$i];
+                $position_mod = $position_mod_array[$index];
+                
+                if ($i)
+                {
+                    $modificationid_new .= ';';
+                }
+                
+                $modificationid_new .= $position_mod;
+            }
+            
+            # overwrite old ModificationID with new
+            if ($modificationid ne $modificationid_new)
+            {
+                $array[$modificationid_col] = $modificationid_new;
+                $probe_id = join "\t", @array;
+            
+                # printf STDERR "FOOBAR\t%s\t%s\n",
+                #    $modificationid, $modificationid_new;
+            }
+        }
+    }
+
+
     $line_new = sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
                         $has_contam,
                         $all_reverse,
@@ -1884,32 +1983,17 @@ for ($i = 0; $i < @array; $i++)
         {
             $conrev_col_hash{$i} = 1;
         }
+        
+        if ($field =~ /^ModificationID$/i)
+        {
+            $modificationid_col = $i;
+        }
 
         $header_col_hash_data{$field} = $i;
     }
 }
-$header_line_data = join "\t", @array;
+#$header_line_data = join "\t", @array;
 $num_header_cols = @array;
-
-
-# columns to be removed, since they can be huge and cause Excel to puke
-if (defined($header_col_hash_data{'Evidence IDs'}))
-{
-    $cols_to_remove_hash{$header_col_hash_data{'Evidence IDs'}} = 'Evidence IDs';
-}
-if (defined($header_col_hash_data{'MS/MS IDs'}))
-{
-    $cols_to_remove_hash{$header_col_hash_data{'MS/MS IDs'}}    = 'MS/MS IDs';
-}
-
-# columns to be removed, since they clutter up the file with no information
-foreach $header (sort keys %header_col_hash_data)
-{
-    if ($header =~ /^Ratio mod\/base/)
-    {
-        $cols_to_remove_hash{$header_col_hash_data{$header}} = $header;
-    }
-}
 
 
 $reverse_col = $header_col_hash_data{'Reverse'};
@@ -1925,17 +2009,7 @@ if (!defined($contam_col))
 }
 
 
-# remove any columns from the header that we don't want
-@temp_array_i = split /\t/, $header_line_data;
-@temp_array_j = ();
-for ($i = 0, $j = 0; $i < @temp_array_i; $i++)
-{
-    if (!defined($cols_to_remove_hash{$i}))
-    {
-        $temp_array_j[$j++] = $temp_array_i[$i];
-    }
-}
-$header_line_data_new = join "\t", @temp_array_j;
+$header_line_data_new = join "\t", @array;
 
 printf "%s", $header_line_data_new;
 printf "\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
@@ -1990,18 +2064,6 @@ while(defined($line=<DATA>))
     }
 
 
-    # remove any columns that we don't want
-    @temp_array_j = ();
-    for ($i = 0, $j = 0; $i < @array; $i++)
-    {
-        if (!defined($cols_to_remove_hash{$i}))
-        {
-            $temp_array_j[$j++] = $array[$i];
-        }
-    }
-    $line_new = join "\t", @temp_array_j;
-
-    
     %contam_accession_hash   = ();
     %reversed_accession_hash = ();
     %local_accession_hash    = ();
@@ -2215,8 +2277,11 @@ while(defined($line=<DATA>))
             }
         }
     }
+
     
 #    printf STDERR "FOOBAR\t%s\n", $new_accession_str;
-    
+
+    $line_new = join "\t", @array;
+
     print_probeid_annotation($line_new, $new_accession_str);
 }
