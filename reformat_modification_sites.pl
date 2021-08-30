@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-08-30:  deal with missing accessions/positions in various fields
+
 use POSIX;
 
 sub cmp_phospho_probs
@@ -500,9 +502,16 @@ $score_col             = $header1_hash{'Score'};
 $mass_err_col          = $header1_hash{'Mass Error [ppm]'};
 
 
-$positions_prot_col    = $header1_hash{'Positions'};
-$leading_prot_col      = $header1_hash{'Leading Proteins'};
+# these go together
+# more complete than Leading/Positions, butempty for REV_ accessions
 $proteins_col          = $header1_hash{'Proteins'};
+$positions_within_col  = $header1_hash{'Positions Within Proteins'};
+
+# these go together
+# has data for REV_ accessions, but can be missing accessions
+$leading_prot_col      = $header1_hash{'Leading Proteins'};
+$positions_prot_col    = $header1_hash{'Positions'};
+
 
 $position_pep_col      = $header1_hash{'Position in Peptide'};
 $window_col            = $header1_hash{'Sequence Window'};
@@ -650,6 +659,10 @@ if (!defined($diffSTY_col))
 if (!defined($proteins_col))
 {
     die "Proteins column not found in file $filename\n";
+}
+if (!defined($positions_within_col))
+{
+    die "Positions Within Proteins column not found in file $filename\n";
 }
 
 if (!defined($reverse_col))
@@ -894,16 +907,18 @@ while(defined($line=<INFILE>))
     $pep               = $array[$pep_col];
     $score             = $array[$score_col];
     $mass_err          = $array[$mass_err_col];
+
+    $proteins          = $array[$proteins_col];
+    $positions_within  = $array[$positions_within_col];
     
-    $positions_prot    = $array[$positions_prot_col];
     $leading_prot      = $array[$leading_prot_col];
+    $positions_prot    = $array[$positions_prot_col];
 
 #    $numSTY            = $array[$numSTY_col];
     $position_pep      = $array[$position_pep_col];
     $window            = $array[$window_col];
     $probSTY           = $array[$probSTY_col];
     $diffSTY           = $array[$diffSTY_col];
-    $proteins          = $array[$proteins_col];
 
     $reverse           = $array[$reverse_col];
     $contaminant       = $array[$contaminant_col];
@@ -954,18 +969,51 @@ while(defined($line=<INFILE>))
             next;
         }
     }
+    
+
+    # count the number of accessions within each accession/position pair
+    @temp_array       = split /;/, $proteins;
+    $proteins_count   = 0;
+    foreach $accession (@temp_array)
+    {
+        if ($accession =~ /[A-Za-z0-9]/)
+        {
+            $proteins_count++;
+        }
+    }
+    @temp_array       = split /;/, $leading_prot;
+    $leading_count    = 0;
+    foreach $accession (@temp_array)
+    {
+        if ($accession =~ /[A-Za-z0-9]/)
+        {
+            $leading_count++;
+        }
+    }
+
+    # pick one of the two paired sources of accessions/positions
+    # choose Proteins / Positions Within Proteins first
+    # use Leading Proteins / Positions if it has more
+    $proteins_chosen  = $proteins;
+    $positions_chosen = $positions_within;
+    if ($leading_count > $proteins_count)
+    {
+        $proteins_chosen  = $leading_prot;
+        $positions_chosen = $positions_prot;
+    }
+
 
     $modified_sequence = fix_phosphopeptide($modification_type_char,
                                             $position_pep,
                                             $probSTY, $diffSTY,
-                                            $positions_prot);
+                                            $positions_chosen);
 
     $unmodified_sequence = $modified_sequence;
     $unmodified_sequence =~ s/[^A-Z]//g;
 
     $query_field       = sprintf "%s;%s;%s;%s;%s;%s",
                                  $modified_sequence,
-                                 $proteins,
+                                 $proteins_chosen,
                                  $window,
                                  $position_pep,
                                  $global_return_num_sites,
@@ -973,14 +1021,14 @@ while(defined($line=<INFILE>))
 
 #    $query_field       = sprintf "%s;%s;%s;%s;%s;%s;%s",
 #                                 $modified_sequence,
-#                                 $proteins,
+#                                 $proteins_chosen,
 #                                 $window,
 #                                 $position_pep,
 #                                 $charge,
 #                                 $global_return_num_sites,
 #                                 $global_return_prob_rank;
 
-    $accession_str = $leading_prot;
+    $accession_str = $proteins_chosen;
     $accession_str =~ s/\|/\;/g;
 #    $accession_str =~ s/\:/\;/g;
     $accession_str =~ s/,/\;/g;
@@ -997,7 +1045,7 @@ while(defined($line=<INFILE>))
     
     # store reversed accessions for later removal
     # store positions for each accession
-    @positions_array = split /\;/, $positions_prot;
+    @positions_array = split /\;/, $positions_chosen;
     for ($i = 0; $i < @accession_array; $i++)
     {
         $accession = $accession_array[$i];
@@ -1087,8 +1135,8 @@ while(defined($line=<INFILE>))
         $num_new_accessions++;
     }
 
-    $leading_prot_new = join ';', @new_accession_array;
-    $positions_new    = join ';', @new_positions_array;
+    $proteins_new  = join ';', @new_accession_array;
+    $positions_new = join ';', @new_positions_array;
     
     # no non-reversed accessions, include the reversed accessions back in...
     if ($num_new_accessions == 0)
@@ -1112,8 +1160,8 @@ while(defined($line=<INFILE>))
         }
     }
 
-    $leading_prot_new = join ';', @new_accession_array;
-    $positions_new    = join ';', @new_positions_array;
+    $proteins_new  = join ';', @new_accession_array;
+    $positions_new = join ';', @new_positions_array;
 
     # abbreviations for ModificationID
     $mod_type = $modification_type_char;
@@ -1131,7 +1179,8 @@ while(defined($line=<INFILE>))
     elsif ($mod_type eq 'a') { $mod_type = 'Acetyl (K)'; }
     else                     { $mod_type = 'Unknown' };
 
-    $phosphosite_id = sprintf "%s_%s:%s", $abbrev, $leading_prot_new, $positions_new;
+    $phosphosite_id = sprintf "%s_%s:%s",
+        $abbrev, $proteins_new, $positions_new;
     
     # HACK -- heavy labeled peptides
 #    if ($modified_sequence =~ /\(si\)/)
