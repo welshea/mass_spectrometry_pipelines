@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-08-30  move amino acid column, insert new position column
 # 2021-08-30  generate new ModificationID from new sorted accession order
 # 2021-08-30  remove columns-to-remove code; all in another script now
 # 2021-03-19  add derived Target_Species_Flag column
@@ -807,7 +808,7 @@ sub compare_accession
 
 sub print_probeid_annotation
 {
-    my $probe_id      = $_[0];
+    my $line_old      = $_[0];
     my $accession_str = $_[1];
 
     $accession_str = bless_delimiter_bar($accession_str);
@@ -1607,9 +1608,10 @@ sub print_probeid_annotation
 
 
     # re-order ModificationID fields to match new sorted accession order
+    $mod_pos_str = '';
     if (defined($modificationid_col))
     {
-        @array = split /\t/, $probe_id;
+        @array = split /\t/, $line_old;
     
         $modificationid = $array[$modificationid_col];
         %temp_seen_hash = ();
@@ -1676,7 +1678,7 @@ sub print_probeid_annotation
             }
 
             # generate new positions portion
-            $modificationid_new .= ':';
+            $mod_pos_str = '';
             for ($i = 0; $i < $count_new; $i++)
             {
                 $index        = $index_array[$i];
@@ -1684,43 +1686,69 @@ sub print_probeid_annotation
                 
                 if ($i)
                 {
-                    $modificationid_new .= ';';
+                    $mod_pos_str .= ';';
                 }
                 
-                $modificationid_new .= $position_mod;
+                $mod_pos_str .= $position_mod;
             }
+            $modificationid_new .= ':' . $mod_pos_str;
+            
             
             # overwrite old ModificationID with new
             if ($modificationid ne $modificationid_new)
             {
                 $array[$modificationid_col] = $modificationid_new;
-                $probe_id = join "\t", @array;
+                $line_old = join "\t", @array;
             
                 # printf STDERR "FOOBAR\t%s\t%s\n",
                 #    $modificationid, $modificationid_new;
             }
         }
     }
+    
+    # remove amino acid column, since we're going to move it
+    if (defined($amino_acid_col))
+    {
+        @array     = split /\t/, $line_old;
+        @array_new = ();
+        
+        $j = 0;
+        for ($i = 0; $i < @array; $i++)
+        {
+            if ($i != $amino_acid_col)
+            {
+                $array_new[$j++] = $array[$i];
+            }
+        }
+        $line_old = join "\t", @array_new;
+    }
 
 
-    $line_new = sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
-                        $has_contam,
-                        $all_reverse,
-                        $cow_contam,
-                        $target_species_flag,
-                        $accession_pruned_str,
-                        $gene_id_str,
-                        $count_symbols,
-                        $warning_level,
-                        $symbol_str,
-                        $alias_str,
-                        $type_str,
-                        $location_str,
-                        $description_str;
+    $line_new  = "$has_contam";
+    $line_new .= "\t$all_reverse";
+    $line_new .= "\t$cow_contam";
+    $line_new .= "\t$target_species_flag";
+    $line_new .= "\t$accession_pruned_str";
+    $line_new .= "\t$gene_id_str";
+    $line_new .= "\t$count_symbols";
+    $line_new .= "\t$warning_level";
+    $line_new .= "\t$symbol_str";
+    if (defined($amino_acid_col))
+    {
+        $line_new .= "\t" . $array[$amino_acid_col];
+    }
+    if (defined($modificationid_col))
+    {
+        $line_new .= "\t" . $mod_pos_str;
+    }
+    $line_new .= "\t$alias_str";
+    $line_new .= "\t$type_str";
+    $line_new .= "\t$location_str";
+    $line_new .= "\t$description_str";
 
     if (1 || $line_new =~ /[A-Za-z0-9]/)
     {
-        $line_new = sprintf "%s\t%s", $probe_id, $line_new;
+        $line_new = sprintf "%s\t%s", $line_old, $line_new;
         printf "%s\n", $line_new;
     }
 }
@@ -1988,6 +2016,11 @@ for ($i = 0; $i < @array; $i++)
         {
             $modificationid_col = $i;
         }
+        
+        if ($field =~ /^Amino Acid$/i)
+        {
+            $amino_acid_col = $i;
+        }
 
         $header_col_hash_data{$field} = $i;
     }
@@ -2008,24 +2041,51 @@ if (!defined($contam_col))
     $contam_col = $header_col_hash_data{'Species_contaminant_flag'};
 }
 
+# remove amino acid column from header, since we're going to move it
+if (defined($amino_acid_col))
+{
+    @array_new = ();
+    
+    $j = 0;
+    for ($i = 0; $i < @array; $i++)
+    {
+        if ($i != $amino_acid_col)
+        {
+            $array_new[$j++] = $array[$i];
+        }
+    }
 
-$header_line_data_new = join "\t", @array;
+    $header_line_data_new = join "\t", @array_new;
+}
+else
+{
+    $header_line_data_new = join "\t", @array;
+}
 
-printf "%s", $header_line_data_new;
-printf "\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-       'Has_Contaminant_Flag',
-       'All_Reverse_Flag',
-       'Cow_Contaminant_Flag',
-       'Target_Species_Flag',
-       'Accession_Protein',
-       'GeneID',
-       'NumGenes',
-       'WarningLevel',
-       'Symbol',
-       'Alias',
-       'Type',
-       'Location',
-       'Description';
+
+printf "%s",   $header_line_data_new;
+printf "\t%s", 'Has_Contaminant_Flag';
+printf "\t%s", 'All_Reverse_Flag';
+printf "\t%s", 'Cow_Contaminant_Flag';
+printf "\t%s", 'Target_Species_Flag';
+printf "\t%s", 'Accession_Protein';
+printf "\t%s", 'GeneID';
+printf "\t%s", 'NumGenes';
+printf "\t%s", 'WarningLevel';
+printf "\t%s", 'Symbol';
+if (defined($amino_acid_col))
+{
+    printf "\t%s", $array[$amino_acid_col];
+}
+if (defined($modificationid_col))
+{
+    printf "\t%s", 'Positions Reannotated';
+}
+printf "\t%s", 'Alias';
+printf "\t%s", 'Type';
+printf "\t%s", 'Location';
+printf "\t%s", 'Description';
+printf "\n";
 
 
 if ($num_accession_cols == 0)
