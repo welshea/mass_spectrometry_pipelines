@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-09-08:  print usage statement to STDERR instead of STDOUT
 # 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
 # 2021-05-27:  change default output_root_name
 # 2021-05-21:  add new autodetect_ms_data.pl arguments
@@ -70,11 +71,11 @@ if ($input_filename eq '')
 
 if ($syntax_error_flag)
 {
-    printf "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
-    printf "\n";
-    printf "  Options:\n";
-    printf "    --boost     use highest channel for normalization\n";
-    printf "    --last-ch   use highest channel for normalization\n";
+    printf STDERR "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
+    printf STDERR "\n";
+    printf STDERR "  Options:\n";
+    printf STDERR "    --boost     use highest channel for normalization\n";
+    printf STDERR "    --last-ch   use highest channel for normalization\n";
     
     exit(1);
 }
