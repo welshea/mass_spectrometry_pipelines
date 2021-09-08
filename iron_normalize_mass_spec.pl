@@ -1,7 +1,9 @@
 #!/usr/bin/perl -w
 
 use Scalar::Util qw(looks_like_number);
+use File::Basename;
 
+# 2021-08-08:  print usage statement on command line error
 # 2021-04-14:  begin adding lipidomics support
 # 2020-09-24:  add --norm-none flag (has some use for metabolomics pipeline)
 # 2020-08-26:  attempt to deal with more pos/neg sample labeling typos
@@ -730,7 +732,7 @@ $exclusions_flag         = 0;
 $spikeins_flag           = 0;
 $bg_flag                 = 0;
 $strip_sample_names_flag = 1;
-$unlog2_flag             = 0;    # unlog2 the input data
+$unlog2_flag             = 0;   # unlog2 the input data
 $no_log2_flag            = 0;   # do not log2 the output data
 $norm_none_flag          = 0;   # do not normalize the data at all
 $global_metabolomics_flag = 0;
@@ -802,6 +804,25 @@ for ($i = 0; $i < @ARGV; $i++)
             $force_ref_sample = $field
         }
     }
+}
+
+if ($syntax_error_flag || $num_files == 0)
+{
+    $program_name = basename($0);
+
+    printf STDERR "Usage: $program_name [options] input_file.txt [reference_sample]\n";
+    printf STDERR "\n";
+    printf STDERR "  Options:\n";
+    printf STDERR "    --iron-exclusions=filename    identifiers to exclude from training\n";
+    printf STDERR "    --iron-spikeins=filename      list of spikein identifiers\n";
+    printf STDERR "\n";
+    printf STDERR "    --log2                        output log2 abundances [default]\n";
+    printf STDERR "    --no-strip-sample-names       keep original full sample headers\n";
+    printf STDERR "    --no-log2                     output unlogged abundances\n";
+    printf STDERR "    --norm-none                   disable normalization\n";
+    printf STDERR "    --unlog2                      exponentiate input data, pow(2, value)\n";
+
+    exit(1);
 }
 
 
