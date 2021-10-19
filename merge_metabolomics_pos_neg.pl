@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-10-19:  bugfix auto-shortened sample names
 # 2021-08-19:  better support for samples missing pos/neg in their names
 # 2021-08-11:  support auto-shortening when blank samples break naming convention
 # 2021-08-06:  export auto-shortened sample names to sample name mapping table
@@ -618,18 +619,19 @@ $count_sample_total  = @global_sample_array;
 $common_prefix_all   = '';
 $common_suffix_all   = '';
 
-$count           = 0;
-$count_blank     = 0;
+$count_blank = 0;
+foreach $sample (@global_sample_array)
+{
+    if ($sample =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
+        $sample =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
+    {
+        $count_blank++;
+    }
+}
+
 foreach $common_prefix (@common_prefix_array)
 {
-    foreach $sample (@global_sample_array)
-    {
-        if ($sample =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
-            $sample =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
-        {
-            $count_blank++;
-        }
-    }
+    $count = 0;
 
     foreach $sample (@global_sample_array)
     {
@@ -646,9 +648,10 @@ foreach $common_prefix (@common_prefix_array)
     }
 }
 
-$count = 0;
 foreach $common_suffix (@common_suffix_array)
 {
+    $count = 0;
+
     foreach $sample (@global_sample_array)
     {
         if ($sample =~ /$common_suffix$/)
@@ -657,13 +660,12 @@ foreach $common_suffix (@common_suffix_array)
         }
     }
     
-    if ($count == $count_sample_total)
+    if ($count >= $count_sample_total - $count_blank)
     {
         $common_suffix_all = $common_suffix;
         last;
     }
 }
-
 
 
 # output sample mapping table
