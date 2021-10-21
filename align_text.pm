@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2021-10-21:  update post-alignment scoring examples in comments
+# 2021-06-14:  further tweaks to post-alignment scoring and comments
 # 2021-06-10:  rewrite large portions to support affine gaps correctly
 # 2021-06-03:  enable debug output via appending _debug to $type
 # 2014-02-03:  last time I worked on it before 2021
@@ -631,24 +633,29 @@ sub score_substring_mismatch
     # penalize alignment length + sqrt(overhang) in denominator
     #
     # glocal:
-    #   AAAAAcccccddddd             0.612574
-    #   AAAAAeeeeefffff
+    #   
+    #   AAAAAccee         0.714286
+    #   AAAAAggjj
     #
-    #   cccccAAAAAddddd             0.338623
-    #   eeeeeAAAAAfffff
+    #   ccAAAAAee         0.428571
+    #   ggAAAAAjj
     #
-    #        AAAAAcccccddddd        0.311500
-    #   eeeeeAAAAAfffff
+    #     AAAAAccee       0.402712
+    #   ggAAAAAjj
     #
-    #             AAAAAcccccddddd   0.194014
-    #   eeeeefffffAAAAA
+    #       AAAAAccee     0.127740
+    #   ggjjAAAAA
     #
     #
     # potentially problematic examples:
-    #   ABCD1         ABCD1-DEFGHI2
-    #   cysgly        lcysteinylglycine
-    #   fumarate13c4  succinated4
-    #   fumarate      succinate   (check for < 50% coverage after returning)
+    #   ABCD1         ABCD1-DEFGHI2       0.653958
+    #   cysgly        lcysteinylglycine   0.351221
+    #   fumarate13c4  succinated4         0.0
+    #   fumarate      succinate           0.550510
+    #     [check for < 50% coverage to zero it after returning]
+    #
+    # I may want to consider zeroing out the score at < 50% coverage here,
+    # rather than relying on the user to do so in the calling function?
     #
     $my_score = ($num_match - min($left_overhang, $right_overhang)) /
                 ($align_length + sqrt($left_overhang + $right_overhang));
