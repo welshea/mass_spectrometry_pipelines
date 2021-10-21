@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2021-10-21:  rename glocal to gmiddle
 # 2021-08-17:  begin adding auto heavy label matching support
 # 2021-08-17:  add --ppm flag to set m/z PPM tolerance
 
@@ -1320,7 +1321,7 @@ while(defined($line=<DATA>))
                     $frac_id = 0;
                     $score = score_substring_mismatch($name_lc_conformed,
                                                       $name_db_conformed,
-                                                      'glocal',
+                                                      'gmiddle',
                                                       \$frac_id);
                     if ($frac_id < 0.5) { $score = 0; }
                     $temp_row_score_hash{$row} = $score;
@@ -1412,7 +1413,7 @@ while(defined($line=<DATA>))
                     $frac_id = 0;
                     $score = score_substring_mismatch($name_lc_conformed,
                                                       $name_db_conformed,
-                                                      'glocal',
+                                                      'gmiddle',
                                                       \$frac_id);
                     if ($frac_id < 0.5) { $score = 0; }
                     $temp_row_score_hash{$row} = $score;
