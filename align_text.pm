@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-10-21:  more consistent tie-breaking behavior between modes
 # 2021-10-21:  update post-alignment scoring examples in comments
 # 2021-06-14:  further tweaks to post-alignment scoring and comments
 # 2021-06-10:  rewrite large portions to support affine gaps correctly
@@ -464,7 +465,7 @@ sub score_substring_mismatch
             elsif ($type eq 'overlap')
             {
                 # best score, must be on far edges
-                if ($score_best >= $best_tb_score &&
+                if ($score_best > $best_tb_score &&
                     ($row == $len1 || $col == $len2))
                 {
                     $best_tb_score = $score_best;
@@ -472,13 +473,11 @@ sub score_substring_mismatch
                     $best_tb_col   = $col;
                 }
             }
-            # best overlap, whether anchored or not
-            # alignment must end on a match
+            # best middle alignment, whether anchored or not
             elsif ($type eq 'glocal')
             {
-                # best score, nearest to either end for ties
-                if ($score_best >= $best_tb_score &&
-                    $$pointer{is_positive})
+                # best score
+                if ($score_best > $best_tb_score)
                 {
                     $best_tb_score = $score_best;
                     $best_tb_row   = $row;
