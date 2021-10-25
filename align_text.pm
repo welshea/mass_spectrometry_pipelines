@@ -13,7 +13,8 @@
 
 #use strict;
 use List::Util qw[min max];
-$BOGUS_SCORE = -9E99;
+use POSIX;
+$BOGUS_SCORE = -DBL_MAX();
 
 # types of alignment:
 #   global      global alignment of both sequences; Needleman-Wunch
