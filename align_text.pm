@@ -346,14 +346,10 @@ sub score_substring_mismatch
             }
             
             # bogify impossible paths
-            # there can be no match states prior to first row/col
-            # allow [0,0] so that global alignments will work
             if ($tb_row == 0 || $tb_col == 0)
             {
-                if ($tb_row || $tb_col)
-                {
-                    $score_diag = $BOGUS_SCORE;
-                }
+                $score_diag = $BOGUS_SCORE;
+
                 if ($tb_col)
                 {
                     $score_up   = $BOGUS_SCORE;
@@ -589,7 +585,7 @@ sub score_substring_mismatch
 
     # trace back through the matrix to assemble the alignment
     $pos = 0;
-    while ($row > 0 || $col > 0)
+    while (defined($tb_row) && defined($tb_col))
     {
         # local traceback ends once alignment score is zero
         if ($type eq 'local' && $matrix[$row][$col]{score_best} <= 0)
@@ -612,23 +608,23 @@ sub score_substring_mismatch
         if ($row == $tb_row)
         {
           $seq_align1 .= '~';
-          $seq_align2 .= $char_array2[$col-1];
+          $seq_align2 .= $char_array2[$tb_col];
           $num_gap1++;
         }
         # gap in seq2
         elsif ($col == $tb_col)
         {
-          $seq_align1 .= $char_array1[$row-1];
+          $seq_align1 .= $char_array1[$tb_row];
           $seq_align2 .= '~';
           $num_gap2++;
         }
         # match state
         else
         {
-          $seq_align1 .= $char_array1[$row-1];
-          $seq_align2 .= $char_array2[$col-1];
+          $seq_align1 .= $char_array1[$tb_row];
+          $seq_align2 .= $char_array2[$tb_col];
           
-          if ($char_array1[$row-1] eq $char_array2[$col-1])
+          if ($char_array1[$tb_row] eq $char_array2[$tb_col])
           {
               $num_match++;
               
@@ -659,18 +655,33 @@ sub score_substring_mismatch
         $choice_best = 'score_' . $state_best;
         if ($state_best eq 'diag')
         {
-            $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
-            $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
+            if ($tb_row)
+            {
+                $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
+            }
+
+            if ($tb_col)
+            {
+                $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
+            }
         }
         elsif ($state_best eq 'up')
         {
-            $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
+            if ($tb_row)
+            {
+                $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
+            }
+
             $matrix[$tb_row][$tb_col]{tb_col} = $tb_col;
         }
         elsif ($state_best eq 'left')
         {
             $matrix[$tb_row][$tb_col]{tb_row} = $tb_row;
-            $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
+
+            if ($tb_col)
+            {
+                $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
+            }
         }
         $matrix[$tb_row][$tb_col]{score_best} =
             $matrix[$tb_row][$tb_col]{$choice_best};
