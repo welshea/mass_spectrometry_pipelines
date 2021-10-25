@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2021-10-22:  bugfix affine gap traceback, should only affect overlap
+# 2021-10-21:  bugfix global matrix column initialization typo
+# 2021-10-21:  rename glocal to gmiddle to avoid literature confusion
 # 2021-10-21:  more consistent tie-breaking behavior between modes
 # 2021-10-21:  update post-alignment scoring examples in comments
 # 2021-06-14:  further tweaks to post-alignment scoring and comments
@@ -9,59 +12,82 @@
 
 #use strict;
 use List::Util qw[min max];
+$BOGUS_SCORE = -9E99;
 
 # types of alignment:
 #   global      global alignment of both sequences; Needleman-Wunch
 #   local       local alignment; Smith-Waterman
-#   overlap     best overlap, mostly anchor at least one end of one or both
-#   glocal      best overlap, no anchor
+#   overlap     best overlap, anchor at least one end of one or both
+#   gmiddle     no gap penalties at begin *and* end of *both* strings
 #
-#   Usually, glocal and local will yield the same alignment.
+#   I had previously used the term "glocal" to refer to a hybrid global-local
+#   alignment.  It appears that many people use the term glocal, or
+#   semi-global, as another name for overlap alignment.  Overlap alignments
+#   anchor at least one end of the alignment, whereas gmiddle does not anchor
+#   *any* ends of the sequences.  I now refer to it as gmiddle to avoid
+#   confusion with common usage of the term glocal.  gmiddle -- find the best
+#   alignment within the middle of the sequences, ignoring poorly aligned
+#   ends entirely.
+#
+#   Global:
+#     Initialize first row and col with affine gap penalties
+#     Traceback begins at m,n
+#     Traceback ends   at 0,0
+#
+#   Overlap:
+#     Initialize first row and column to zero
+#     Traceback begins at highest score within last row and column
+#     Traceback ends at either first row/col
+#
+#   Local:
+#     Initialize first row and column to zero
+#     Negative scores are floored to zero as matrix is filled
+#     Traceback begins at highest score within entire matrix
+#     Traceback ends at first encountered zero score
+#
+#   Gmiddle:
+#     Initialize first row and column to zero
+#     Negative scores are floored to zero as matrix is filled, but only until
+#      the first positive match along the path
+#     Traceback begins at highest score within entire matrix
+#     Traceback ends at aforementioned first positive match along the path
+#
+#   Gmiddle can be thought of as a global alignment that completely ignores
+#   poorly aligned end regions (a "global" alignment of the "middle" regions),
+#   or as a local alignment that can pass through negatively scoring regions
+#   on its way to finding a longer, higher scoring alignment.
+#
+#   Usually, gmiddle and local will yield the same alignment.
 #   I needed to specifically craft an example for which they are different.
 #
-#   Glocal can sometimes yield longer alignments than local due to not
+#   Gmiddle can sometimes yield longer alignments than local due to not
 #   ending the traceback when it encounters a non-positive score, if the
 #   scores of the blocks on either side of the unmatched region are high
 #   enough.
-
+#
 # test strings, yield different alignments for the different methods
 #
 #   match, mis-match, gap-open, gap-extend = [25, 11, 12, 9]
 #
-#   xxxzdaaaaaaa0000000000bbbbbyyycz  qdccaaaa4444bbbbbzzzzcqqqqq
 #
-#   global:    raw score = 7
-#     XXXZDAAAAAAA0000000000BBBBB~YYYC~~~~Z
-#     ~~~QD~CCAAAA~~~~~~4444BBBBBZZZZCQQQQQ
+#   22AA55555CCC  333AABCCC           AA55555CCC22  AABCCC333
 #
-#   overlap:   raw score = 93
-#     ZDAAAAAAA0000000000BBBBBYYYCZ
-#     QD~CCAAAA~~~~~~4444BBBBB~~~~Z
+#   global:    raw score = 41         global:    raw score = 41
+#     ~22AA55555CCC                        AA55555CCC~22
+#     333AA~~~~BCCC                        AA~~~~BCCC333
 #
-#   glocal:    raw score = 124
-#     AAAA0000000000BBBBB
-#     AAAA~~~~~~4444BBBBB
+#   overlap:   raw score = 54         overlap:   raw score = 54
+#      22AA55555CCC                        AA55555CCC22
+#      ~~AA~~~~BCCC                        AA~~~~BCCC~~
 #
-#   local:     raw score = 125
-#     BBBBB
-#     BBBBB
+#   local:     raw score = 75         local:     raw score = 75
+#               CCC                               CCC
+#               CCC                               CCC
 #
-# -------------------------------------------------------------------------
+#   gmiddle:   raw score = 75         gmiddle:   raw score = 75
+#        AA55555CCC                        AA55555CCC
+#        AA~~~~BCCC                        AA~~~~BCCC
 #
-#   cccccaaaaaddddd  eeeeeaaaaafffff
-#
-#   global:     raw score = 15
-#     CCCCCAAAAADDDDD
-#     EEEEEAAAAAFFFFF
-#
-#   overlap:    raw score = 29    (overhanging sequences shown for clarity)
-#     CCCCC~~~~AAAAADDDDD
-#         EEEEEAAAAA~~~~~DDDDD
-#
-#   local
-#   glocal:     raw score = 125   (overhanging sequences omitted)
-#     AAAAA
-#     AAAAA
 #
 sub score_substring_mismatch
 {
@@ -121,9 +147,9 @@ sub score_substring_mismatch
     $type = $type_orig;
     $type =~ s/_debug$//;
 
-    # default to glocal
+    # default to gmiddle
     if ($type ne 'global' && $type ne 'local' && $type ne 'overlap' &&
-        $type ne 'glocal')
+        $type ne 'gmiddle')
     {
         printf STDERR "ERROR - no method for alignment of type %s\n", $type;
         return '';
@@ -135,7 +161,7 @@ sub score_substring_mismatch
     # [25, 12, 11, 10]  seems to work well ??
     # [25, 11, 12,  9]  an alternative to discourage gap opening
     #
-    # real test case that glocal needs to handle well:
+    # real test case that gmiddle needs to handle well:
     #   cysgly  lcysteinylglycine
     #
     # contrived variant, works with [25, 11, 12, 9]
@@ -181,6 +207,7 @@ sub score_substring_mismatch
     $matrix[0][0]{score_left}   = 0;
     $matrix[0][0]{is_positive}  = 0;
     $matrix[0][0]{was_positive} = 0;
+    $matrix[0][0]{state_best}   = 'diag';
 
 
     # initialize first rows and cols
@@ -195,6 +222,7 @@ sub score_substring_mismatch
         $$pointer{tb_col}         = $col - 1;
         $$pointer{is_positive}    = 0;
         $$pointer{was_positive}   = 0;
+        $$pointer{state_best}     = 'left';
         
         # local alignments, set first rows/cols to zero
         if ($type ne 'global')
@@ -207,7 +235,7 @@ sub score_substring_mismatch
             $score_best = $matrix[$row][$col-1]{score_best};
 
             # gap open
-            if ($row == 1)
+            if ($col == 1)
             {
                 $$pointer{score_best} = $score_best - $gap_open_penalty;
             }
@@ -234,6 +262,7 @@ sub score_substring_mismatch
         $$pointer{tb_col}        = $col;
         $$pointer{is_positive}   = 0;
         $$pointer{was_positive}  = 0;
+        $$pointer{state_best}    = 'up';
 
         # local alignments, set first rows/cols to zero
         if ($type ne 'global')
@@ -305,25 +334,48 @@ sub score_substring_mismatch
             $score_up   = $matrix[$tb_row][$tb_col]{score_up}   + $score;
             $score_left = $matrix[$tb_row][$tb_col]{score_left} + $score;
 
-            # glocal doesn't allow negative scores before first positive hit
-            # local  doesn't allow negative scores anywhere
+            # gmiddle doesn't allow negative scores before first positive hit
+            # local   doesn't allow negative scores anywhere
             if ($type eq 'local' ||
-                ($type eq 'glocal' && $was_positive == 0))
+                ($type eq 'gmiddle' && $was_positive == 0))
             {
                 if ($score_diag < 0) { $score_diag = 0; }
                 if ($score_up   < 0) { $score_up   = 0; }
                 if ($score_left < 0) { $score_left = 0; }
             }
             
+            # bogify impossible paths
+            # there can be no match states prior to first row/col
+            if ($tb_row == 0 || $tb_col == 0)
+            {
+                # allow [0,0] so alignments can start without gaps
+                if ($tb_row || $tb_col)
+                {
+                    $score_diag = $BOGUS_SCORE;
+                }
+            
+                if ($tb_row == 0)
+                {
+                    $score_up   = $BOGUS_SCORE;
+                }
+                if ($tb_col == 0)
+                {
+                    $score_left = $BOGUS_SCORE;
+                }
+            }
+            
             # maximum of potential states
             $score_best = $score_diag;
+            $state_best = 'diag';
             if ($score_up > $score_best)
             {
                 $score_best = $score_up;
+                $state_best = 'up';
             }
             if ($score_left > $score_best)
             {
                 $score_best = $score_left;
+                $state_best = 'left';
             }
             $$pointer{score_diag} = $score_best;
 
@@ -336,6 +388,7 @@ sub score_substring_mismatch
             $$pointer{was_positive} = $was_positive;
             $$pointer{tb_col}       = $tb_col;
             $$pointer{tb_row}       = $tb_row;
+            $$pointer{state_best}   = $state_best;
 
 
 
@@ -344,7 +397,7 @@ sub score_substring_mismatch
             $tb_col = $col - 1;
 
             # check to see if we have ever had a positive match before
-            $was_positive   = $matrix[$tb_row][$tb_col]{was_positive};
+            $was_positive = $matrix[$tb_row][$tb_col]{was_positive};
 
             $score_diag     = $matrix[$tb_row][$tb_col]{score_diag} -
                               $gap_open_penalty;
@@ -361,20 +414,22 @@ sub score_substring_mismatch
                               $gap_extend_penalty;
             }
 
-            # glocal doesn't allow negative scores before first positive hit
-            # local  doesn't allow negative scores anywhere
+            # gmiddle doesn't allow negative scores before first positive hit
+            # local   doesn't allow negative scores anywhere
             if ($type eq 'local' ||
-                ($type eq 'glocal' && $was_positive == 0))
+                ($type eq 'gmiddle' && $was_positive == 0))
             {
                 if ($score_diag < 0) { $score_diag = 0; }
                 if ($score_left < 0) { $score_left = 0; }
             }
-            
+
             # maximum of potential states
             $score_best = $score_diag;
+            $state_best = 'diag';
             if ($score_left > $score_best)
             {
                 $score_best = $score_left;
+                $state_best = 'left';
             }
             $$pointer{score_left} = $score_best;
 
@@ -389,6 +444,7 @@ sub score_substring_mismatch
                 $$pointer{was_positive} = $was_positive;
                 $$pointer{tb_col}       = $tb_col;
                 $$pointer{tb_row}       = $tb_row;
+                $$pointer{state_best}   = $state_best;
             }
 
 
@@ -415,22 +471,24 @@ sub score_substring_mismatch
                             $gap_extend_penalty;
             }
 
-            # glocal doesn't allow negative scores before first positive hit
-            # local  doesn't allow negative scores anywhere
+            # gmiddle doesn't allow negative scores before first positive hit
+            # local   doesn't allow negative scores anywhere
             if ($type eq 'local' ||
-                ($type eq 'glocal' && $was_positive == 0))
+                ($type eq 'gmiddle' && $was_positive == 0))
             {
                 if ($score_diag < 0) { $score_diag = 0; }
                 if ($score_up   < 0) { $score_up   = 0; }
             }
-            
+
             # maximum of potential states
             $score_best = $score_diag;
+            $state_best = 'diag';
             if ($score_up > $score_best)
             {
                 $score_best = $score_up;
+                $state_best = 'up';
             }
-            $$pointer{score_up} = $score_best;
+            $$pointer{score_up}   = $score_best;
 
             # printf "%d\t%d\t%d\t%d\t%f\n",
             #     $row, $col, $tb_row, $tb_col, $score_best;
@@ -443,6 +501,7 @@ sub score_substring_mismatch
                 $$pointer{was_positive} = $was_positive;
                 $$pointer{tb_col}       = $tb_col;
                 $$pointer{tb_row}       = $tb_row;
+                $$pointer{state_best}   = $state_best;
             }
 
 
@@ -474,7 +533,7 @@ sub score_substring_mismatch
                 }
             }
             # best middle alignment, whether anchored or not
-            elsif ($type eq 'glocal')
+            elsif ($type eq 'gmiddle')
             {
                 # best score
                 if ($score_best > $best_tb_score)
@@ -516,7 +575,7 @@ sub score_substring_mismatch
 
     # trace back through the matrix to assemble the alignment
     $pos = 0;
-    while (defined($tb_row) && defined($tb_col))
+    while ($row > 0 || $col > 0)
     {
         # local traceback ends once alignment score is zero
         if ($type eq 'local' && $matrix[$row][$col]{score_best} <= 0)
@@ -530,14 +589,11 @@ sub score_substring_mismatch
             last;
         }
 
-        # glocal traceback ends at the last (first in sequence) match
-        if ($type eq 'glocal' && $matrix[$row][$col]{was_positive} == 0)
+        # gmiddle traceback ends at the last (first in sequence) match
+        if ($type eq 'gmiddle' && $matrix[$row][$col]{was_positive} == 0)
         {
             last;
         }
-
-        # printf "SCORE %s\n", $matrix[$row][$col]{score_best};
-       
         # gap in seq1
         if ($row == $tb_row)
         {
@@ -582,10 +638,37 @@ sub score_substring_mismatch
           }
         }
         $pos--;
+
+
+        # overwrite old traceback with newer knowledge from the future
+        $state_best  = $matrix[$row][$col]{state_best};
+        $choice_best = 'score_' . $state_best;
+        if ($state_best eq 'diag')
+        {
+            $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
+            $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
+        }
+        elsif ($state_best eq 'up')
+        {
+            $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
+            $matrix[$tb_row][$tb_col]{tb_col} = $tb_col;
+        }
+        elsif ($state_best eq 'left')
+        {
+            $matrix[$tb_row][$tb_col]{tb_row} = $tb_row;
+            $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
+        }
+        $matrix[$tb_row][$tb_col]{score_best} =
+            $matrix[$tb_row][$tb_col]{$choice_best};
+
+        #printf "DEBUG\t%d\t%d\t%s\t%f\t%d\t%d\t%f\n",
+        #    $row, $col, $state_best,
+        #    $matrix[$row][$col]{score_best},
+        #    $tb_row, $tb_col, $matrix[$tb_row][$tb_col]{$choice_best};
         
         $row = $tb_row;
         $col = $tb_col;
-
+        
         $tb_row = $matrix[$row][$col]{tb_row};
         $tb_col = $matrix[$row][$col]{tb_col};
     }
@@ -619,19 +702,17 @@ sub score_substring_mismatch
     }
     
     # adjust metrics so as to treat global/overlap more like local
-    $num_mismatch    = $last_match_pos - $first_match_pos + 1 - $num_match -
-                       max($num_gap1, $num_gap2);
     $left_overhang   = max($first_match_row, $first_match_col) - 1;
     $right_overhang  = max($len1 - $last_match_row, $len2 - $last_match_col);
     $align_length    = $last_match_pos - $first_match_pos + 1;
     
 
-    # match score and penalties optimized for use with glocal alignments
+    # match score and penalties optimized for use with gmiddle alignments
     #
     # penalize less-end-anchored overhang        in numerator
     # penalize alignment length + sqrt(overhang) in denominator
     #
-    # glocal:
+    # gmiddle:
     #   
     #   AAAAAccee         0.714286
     #   AAAAAggjj
@@ -649,7 +730,7 @@ sub score_substring_mismatch
     # potentially problematic examples:
     #   ABCD1         ABCD1-DEFGHI2       0.653958
     #   cysgly        lcysteinylglycine   0.351221
-    #   fumarate13c4  succinated4         0.0
+    #   fumarate13c4  succinated4         0.0  (global/overlap align too much)
     #   fumarate      succinate           0.550510
     #     [check for < 50% coverage to zero it after returning]
     #
