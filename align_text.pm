@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-10-25:  more affine gap traceback buxfixes
 # 2021-10-22:  bugfix affine gap traceback, should only affect overlap
 # 2021-10-21:  bugfix global matrix column initialization typo
 # 2021-10-21:  rename glocal to gmiddle to avoid literature confusion
@@ -346,19 +347,18 @@ sub score_substring_mismatch
             
             # bogify impossible paths
             # there can be no match states prior to first row/col
+            # allow [0,0] so that global alignments will work
             if ($tb_row == 0 || $tb_col == 0)
             {
-                # allow [0,0] so alignments can start without gaps
                 if ($tb_row || $tb_col)
                 {
                     $score_diag = $BOGUS_SCORE;
                 }
-            
-                if ($tb_row == 0)
+                if ($tb_col)
                 {
                     $score_up   = $BOGUS_SCORE;
                 }
-                if ($tb_col == 0)
+                if ($tb_row)
                 {
                     $score_left = $BOGUS_SCORE;
                 }
@@ -423,6 +423,13 @@ sub score_substring_mismatch
                 if ($score_left < 0) { $score_left = 0; }
             }
 
+            # bogify impossible paths
+            # there can be no match states prior to first row/col
+            if ($tb_col == 0)
+            {
+                $score_diag = $BOGUS_SCORE;
+            }
+
             # maximum of potential states
             $score_best = $score_diag;
             $state_best = 'diag';
@@ -478,6 +485,13 @@ sub score_substring_mismatch
             {
                 if ($score_diag < 0) { $score_diag = 0; }
                 if ($score_up   < 0) { $score_up   = 0; }
+            }
+
+            # bogify impossible paths
+            # there can be no match states prior to first row/col
+            if ($tb_row == 0)
+            {
+                $score_diag = $BOGUS_SCORE;
             }
 
             # maximum of potential states
