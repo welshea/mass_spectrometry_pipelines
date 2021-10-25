@@ -425,10 +425,10 @@ sub score_substring_mismatch
 
             # bogify impossible paths
             # there can be no match states prior to first row/col
-            if ($tb_col == 0)
-            {
-                $score_diag = $BOGUS_SCORE;
-            }
+            #if ($tb_col == 0)
+            #{
+            #    $score_diag = $BOGUS_SCORE;
+            #}
 
             # maximum of potential states
             $score_best = $score_diag;
@@ -489,10 +489,10 @@ sub score_substring_mismatch
 
             # bogify impossible paths
             # there can be no match states prior to first row/col
-            if ($tb_row == 0)
-            {
-                $score_diag = $BOGUS_SCORE;
-            }
+            #if ($tb_row == 0)
+            #{
+            #    $score_diag = $BOGUS_SCORE;
+            #}
 
             # maximum of potential states
             $score_best = $score_diag;
