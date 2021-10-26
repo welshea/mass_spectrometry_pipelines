@@ -621,7 +621,15 @@ sub score_substring_mismatch
         $pos--;
 
 
-        # overwrite old traceback with newer knowledge from the future
+        # HACK  -- overwrite old traceback with then-future knowledge
+        # FIXME -- implement separate traceback for all 3 states
+        #
+        # This merely corrects bookkeeping after the fact, clobbering
+        # the traceback matrix (if we ever wanted to walk through it again
+        # after masking out portions).  It works, but isn't a remotely clean
+        # solution.  Best to rewrite the traceback properly, but this should
+        # work OK for the time being.
+        #
         $state_best  = $matrix[$row][$col]{state_best};
         $choice_best = 'score_' . $state_best;
         if ($state_best eq 'diag')
