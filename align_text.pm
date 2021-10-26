@@ -13,8 +13,7 @@
 
 #use strict;
 use List::Util qw[min max];
-use POSIX;
-$BOGUS_SCORE = -DBL_MAX();
+
 
 # types of alignment:
 #   global      global alignment of both sequences; Needleman-Wunch
@@ -346,21 +345,6 @@ sub score_substring_mismatch
                 if ($score_left < 0) { $score_left = 0; }
             }
             
-            # bogify impossible paths
-            if ($tb_row == 0 || $tb_col == 0)
-            {
-                $score_diag = $BOGUS_SCORE;
-
-                if ($tb_col)
-                {
-                    $score_up   = $BOGUS_SCORE;
-                }
-                if ($tb_row)
-                {
-                    $score_left = $BOGUS_SCORE;
-                }
-            }
-            
             # maximum of potential states
             $score_best = $score_diag;
             $state_best = 'diag';
@@ -420,13 +404,6 @@ sub score_substring_mismatch
                 if ($score_left < 0) { $score_left = 0; }
             }
 
-            # bogify impossible paths
-            # there can be no match states prior to first row/col
-            #if ($tb_col == 0)
-            #{
-            #    $score_diag = $BOGUS_SCORE;
-            #}
-
             # maximum of potential states
             $score_best = $score_diag;
             $state_best = 'diag';
@@ -483,13 +460,6 @@ sub score_substring_mismatch
                 if ($score_diag < 0) { $score_diag = 0; }
                 if ($score_up   < 0) { $score_up   = 0; }
             }
-
-            # bogify impossible paths
-            # there can be no match states prior to first row/col
-            #if ($tb_row == 0)
-            #{
-            #    $score_diag = $BOGUS_SCORE;
-            #}
 
             # maximum of potential states
             $score_best = $score_diag;
