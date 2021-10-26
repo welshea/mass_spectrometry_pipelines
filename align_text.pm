@@ -20,6 +20,7 @@ $BOGUS_SCORE = -DBL_MAX();
 
 
 # types of alignment:
+#
 #   global      global alignment of both sequences; Needleman-Wunch
 #   local       local alignment; Smith-Waterman
 #   overlap     best overlap, anchor at least one end of one or both
@@ -34,8 +35,9 @@ $BOGUS_SCORE = -DBL_MAX();
 #   alignment within the middle of the sequences, ignoring poorly aligned
 #   ends entirely.
 #
+#
 #   Global:
-#     Initialize first row and col with affine gap penalties
+#     Initialize first row and column with affine gap penalties
 #     Traceback begins at m,n
 #     Traceback ends   at 0,0
 #
@@ -57,20 +59,26 @@ $BOGUS_SCORE = -DBL_MAX();
 #     Traceback begins at highest score within entire matrix
 #     Traceback ends at aforementioned first positive match along the path
 #
-#   Gmiddle can be thought of as a global alignment that completely ignores
-#   poorly aligned end regions (a "global" alignment of the "middle" regions),
-#   or as a local alignment that can pass through negatively scoring regions
-#   on its way to finding a longer, higher scoring alignment.
+#   Ties are broken broken by number of positive matches, usually keeping a
+#   longer alignment over a shorter one.
 #
-#   Usually, gmiddle and local will yield the same alignment.
-#   I needed to specifically craft an example for which they are different.
+#
+#   Gmiddle can be thought of as an overlap alignment that completely ignores
+#   poorly aligned end regions at both ends of both sequences (a "global"
+#   alignment of the "middle" regions), or as a local alignment that can pass
+#   through poorly scoring regions on its way to finding a longer best scoring
+#   alignment.
 #
 #   Gmiddle can sometimes yield longer alignments than local due to not
 #   ending the traceback when it encounters a non-positive score, if the
 #   scores of the blocks on either side of the unmatched region are high
 #   enough.
 #
-# test strings, yield different alignments for the different methods
+#   Usually, gmiddle and local will yield the same alignment.
+#   I needed to specifically craft an example for which they are different.
+#
+#
+# The following examples yield different alignments for the different methods
 #
 #   match, mis-match, gap-open, gap-extend = [25, 11, 12, 9]
 #
@@ -93,8 +101,10 @@ $BOGUS_SCORE = -DBL_MAX();
 #               CCC                               CCC
 #               CCC                               CCC
 #
-#   In the gmiddle example, the tie with CCC is broken by number of positive
-#   matches, keeping the longer alignment over the shorter one.
+#
+#   The output gmiddle alignment ties with CCC, but the tie is broken by its
+#   ability to extend backwards through the net-zero score adjacent to CCC,
+#   producing an alternative alignment with more positive matches.
 #
 sub score_substring_mismatch
 {
@@ -736,11 +746,14 @@ sub score_substring_mismatch
         $pos--;
 
 
-        #printf "DEBUG\t%d\t%d\t%s\t%d\t%f\t%d\t%d\n",
-        #    $row, $col, $state_best,
-        #    $matrix[$row][$col]{$state_best}{num_positive},
-        #    $matrix[$row][$col]{score_best},
-        #    $tb_row, $tb_col;
+        if ($type_orig =~ /_debug$/)
+        {
+            printf "DEBUG\t%d\t%d\t%s\t%d\t%f\t%d\t%d\n",
+                $row, $col, $state_best,
+                $matrix[$row][$col]{$state_best}{num_positive},
+                $matrix[$row][$col]{score_best},
+                $tb_row, $tb_col;
+        }
 
         $state_best = $matrix[$row][$col]{$state_best}{state_best};
         
