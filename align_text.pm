@@ -85,14 +85,16 @@ $BOGUS_SCORE = -DBL_MAX();
 #      22AA55555CCC                        AA55555CCC22
 #      ~~AA~~~~BCCC                        AA~~~~BCCC~~
 #
-#   local:     raw score = 75         local:     raw score = 75
-#               CCC                               CCC
-#               CCC                               CCC
-#
 #   gmiddle:   raw score = 75         gmiddle:   raw score = 75
 #        AA55555CCC                        AA55555CCC
 #        AA~~~~BCCC                        AA~~~~BCCC
 #
+#   local:     raw score = 75         local:     raw score = 75
+#               CCC                               CCC
+#               CCC                               CCC
+#
+#   In the gmiddle example, the tie with CCC is broken by number of positive
+#   matches, keeping the longer alignment over the shorter one.
 #
 sub score_substring_mismatch
 {
