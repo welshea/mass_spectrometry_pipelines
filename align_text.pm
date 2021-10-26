@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-10-26:  restructure affine gap tracebacks to be more correct
 # 2021-10-25:  more affine gap traceback buxfixes
 # 2021-10-22:  bugfix affine gap traceback, should only affect overlap
 # 2021-10-21:  bugfix global matrix column initialization typo
@@ -13,6 +14,9 @@
 
 #use strict;
 use List::Util qw[min max];
+
+use POSIX;
+$BOGUS_SCORE = -DBL_MAX();
 
 
 # types of alignment:
@@ -120,7 +124,7 @@ sub score_substring_mismatch
     my $best_tb_row        = 0;
     my $best_tb_col        = 0;
     my $best_tb_score      = -9E99;
-    my $was_positive;
+    my $num_positive;
     my $is_positive;
     my $seq_align1;
     my $seq_align2;
@@ -195,20 +199,28 @@ sub score_substring_mismatch
     @char_array2 = split //, uc $string2, -1;
     
     # allocate max dimensions
-    $matrix[$len1][$len2]{score_best} = 0;    # best of the 3 scores
-    $matrix[$len1][$len2]{score_diag} = 0;    # from previous aligned seq1:seq2
-    $matrix[$len1][$len2]{score_up}   = 0;    # from previous gap in seq1
-    $matrix[$len1][$len2]{score_left} = 0;    # from previous gap in seq2
+    $matrix[$len1][$len2]{score_best}  = 0;    # best of the 3 scores
+    $matrix[$len1][$len2]{diag}{score} = 0;    # from previous aligned seq1:seq2
+    $matrix[$len1][$len2]{left}{score} = 0;    # from previous gap in seq2
+    $matrix[$len1][$len2]{up}{score}   = 0;    # from previous gap in seq1
     
     # fill 0,0
     # the full first row and first col are initialized further down
-    $matrix[0][0]{score_best}   = 0;
-    $matrix[0][0]{score_diag}   = 0;
-    $matrix[0][0]{score_up}     = 0;
-    $matrix[0][0]{score_left}   = 0;
-    $matrix[0][0]{is_positive}  = 0;
-    $matrix[0][0]{was_positive} = 0;
-    $matrix[0][0]{state_best}   = 'diag';
+    $matrix[0][0]{diag}{score}        = 0;
+    $matrix[0][0]{diag}{state_best}   = 'origin';
+    $matrix[0][0]{diag}{is_positive}  = 0;
+    $matrix[0][0]{diag}{num_positive} = 0;
+    $matrix[0][0]{left}{score}        = 0;
+    $matrix[0][0]{left}{state_best}   = 'origin';
+    $matrix[0][0]{left}{is_positive}  = 0;
+    $matrix[0][0]{left}{num_positive} = 0;
+    $matrix[0][0]{up}{score}          = 0;
+    $matrix[0][0]{up}{state_best}     = 'origin';
+    $matrix[0][0]{up}{is_positive}    = 0;
+    $matrix[0][0]{up}{num_positive}   = 0;
+    $matrix[0][0]{score_best}         = 0;
+    $matrix[0][0]{state_best}         = 'origin';
+    $matrix[0][0]{num_positive}       = 0;
 
 
     # initialize first rows and cols
@@ -219,19 +231,21 @@ sub score_substring_mismatch
         $pointer                  = \%{$matrix[$row][$col]};
 
         # traceback
-        $$pointer{tb_row}         = $row;
-        $$pointer{tb_col}         = $col - 1;
-        $$pointer{is_positive}    = 0;
-        $$pointer{was_positive}   = 0;
-        $$pointer{state_best}     = 'left';
+        $$pointer{diag}{state_best}   = 'left';
+        $$pointer{diag}{is_positive}  = 0;
+        $$pointer{diag}{num_positive} = 0;
+        $$pointer{left}{state_best}   = 'left';
+        $$pointer{left}{is_positive}  = 0;
+        $$pointer{left}{num_positive} = 0;
+        $$pointer{up}{state_best}     = 'left';
+        $$pointer{up}{is_positive}    = 0;
+        $$pointer{up}{num_positive}   = 0;
+        $$pointer{score_best}         = 0;
+        $$pointer{state_best}         = 'left';
+        $$pointer{num_positive}       = 0;
         
-        # local alignments, set first rows/cols to zero
-        if ($type ne 'global')
-        {
-            $$pointer{score_best} = 0;
-        }
         # global, initialize gaps
-        else
+        if ($type eq 'global')
         {
             $score_best = $matrix[$row][$col-1]{score_best};
 
@@ -247,10 +261,18 @@ sub score_substring_mismatch
             }
         }
 
-        # there are no previous paths, so all paths are the same value
-        $$pointer{score_diag} = $$pointer{score_best};
-        $$pointer{score_up}   = $$pointer{score_best};
-        $$pointer{score_left} = $$pointer{score_best};
+        $$pointer{diag}{score} = $$pointer{score_best};
+        $$pointer{left}{score} = $$pointer{score_best};
+        $$pointer{up}{score}   = $$pointer{score_best};
+        
+        # bogify impossible paths through global alignment
+        # only needed for global, messes up non-global
+        # non-global is all zeroes and can start from "illegal" transitions
+        if ($type eq 'global')
+        {
+            $$pointer{diag}{score} = $BOGUS_SCORE;
+            $$pointer{up}{score}   = $BOGUS_SCORE;
+        }
     }
 
     $col = 0;
@@ -259,19 +281,21 @@ sub score_substring_mismatch
         $pointer                 = \%{$matrix[$row][$col]};
 
         # traceback
-        $$pointer{tb_row}        = $row - 1;
-        $$pointer{tb_col}        = $col;
-        $$pointer{is_positive}   = 0;
-        $$pointer{was_positive}  = 0;
-        $$pointer{state_best}    = 'up';
+        $$pointer{diag}{state_best}   = 'up';
+        $$pointer{diag}{is_positive}  = 0;
+        $$pointer{diag}{num_positive} = 0;
+        $$pointer{left}{state_best}   = 'up';
+        $$pointer{left}{is_positive}  = 0;
+        $$pointer{left}{num_positive} = 0;
+        $$pointer{up}{state_best}     = 'up';
+        $$pointer{up}{is_positive}    = 0;
+        $$pointer{up}{num_positive}   = 0;
+        $$pointer{score_best}         = 0;
+        $$pointer{state_best}         = 'up';
+        $$pointer{num_positive}       = 0;
 
-        # local alignments, set first rows/cols to zero
-        if ($type ne 'global')
-        {
-            $$pointer{score_best} = 0;
-        }
         # global, initialize gaps
-        else
+        if ($type eq 'global')
         {
             $score_best = $matrix[$row-1][$col]{score_best};
 
@@ -286,11 +310,19 @@ sub score_substring_mismatch
                 $$pointer{score_best} = $score_best - $gap_extend_penalty;
             }
         }
+        
+        $$pointer{diag}{score} = $$pointer{score_best};
+        $$pointer{left}{score} = $$pointer{score_best};
+        $$pointer{up}{score}   = $$pointer{score_best};
 
-        # there are no previous paths, so all paths are the same value
-        $$pointer{score_diag} = $$pointer{score_best};
-        $$pointer{score_up}   = $$pointer{score_best};
-        $$pointer{score_left} = $$pointer{score_best};
+        # bogify impossible paths through global alignment
+        # only needed for global, messes up non-global
+        # non-global is all zeroes and can start from "illegal" transitions
+        if ($type eq 'global')
+        {
+            $$pointer{diag}{score} = $BOGUS_SCORE;
+            $$pointer{left}{score} = $BOGUS_SCORE;
+        }
     }
     
 
@@ -306,6 +338,7 @@ sub score_substring_mismatch
             # diag: [row - 1][col - 1]
             $tb_row = $row - 1;
             $tb_col = $col - 1;
+            $pointer_tb       = \%{$matrix[$tb_row][$tb_col]};
 
             # score if position is aligned instead of gapped
             $is_positive      = 0;
@@ -319,113 +352,124 @@ sub score_substring_mismatch
                 $score        = -$mismatch_penalty;
             }
 
-            # check to see if we have ever had a positive match
-            $was_positive = 0;
-            if ($is_positive)
-            {
-                $was_positive = 1;
-            }
-            # else propagate the flag
-            else
-            {
-                $was_positive = $matrix[$tb_row][$tb_col]{was_positive};
-            }
+            $score_diag = $$pointer_tb{diag}{score} + $score;
+            $score_left = $$pointer_tb{left}{score} + $score;
+            $score_up   = $$pointer_tb{up}{score}   + $score;
 
-            $score_diag = $matrix[$tb_row][$tb_col]{score_diag} + $score;
-            $score_up   = $matrix[$tb_row][$tb_col]{score_up}   + $score;
-            $score_left = $matrix[$tb_row][$tb_col]{score_left} + $score;
-
-            # gmiddle doesn't allow negative scores before first positive hit
-            # local   doesn't allow negative scores anywhere
-            if ($type eq 'local' ||
-                ($type eq 'gmiddle' && $was_positive == 0))
-            {
-                if ($score_diag < 0) { $score_diag = 0; }
-                if ($score_up   < 0) { $score_up   = 0; }
-                if ($score_left < 0) { $score_left = 0; }
-            }
             
             # maximum of potential states
-            $score_best = $score_diag;
-            $state_best = 'diag';
-            if ($score_up > $score_best)
+            # break ties on num_positive
+            $num_positive = $$pointer_tb{diag}{num_positive};
+            $score_best   = $score_diag;
+            $state_best   = 'diag';
+            if ($score_left >= $score_best)
             {
-                $score_best = $score_up;
-                $state_best = 'up';
+                if ($score_left > $score_best ||
+                    $$pointer_tb{left}{num_positive} > $num_positive)
+                {
+                    $num_positive = $$pointer_tb{left}{num_positive};
+                    $score_best   = $score_left;
+                    $state_best   = 'left';
+                }
             }
-            if ($score_left > $score_best)
+            if ($score_up >= $score_best)
             {
-                $score_best = $score_left;
-                $state_best = 'left';
+                if ($score_up > $score_best ||
+                    $$pointer_tb{up}{num_positive} > $num_positive)
+                {
+                    $num_positive = $$pointer_tb{up}{num_positive};
+                    $score_best   = $score_up;
+                    $state_best   = 'up';
+                }
             }
-            $$pointer{score_diag} = $score_best;
+            $$pointer{diag}{score}      = $score_best;
+            $$pointer{diag}{state_best} = $state_best;
 
-            # printf "%d\t%d\t%d\t%d\t%f\n",
-            #    $row, $col, $tb_row, $tb_col, $score_best;
 
-            # initialize best of the 3 paths
-            $$pointer{score_best}   = $score_best;
-            $$pointer{is_positive}  = $is_positive;
-            $$pointer{was_positive} = $was_positive;
-            $$pointer{tb_col}       = $tb_col;
-            $$pointer{tb_row}       = $tb_row;
-            $$pointer{state_best}   = $state_best;
+            # increment / propagate num positive matches so far
+            $$pointer{diag}{num_positive} =
+               $$pointer_tb{$state_best}{num_positive} + $is_positive;
+
+
+            # local doesn't allow negative scores anywhere
+            if ($type eq 'local')
+            {
+                if ($$pointer{diag}{score} < 0)
+                {
+                    $$pointer{diag}{score} = 0;
+                }
+            }
+            # gmiddle doesn't allow negative scores before first positive hit
+            if ($type eq 'gmiddle' && $$pointer{diag}{num_positive} == 0)
+            {
+                if ($$pointer{diag}{score} < 0)
+                {
+                    $$pointer{diag}{score} = 0;
+                }
+            }
 
 
 
             # left: [row][col-1]
             $tb_row = $row;
             $tb_col = $col - 1;
+            $pointer_tb       = \%{$matrix[$tb_row][$tb_col]};
 
-            # check to see if we have ever had a positive match before
-            $was_positive = $matrix[$tb_row][$tb_col]{was_positive};
-
-            $score_diag     = $matrix[$tb_row][$tb_col]{score_diag} -
+            $score_diag     = $$pointer_tb{diag}{score} -
                               $gap_open_penalty;
             if ($tb_col == 0)
             {
                 # col 0 can't have come from a gap
-                $score_left = $matrix[$tb_row][$tb_col]{score_left} -
+                $score_left = $$pointer_tb{left}{score} -
                               $gap_open_penalty;
             }
             else
             {
                 # gap extension
-                $score_left = $matrix[$tb_row][$tb_col]{score_left} -
+                $score_left = $$pointer_tb{left}{score} -
                               $gap_extend_penalty;
             }
 
-            # gmiddle doesn't allow negative scores before first positive hit
-            # local   doesn't allow negative scores anywhere
-            if ($type eq 'local' ||
-                ($type eq 'gmiddle' && $was_positive == 0))
-            {
-                if ($score_diag < 0) { $score_diag = 0; }
-                if ($score_left < 0) { $score_left = 0; }
-            }
 
             # maximum of potential states
-            $score_best = $score_diag;
-            $state_best = 'diag';
-            if ($score_left > $score_best)
+            # break ties on num_positive
+            $num_positive = $$pointer_tb{diag}{num_positive};
+            $score_best   = $score_diag;
+            $state_best   = 'diag';
+            if ($score_left >= $score_best)
             {
-                $score_best = $score_left;
-                $state_best = 'left';
+                if ($score_left > $score_best ||
+                    $$pointer_tb{left}{num_positive} > $num_positive)
+                {
+                    $num_positive = $$pointer_tb{left}{num_positive};
+                    $score_best   = $score_left;
+                    $state_best   = 'left';
+                }
             }
-            $$pointer{score_left} = $score_best;
+            $$pointer{left}{score}      = $score_best;
+            $$pointer{left}{state_best} = $state_best;
 
-            # printf "%d\t%d\t%d\t%d\t%f\n",
-            #     $row, $col, $tb_row, $tb_col, $score_best;
-            
-            # store best of the 3 paths
-            if ($score_best > $$pointer{score_best})
+
+            # increment / propagate num positive matches so far
+            $$pointer{left}{num_positive} =
+               $$pointer_tb{$state_best}{num_positive} + $is_positive;
+
+
+            # local doesn't allow negative scores anywhere
+            if ($type eq 'local')
             {
-                $$pointer{score_best}   = $score_best;
-                $$pointer{is_positive}  = 0;              # it's a gap
-                $$pointer{was_positive} = $was_positive;
-                $$pointer{tb_col}       = $tb_col;
-                $$pointer{tb_row}       = $tb_row;
-                $$pointer{state_best}   = $state_best;
+                if ($$pointer{left}{score} < 0)
+                {
+                    $$pointer{left}{score} = 0;
+                }
+            }
+            # gmiddle doesn't allow negative scores before first positive hit
+            if ($type eq 'gmiddle' && $$pointer{left}{num_positive} == 0)
+            {
+                if ($$pointer{left}{score} < 0)
+                {
+                    $$pointer{left}{score} = 0;
+                }
             }
 
 
@@ -433,58 +477,92 @@ sub score_substring_mismatch
             # up: [row-1][col]
             $tb_row = $row - 1;
             $tb_col = $col;
+            $pointer_tb       = \%{$matrix[$tb_row][$tb_col]};
 
-            # check to see if we have ever had a positive match before
-            $was_positive = $matrix[$tb_row][$tb_col]{was_positive};
-
-            $score_diag   = $matrix[$tb_row][$tb_col]{score_diag} -
+            $score_diag   = $$pointer_tb{diag}{score} -
                             $gap_open_penalty;
             if ($tb_row == 0)
             {
                 # row 0 can't have come from a gap
-                $score_up = $matrix[$tb_row][$tb_col]{score_up} -
+                $score_up = $$pointer_tb{up}{score} -
                             $gap_open_penalty;
             }
             else
             {
                 # gap extension
-                $score_up = $matrix[$tb_row][$tb_col]{score_up} -
+                $score_up = $$pointer_tb{up}{score} -
                             $gap_extend_penalty;
             }
 
-            # gmiddle doesn't allow negative scores before first positive hit
-            # local   doesn't allow negative scores anywhere
-            if ($type eq 'local' ||
-                ($type eq 'gmiddle' && $was_positive == 0))
-            {
-                if ($score_diag < 0) { $score_diag = 0; }
-                if ($score_up   < 0) { $score_up   = 0; }
-            }
 
             # maximum of potential states
-            $score_best = $score_diag;
-            $state_best = 'diag';
-            if ($score_up > $score_best)
+            # break ties on num_positive
+            $num_positive = $$pointer_tb{diag}{num_positive};
+            $score_best   = $score_diag;
+            $state_best   = 'diag';
+            if ($score_up >= $score_best)
             {
-                $score_best = $score_up;
-                $state_best = 'up';
+                if ($score_up > $score_best ||
+                    $$pointer_tb{up}{num_positive} > $num_positive)
+                {
+                    $num_positive = $$pointer_tb{up}{num_positive};
+                    $score_best   = $score_up;
+                    $state_best   = 'up';
+                }
             }
-            $$pointer{score_up}   = $score_best;
+            $$pointer{up}{score}      = $score_best;
+            $$pointer{up}{state_best} = $state_best;
 
-            # printf "%d\t%d\t%d\t%d\t%f\n",
-            #     $row, $col, $tb_row, $tb_col, $score_best;
-            
-            # store best of the 3 paths
-            if ($score_best > $$pointer{score_best})
+
+            # increment / propagate num positive matches so far
+            $$pointer{up}{num_positive} =
+               $$pointer_tb{$state_best}{num_positive} + $is_positive;
+
+
+            # local doesn't allow negative scores anywhere
+            if ($type eq 'local')
             {
-                $$pointer{score_best}   = $score_best;
-                $$pointer{is_positive}  = 0;              # it's a gap
-                $$pointer{was_positive} = $was_positive;
-                $$pointer{tb_col}       = $tb_col;
-                $$pointer{tb_row}       = $tb_row;
-                $$pointer{state_best}   = $state_best;
+                if ($$pointer{diag}{score} < 0)
+                {
+                    $$pointer{diag}{score} = 0;
+                }
+            }
+            # gmiddle doesn't allow negative scores before first positive hit
+            if ($type eq 'gmiddle' && $$pointer{up}{num_positive} == 0)
+            {
+                if ($$pointer{up}{score} < 0)
+                {
+                    $$pointer{up}{score} = 0;
+                }
             }
 
+
+
+            # store best of the current 3 states
+            # break ties on num_positive
+            $$pointer{num_positive} = $$pointer{diag}{num_positive};
+            $$pointer{score_best}   = $$pointer{diag}{score};
+            $$pointer{state_best}   = 'diag';
+            if ($$pointer{left}{score} >= $$pointer{score_best})
+            {
+                if ($$pointer{left}{score}        > $$pointer{score_best} ||
+                    $$pointer{left}{num_positive} > $$pointer{num_positive})
+                {
+                    $$pointer{num_positive} = $$pointer{left}{num_positive};
+                    $$pointer{score_best}   = $$pointer{left}{score};
+                    $$pointer{state_best}   = 'left';
+                }
+            }
+            if ($$pointer{up}{score} >= $$pointer{score_best})
+            {
+                if ($$pointer{up}{score}        > $$pointer{score_best} ||
+                    $$pointer{up}{num_positive} > $$pointer{num_positive})
+                {
+                    $$pointer{num_positive} = $$pointer{up}{num_positive};
+                    $$pointer{score_best}   = $$pointer{up}{score};
+                    $$pointer{state_best}   = 'up';
+                }
+            }
 
 
             # keep track of best non-global alignments
@@ -549,32 +627,67 @@ sub score_substring_mismatch
     $seq_align1     = '';
     $seq_align2     = '';
     $score          = $matrix[$row][$col]{score_best};
-    $tb_row         = $matrix[$row][$col]{tb_row};
-    $tb_col         = $matrix[$row][$col]{tb_col};
+    $state_best     = $matrix[$row][$col]{state_best};
     $right_overhang = max($len1 - $row, $len2 - $col);
 
 
     # trace back through the matrix to assemble the alignment
     $pos = 0;
-    while (defined($tb_row) && defined($tb_col))
+    while ($row || $col)
     {
         # local traceback ends once alignment score is zero
-        if ($type eq 'local' && $matrix[$row][$col]{score_best} <= 0)
+        if ($type eq 'local' && $matrix[$row][$col]{$state_best}{score} <= 0)
         {
             last;
         }
 
         # non-global traceback ends when first row/col is reached
-        if ($type ne 'global' && ($row == 0 || $col == 0))
+        if ($type ne 'global' &&
+            ($row == 0 || $col == 0))
         {
             last;
         }
 
         # gmiddle traceback ends at the last (first in sequence) match
-        if ($type eq 'gmiddle' && $matrix[$row][$col]{was_positive} == 0)
+        if ($type eq 'gmiddle' &&
+            $matrix[$row][$col]{$state_best}{num_positive} == 0)
         {
             last;
         }
+        
+        $tb_row = $row;
+        $tb_col = $col;
+
+        # commented out bounding sanity checks
+        # current code shouldn't be taking any impossible paths...
+        if ($state_best eq 'diag')
+        {
+            #if ($row)
+            #{
+                $tb_row = $row - 1;
+            #}
+
+            #if ($col)
+            #{
+                $tb_col = $col - 1;
+            #}
+        }
+        elsif ($state_best eq 'left')
+        {
+            #if ($col)
+            #{
+                $tb_col = $col - 1;
+            #}
+        }
+        elsif ($state_best eq 'up')
+        {
+            #if ($row)
+            #{
+                $tb_row = $row - 1;
+            #}
+        }
+        
+
         # gap in seq1
         if ($row == $tb_row)
         {
@@ -621,60 +734,16 @@ sub score_substring_mismatch
         $pos--;
 
 
-        # HACK  -- overwrite old traceback with then-future knowledge
-        # FIXME -- implement separate traceback for all 3 states
-        #
-        # This merely corrects bookkeeping after the fact, clobbering
-        # the traceback matrix (if we ever wanted to walk through it again
-        # after masking out portions).  It works, but isn't a remotely clean
-        # solution.  Best to rewrite the traceback properly, but this should
-        # work OK for the time being.
-        #
-        $state_best  = $matrix[$row][$col]{state_best};
-        $choice_best = 'score_' . $state_best;
-        if ($state_best eq 'diag')
-        {
-            if ($tb_row)
-            {
-                $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
-            }
+        printf "DEBUG\t%d\t%d\t%s\t%d\t%f\t%d\t%d\n",
+            $row, $col, $state_best,
+            $matrix[$row][$col]{$state_best}{num_positive},
+            $matrix[$row][$col]{score_best},
+            $tb_row, $tb_col;
 
-            if ($tb_col)
-            {
-                $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
-            }
-        }
-        elsif ($state_best eq 'up')
-        {
-            if ($tb_row)
-            {
-                $matrix[$tb_row][$tb_col]{tb_row} = $tb_row - 1;
-            }
-
-            $matrix[$tb_row][$tb_col]{tb_col} = $tb_col;
-        }
-        elsif ($state_best eq 'left')
-        {
-            $matrix[$tb_row][$tb_col]{tb_row} = $tb_row;
-
-            if ($tb_col)
-            {
-                $matrix[$tb_row][$tb_col]{tb_col} = $tb_col - 1;
-            }
-        }
-        $matrix[$tb_row][$tb_col]{score_best} =
-            $matrix[$tb_row][$tb_col]{$choice_best};
-
-        #printf "DEBUG\t%d\t%d\t%s\t%f\t%d\t%d\t%f\n",
-        #    $row, $col, $state_best,
-        #    $matrix[$row][$col]{score_best},
-        #    $tb_row, $tb_col, $matrix[$tb_row][$tb_col]{$choice_best};
+        $state_best = $matrix[$row][$col]{$state_best}{state_best};
         
         $row = $tb_row;
         $col = $tb_col;
-        
-        $tb_row = $matrix[$row][$col]{tb_row};
-        $tb_col = $matrix[$row][$col]{tb_col};
     }
 
     $align_length     = length $seq_align1;
@@ -718,16 +787,16 @@ sub score_substring_mismatch
     #
     # gmiddle:
     #   
-    #   AAAAAccee         0.714286
-    #   AAAAAggjj
+    #       AAAAAccee       0.714286
+    #       AAAAAggjj
     #
-    #   ccAAAAAee         0.428571
-    #   ggAAAAAjj
+    #     ccAAAAAee         0.428571
+    #     ggAAAAAjj
     #
-    #     AAAAAccee       0.402712
-    #   ggAAAAAjj
+    #       AAAAAccee       0.402712
+    #     ggAAAAAjj
     #
-    #       AAAAAccee     0.127740
+    #       AAAAAccee       0.127740
     #   ggjjAAAAA
     #
     #
