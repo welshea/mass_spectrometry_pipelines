@@ -734,11 +734,11 @@ sub score_substring_mismatch
         $pos--;
 
 
-        printf "DEBUG\t%d\t%d\t%s\t%d\t%f\t%d\t%d\n",
-            $row, $col, $state_best,
-            $matrix[$row][$col]{$state_best}{num_positive},
-            $matrix[$row][$col]{score_best},
-            $tb_row, $tb_col;
+        #printf "DEBUG\t%d\t%d\t%s\t%d\t%f\t%d\t%d\n",
+        #    $row, $col, $state_best,
+        #    $matrix[$row][$col]{$state_best}{num_positive},
+        #    $matrix[$row][$col]{score_best},
+        #    $tb_row, $tb_col;
 
         $state_best = $matrix[$row][$col]{$state_best}{state_best};
         
