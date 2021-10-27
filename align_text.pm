@@ -25,7 +25,7 @@ $BOGUS_SCORE = -DBL_MAX();
 #   global      global alignment of both sequences; Needleman-Wunch
 #   local       local alignment; Smith-Waterman
 #   overlap     best overlap, anchor at least one end of one or both
-#   elocal      no gap penalties at begin *and* end of *both* strings
+#   elocal      no gap/mm penalties at begin *and* end of *both* strings
 #
 #   I had previously used the term "glocal" to refer to a hybrid global-local
 #   alignment.  It appears that many people use the term glocal, or
@@ -35,11 +35,10 @@ $BOGUS_SCORE = -DBL_MAX();
 #   confusion with common usage of the term glocal.  Elocal -- find the best
 #   alignment within the middle of the sequences, ignoring poorly aligned
 #   ends entirely.  Elocal winds up behaving similarly to local alignment,
-#   but can occasionally extend the alignment through negatively scoring
-#   regions in order to find a longer alignment tied with best scoring
-#   regular local alignment.  Usually, elocal and local will yield the same
-#   alignment.  I needed to specifically craft an example for which they are
-#   different.
+#   but can occasionally extend the alignment through zero-scores in order to
+#   find a longer alignment tied with the best scoring regular local
+#   alignment.  Usually, elocal and local will yield the same alignment.
+#   I needed to specifically craft an example for which they are different.
 #
 #
 #   Global:
@@ -65,13 +64,15 @@ $BOGUS_SCORE = -DBL_MAX();
 #     Traceback begins at highest score within entire matrix
 #     Traceback ends at aforementioned first positive match along the path
 #
-#   Ties are broken broken by number of positive matches, usually keeping a
-#   longer alignment over a shorter one.
+#   Ties are broken broken by number of positive matches, which usually
+#   results in keeping a longer alignment over a shorter one.
 #
 #
 #
 #
-# The following examples yield different alignments for the different methods
+# The following examples yield different alignments for the different methods.
+# I use "~" to denote a gap, since it is much less likely to appear in input
+# text strings than a hyphen or space.
 #
 #   match, mis-match, gap-open, gap-extend = [25, 11, 12, 9]
 #
@@ -95,9 +96,10 @@ $BOGUS_SCORE = -DBL_MAX();
 #               CCC                               CCC
 #
 #
-#   The output elocal alignment ties with CCC, but the tie is broken by its
-#   ability to extend backwards through the net-zero score adjacent to CCC,
-#   producing an alternative alignment with more positive matches.
+#   The output elocal alignment contains and ties with CCC, but the tie is
+#   broken by its ability to extend backwards through the net-zero score
+#   adjacent to CCC, producing an alternative alignment with more positive
+#   matches.
 #
 sub score_substring_mismatch
 {
@@ -583,8 +585,7 @@ sub score_substring_mismatch
                     $best_tb_col   = $col;
                 }
             }
-            # anchor at least the far end of either sequence
-            # gaps may still wind up causing it to be not-quite anchored
+            # anchor at least the near or far end of either sequence
             elsif ($type eq 'overlap')
             {
                 # best score, must be on far edges
@@ -830,23 +831,23 @@ sub score_substring_mismatch
     
     if ($type_orig =~ /_debug$/)
     {
-        printf STDERR "%s\n",             $seq_align1;
-        printf STDERR "%s\n",             $seq_align2;
-        printf STDERR "M:\t%d\n",         $num_match;
-        printf STDERR "MM:\t%d\n",        $num_mismatch;
-        printf STDERR "Gap1:\t%d\n",      $num_gap1;
-        printf STDERR "Gap2:\t%d\n",      $num_gap2;
-        printf STDERR "AlignLen:\t%s\n",  $align_length;
-        printf STDERR "MinPadLen:\t%d\n", $min_padded_len;
-        printf STDERR "MaxPadLen:\t%d\n", $max_padded_len;
+        printf STDERR "%s\n",              $seq_align1;
+        printf STDERR "%s\n",              $seq_align2;
+        printf STDERR "M:\t%d\n",          $num_match;
+        printf STDERR "MM:\t%d\n",         $num_mismatch;
+        printf STDERR "Gap1:\t%d\n",       $num_gap1;
+        printf STDERR "Gap2:\t%d\n",       $num_gap2;
+        printf STDERR "AlignLen:\t%s\n",   $align_length;
+        printf STDERR "MinPadLen:\t%d\n",  $min_padded_len;
+        printf STDERR "MaxPadLen:\t%d\n",  $max_padded_len;
         printf STDERR "FirstMatch:\t%s\n", $first_match_pos;
         printf STDERR "LastMatch:\t%s\n",  $last_match_pos;
-        printf STDERR "LeftOH:\t%d\n",    $left_overhang;
-        printf STDERR "RightOH:\t%d\n",   $right_overhang;
-        printf STDERR "Score:\t%s\n",     $score;
-        printf STDERR "MyScore:\t%s\n",   $my_score;
-        printf STDERR "%s\n",             $seq_align1;
-        printf STDERR "%s\n",             $seq_align2;
+        printf STDERR "LeftOH:\t%d\n",     $left_overhang;
+        printf STDERR "RightOH:\t%d\n",    $right_overhang;
+        printf STDERR "Score:\t%s\n",      $score;
+        printf STDERR "MyScore:\t%s\n",    $my_score;
+        printf STDERR "%s\n",              $seq_align1;
+        printf STDERR "%s\n",              $seq_align2;
     }
     
     ${$return_frac_id_ptr} = $num_match / $min_len;
