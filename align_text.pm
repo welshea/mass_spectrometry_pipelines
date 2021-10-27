@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-10-27:  rename gmiddle to elocal, for extended local
 # 2021-10-26:  restructure affine gap tracebacks to be more correct
 # 2021-10-25:  more affine gap traceback buxfixes
 # 2021-10-22:  bugfix affine gap traceback, should only affect overlap
@@ -24,16 +25,21 @@ $BOGUS_SCORE = -DBL_MAX();
 #   global      global alignment of both sequences; Needleman-Wunch
 #   local       local alignment; Smith-Waterman
 #   overlap     best overlap, anchor at least one end of one or both
-#   gmiddle     no gap penalties at begin *and* end of *both* strings
+#   elocal      no gap penalties at begin *and* end of *both* strings
 #
 #   I had previously used the term "glocal" to refer to a hybrid global-local
 #   alignment.  It appears that many people use the term glocal, or
 #   semi-global, as another name for overlap alignment.  Overlap alignments
-#   anchor at least one end of the alignment, whereas gmiddle does not anchor
-#   *any* ends of the sequences.  I now refer to it as gmiddle to avoid
-#   confusion with common usage of the term glocal.  gmiddle -- find the best
+#   anchor at least one end of the alignment, whereas elocal does not anchor
+#   *any* ends of the sequences.  I now refer to it as elocal to avoid
+#   confusion with common usage of the term glocal.  Elocal -- find the best
 #   alignment within the middle of the sequences, ignoring poorly aligned
-#   ends entirely.
+#   ends entirely.  Elocal winds up behaving similarly to local alignment,
+#   but can occasionally extend the alignment through negatively scoring
+#   regions in order to find a longer alignment tied with best scoring
+#   regular local alignment.  Usually, elocal and local will yield the same
+#   alignment.  I needed to specifically craft an example for which they are
+#   different.
 #
 #
 #   Global:
@@ -52,7 +58,7 @@ $BOGUS_SCORE = -DBL_MAX();
 #     Traceback begins at highest score within entire matrix
 #     Traceback ends at first encountered zero score
 #
-#   Gmiddle:
+#   Elocal:
 #     Initialize first row and column to zero
 #     Negative scores are floored to zero as matrix is filled, but only until
 #      the first positive match along the path
@@ -63,19 +69,6 @@ $BOGUS_SCORE = -DBL_MAX();
 #   longer alignment over a shorter one.
 #
 #
-#   Gmiddle can be thought of as an overlap alignment that completely ignores
-#   poorly aligned end regions at both ends of both sequences (a "global"
-#   alignment of the "middle" regions), or as a local alignment that can pass
-#   through poorly scoring regions on its way to finding a longer best scoring
-#   alignment.
-#
-#   Gmiddle can sometimes yield longer alignments than local due to not
-#   ending the traceback when it encounters a non-positive score, if the
-#   scores of the blocks on either side of the unmatched region are high
-#   enough.
-#
-#   Usually, gmiddle and local will yield the same alignment.
-#   I needed to specifically craft an example for which they are different.
 #
 #
 # The following examples yield different alignments for the different methods
@@ -93,7 +86,7 @@ $BOGUS_SCORE = -DBL_MAX();
 #      22AA55555CCC                        AA55555CCC22
 #      ~~AA~~~~BCCC                        AA~~~~BCCC~~
 #
-#   gmiddle:   raw score = 75         gmiddle:   raw score = 75
+#   elocal:    raw score = 75         elocal:    raw score = 75
 #        AA55555CCC                        AA55555CCC
 #        AA~~~~BCCC                        AA~~~~BCCC
 #
@@ -102,7 +95,7 @@ $BOGUS_SCORE = -DBL_MAX();
 #               CCC                               CCC
 #
 #
-#   The output gmiddle alignment ties with CCC, but the tie is broken by its
+#   The output elocal alignment ties with CCC, but the tie is broken by its
 #   ability to extend backwards through the net-zero score adjacent to CCC,
 #   producing an alternative alignment with more positive matches.
 #
@@ -164,9 +157,9 @@ sub score_substring_mismatch
     $type = $type_orig;
     $type =~ s/_debug$//;
 
-    # default to gmiddle
+    # default to elocal
     if ($type ne 'global' && $type ne 'local' && $type ne 'overlap' &&
-        $type ne 'gmiddle')
+        $type ne 'elocal')
     {
         printf STDERR "ERROR - no method for alignment of type %s\n", $type;
         return '';
@@ -178,7 +171,7 @@ sub score_substring_mismatch
     # [25, 12, 11, 10]  seems to work well ??
     # [25, 11, 12,  9]  an alternative to discourage gap opening
     #
-    # real test case that gmiddle needs to handle well:
+    # real test case that elocal needs to handle well:
     #   cysgly  lcysteinylglycine
     #
     # contrived variant, works with [25, 11, 12, 9]
@@ -411,8 +404,8 @@ sub score_substring_mismatch
                     $$pointer{diag}{score} = 0;
                 }
             }
-            # gmiddle doesn't allow negative scores before first positive hit
-            if ($type eq 'gmiddle' && $$pointer{diag}{num_positive} == 0)
+            # elocal doesn't allow negative scores before first positive hit
+            if ($type eq 'elocal' && $$pointer{diag}{num_positive} == 0)
             {
                 if ($$pointer{diag}{score} < 0)
                 {
@@ -475,8 +468,8 @@ sub score_substring_mismatch
                     $$pointer{left}{score} = 0;
                 }
             }
-            # gmiddle doesn't allow negative scores before first positive hit
-            if ($type eq 'gmiddle' && $$pointer{left}{num_positive} == 0)
+            # elocal doesn't allow negative scores before first positive hit
+            if ($type eq 'elocal' && $$pointer{left}{num_positive} == 0)
             {
                 if ($$pointer{left}{score} < 0)
                 {
@@ -539,8 +532,8 @@ sub score_substring_mismatch
                     $$pointer{diag}{score} = 0;
                 }
             }
-            # gmiddle doesn't allow negative scores before first positive hit
-            if ($type eq 'gmiddle' && $$pointer{up}{num_positive} == 0)
+            # elocal doesn't allow negative scores before first positive hit
+            if ($type eq 'elocal' && $$pointer{up}{num_positive} == 0)
             {
                 if ($$pointer{up}{score} < 0)
                 {
@@ -604,7 +597,7 @@ sub score_substring_mismatch
                 }
             }
             # best middle alignment, whether anchored or not
-            elsif ($type eq 'gmiddle')
+            elsif ($type eq 'elocal')
             {
                 # best score
                 if ($score_best > $best_tb_score)
@@ -660,8 +653,8 @@ sub score_substring_mismatch
             last;
         }
 
-        # gmiddle traceback ends at the last (first in sequence) match
-        if ($type eq 'gmiddle' &&
+        # elocal traceback ends at the last (first in sequence) match
+        if ($type eq 'elocal' &&
             $matrix[$row][$col]{$state_best}{num_positive} == 0)
         {
             last;
@@ -795,12 +788,12 @@ sub score_substring_mismatch
     $align_length    = $last_match_pos - $first_match_pos + 1;
     
 
-    # match score and penalties optimized for use with gmiddle alignments
+    # match score and penalties optimized for use with elocal alignments
     #
     # penalize less-end-anchored overhang        in numerator
     # penalize alignment length + sqrt(overhang) in denominator
     #
-    # gmiddle:
+    # elocal:
     #   
     #       AAAAAccee       0.714286
     #       AAAAAggjj
