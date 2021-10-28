@@ -1380,6 +1380,13 @@ for ($i = 0; $i < @ARGV; $i++)
 }
 
 
+if (!defined($filename))
+{
+    printf STDERR "ABORT -- no input file specified\n";
+
+    $error_flag = 1;
+}
+
 if ($error_flag)
 {
     print STDERR "Usage: automate_tmt.pl [options] maxquant_output_file.txt [IRON ref channels] > iron_output.txt\n";
