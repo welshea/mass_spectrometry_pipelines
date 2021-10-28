@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2021-10-28: print Usage statement on command line error
 # 2020-10-15: make sure split doesn't remove empty trailing fields
 # 2020-09-22: respect --no-debatch flag when combined with --comp-pool
 # 2020-09-22: --comp-pool uses comp pool for scaling, instead of norm pools
@@ -1309,6 +1310,7 @@ $unlog2_flag       = 0;    # unlog2 the input data
 $no_log2_flag      = 0;    # do not log2 the output data
 $comp_pool_flag    = 0;    # use computational pool instead of real pool
 
+$error_flag = 0;
 for ($i = 0; $i < @ARGV; $i++)
 {
     $field = $ARGV[$i];
@@ -1353,7 +1355,8 @@ for ($i = 0; $i < @ARGV; $i++)
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
-            exit(1);
+
+            $error_flag = 1;
         }
     }
     else
@@ -1374,6 +1377,35 @@ for ($i = 0; $i < @ARGV; $i++)
             $fixed_pool_hash{$field} = 1;
         }
     }
+}
+
+
+if ($error_flag)
+{
+    print STDERR "Usage: automate_tmt.pl [options] maxquant_output_file.txt [IRON ref channels] > iron_output.txt\n";
+    print STDERR "  Options:\n";
+    print STDERR "    --iron             normalize within-plex prior to other calcuations [default]\n";
+    print STDERR "    --no-iron          do not normalize within each plex first\n";
+    print STDERR "    --debatch          use reference channel for cross-plex normalization [default]\n";
+    print STDERR "    --no-debatch       do not perform cross-plex normalization\n";
+    print STDERR "    --leave-ratios     leave cross-plex normalized data as log2 ratios\n";
+    print STDERR "    --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]\n";
+    print STDERR "    --comp-pool        use all-channel geometric mean for cross-plex debatching\n";
+    print STDERR "    --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]\n";
+    print STDERR "    --iron-exclusions=filename.txt\n";
+    print STDERR "                       exclude row identifiers from IRON training\n";
+    print STDERR "\n";
+    print STDERR "    --no-iron --no-debatch will leave the output abundances unchanged\n";
+    print STDERR "\n";
+    print STDERR "  Output:\n";
+    print STDERR "    Normalized data is output to STDOUT.\n";
+    print STDERR "\n";
+    print STDERR "    Several other files are generated, extending the original input filename:\n";
+    print STDERR "\n";
+    print STDERR "      *_scaling_factors.txt  various statistics from the IRON normalizations\n";
+    print STDERR "      *_findmedian.txt       results from the various findmedian runs\n";
+
+    exit(1);
 }
 
 
