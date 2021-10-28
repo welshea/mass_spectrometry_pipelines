@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-10-28:  add support for Biotin-HPDP
 # 2021-08-30:  deal with missing accessions/positions in various fields
 
 use POSIX;
@@ -605,6 +606,14 @@ if (!defined($probSTY_col))
     $diffSTY_col           = $header1_hash{'GlyGly (K) Score Diffs'};
     $modification_type_char     = 'g';	# glygly
 }
+# might be some other modification
+if (!defined($probSTY_col))
+{
+#    $numSTY_col            = $header1_hash{'Number of Biotin-HPDP'};
+    $probSTY_col           = $header1_hash{'Biotin-HPDP Probabilities'};
+    $diffSTY_col           = $header1_hash{'Biotin-HPDP Score Diffs'};
+    $modification_type_char     = 'b';	# biotin
+}
 
 #if (!defined($modified_sequence_col))
 #{
@@ -1171,12 +1180,14 @@ while(defined($line=<INFILE>))
     if ($mod_type eq 'd') { $abbrev = 'de'; }
     if ($mod_type eq 'g') { $abbrev = 'gl'; }
     if ($mod_type eq 'a') { $abbrev = 'ac'; }
+    if ($mod_type eq 'b') { $abbrev = 'bh'; }   # Biotin-HPDP
 
     if    ($mod_type eq 'p') { $mod_type = 'Phosphorylation (STY)'; }
     elsif ($mod_type eq 'o') { $mod_type = 'Oxidation (M)'; }
     elsif ($mod_type eq 'd') { $mod_type = 'Desthiobiotin-ATP'; }
     elsif ($mod_type eq 'g') { $mod_type = 'GlyGly (K)'; }
     elsif ($mod_type eq 'a') { $mod_type = 'Acetyl (K)'; }
+    elsif ($mod_type eq 'b') { $mod_type = 'Biotin-HPDP'; }
     else                     { $mod_type = 'Unknown' };
 
     $phosphosite_id = sprintf "%s_%s:%s",
