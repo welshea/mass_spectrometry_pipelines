@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-10-28:  support --(no-)iron --(no-)debatch --(no-)comp-pool
 # 2021-09-08:  print usage statement to STDERR instead of STDOUT
 # 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
 # 2021-05-27:  change default output_root_name
@@ -16,9 +17,14 @@ use File::Spec;
 use File::Basename;
 
 
-$input_filename = '';
-$num_non_options = 0;
-$boost_flag = 0;
+$input_filename    = '';
+$num_non_options   = 0;
+$boost_flag        = 0;
+$no_debatch_flag   = 0;
+$no_iron_flag      = 0;
+$comp_pool_flag    = 0;    # use computational pool instead of real pool
+
+
 $syntax_error_flag = 0;
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -31,6 +37,34 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $boost_flag = 1;
         }
+
+        elsif ($field =~ /^--no-debatch$/)
+        {
+            $no_debatch_flag = 1;
+        }
+        elsif ($field =~ /^--debatch$/)
+        {
+            $no_debatch_flag = 0;
+        }
+
+        elsif ($field =~ /^--no-iron$/)
+        {
+            $no_iron_flag = 1;
+        }
+        elsif ($field =~ /^--iron$/)
+        {
+            $no_iron_flag = 0;
+        }
+
+        elsif ($field =~ /^--comp-pool$/)
+        {
+            $comp_pool_flag = 1;
+        }
+        elsif ($field =~ /^--no-comp-pool$/)
+        {
+            $comp_pool_flag = 0;
+        }
+
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -74,8 +108,17 @@ if ($syntax_error_flag)
     printf STDERR "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
     printf STDERR "\n";
     printf STDERR "  Options:\n";
-    printf STDERR "    --boost     use highest channel for normalization\n";
-    printf STDERR "    --last-ch   use highest channel for normalization\n";
+    printf STDERR "    --boost         use highest channel for normalization\n";
+    printf STDERR "    --last-ch       use highest channel for normalization\n";
+    printf STDERR "\n";
+    printf STDERR "    --iron          apply IRON normalization (default)\n";
+    printf STDERR "    --no-iron       disable IRON normalization\n";
+    printf STDERR "\n";
+    printf STDERR "    --debatch       cross-plex de-batch TMT data (default)\n";
+    printf STDERR "    --no-debatch    disable cross-plex de-batching\n";
+    printf STDERR "\n";
+    printf STDERR "    --comp-pool     average all plex channels for cross-plex de-batching\n";
+    printf STDERR "    --no-comp-pool  use reference channel for de-batching (default)\n";
     
     exit(1);
 }
@@ -307,21 +350,43 @@ $pipeline_ibaq_str .= sprintf "\nrm \"%s%s\"",
 # normalize the data
 
 # default pipeline
-$pipeline_norm_str = sprintf "%s \"%s%s\" \\\n  > \"%s%s\"",
+$options_str = '';
+if ($no_iron_flag)
+{
+    $options_str = '--norm-none';
+}
+$pipeline_norm_str = sprintf "%s %s \"%s%s\" \\\n  > \"%s%s\"",
     'iron_normalize_mass_spec.pl',
+    $options_str,
     $output_root_name, '_orig_intensity.txt',
     $output_root_name, '_iron_log2_intensity.txt';
 
 if (defined($autodetect_hash{TMT}) &&
             $autodetect_hash{TMT} ne 'no')
 {
+    $options_str = '';
+    if ($no_iron_flag)
+    {
+        $options_str .= ' --no-iron';
+    }
+    if ($no_debatch_flag)
+    {
+        $options_str .= ' --no-debatch';
+    }
+    if ($comp_pool_flag)
+    {
+        $options_str .= ' --comp-pool';
+    }
+    $options_str =~ s/^\s+//;
+
     # multiple plexes
     if ($autodetect_hash{TMT} eq 'multi' &&
         defined($autodetect_hash{TMT_Channel}) &&
                 $autodetect_hash{TMT_Channel} =~ /TMT/)
     {
-        $pipeline_norm_str = sprintf "%s \"%s%s\" %s \\\n  > \"%s%s\"",
+        $pipeline_norm_str = sprintf "%s %s \"%s%s\" %s \\\n  > \"%s%s\"",
             'automate_tmt.pl',
+            $options_str,
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
             $output_root_name, '_iron_log2_intensity.txt';
@@ -331,11 +396,18 @@ if (defined($autodetect_hash{TMT}) &&
            defined($autodetect_hash{TMT_Channel}) &&
                    $autodetect_hash{TMT_Channel} =~ /TMT/)
     {
-        $pipeline_norm_str = sprintf "%s --comp-pool \"%s%s\" %s \\\n  > \"%s%s\"",
+        $pipeline_norm_str = sprintf "%s %s --comp-pool \"%s%s\" %s \\\n  > \"%s%s\"",
             'automate_tmt.pl',
+            $options_str,
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
             $output_root_name, '_iron_log2_intensity.txt';
+
+        # remove 2nd, redundant, --comp-pool flag
+        if ($comp_pool_flag)
+        {
+            $pipeline_norm_str =~ s/ --comp-pool\b//;
+        }
     }
     # else use default normalization
 }
