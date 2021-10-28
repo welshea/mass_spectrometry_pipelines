@@ -1383,6 +1383,7 @@ for ($i = 0; $i < @ARGV; $i++)
 if ($error_flag)
 {
     print STDERR "Usage: automate_tmt.pl [options] maxquant_output_file.txt [IRON ref channels] > iron_output.txt\n";
+    print STDERR "\n";
     print STDERR "  Options:\n";
     print STDERR "    --iron             normalize within-plex prior to other calcuations [default]\n";
     print STDERR "    --no-iron          do not normalize within each plex first\n";
