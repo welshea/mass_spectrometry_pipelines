@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-11-02: preserve and reformat run# in single-plex injection replicates
 # 2020-08-03: finish support for TMT16, improve unsupported #channels error
 # 2020-07-09: add support for TMT16, add letters to the ends of ALL channels
 #
@@ -530,14 +531,16 @@ foreach $header (keys %header_to_col_hash)
         {
             $replicate = $1;
 #            $plex = sprintf "TMT_%d", $replicate;
-            $plex = sprintf "TMT%d", $replicate;
+#            $plex = sprintf "TMT%d", $replicate;
+            $plex = sprintf "Plex1_run%d", $replicate;
         }
 
         elsif ($plex =~ /^Run\s*(\d+)$/i)
         {
             $replicate = $1;
 #            $plex = sprintf "TMT_%d", $replicate;
-            $plex = sprintf "TMT%d", $replicate;
+#            $plex = sprintf "TMT%d", $replicate;
+            $plex = sprintf "Plex1_run%d", $replicate;
         }
         
         $sample_name = sprintf "%s_TMT-%s",
@@ -551,7 +554,7 @@ foreach $header (keys %header_to_col_hash)
     if ($multi_plex_flag == 0 && $header =~ /^Reporter intensity (\d+)$/i)
     {
         $channel_number = $1;
-        $plex           = 'TMT01';
+        $plex           = 'Plex1';
 
         # recent Maxquant nonsense where they changed the channel numbering
         #  convention from 0 to N-1 to 1 to N.
@@ -568,7 +571,8 @@ foreach $header (keys %header_to_col_hash)
         {
             $replicate = $1;
 #            $plex = sprintf "TMT_%d", $replicate;
-            $plex = sprintf "TMT%d", $replicate;
+#            $plex = sprintf "TMT%d", $replicate;
+            $plex = sprintf "Plex1_run%d", $replicate;
         }
         
         $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
