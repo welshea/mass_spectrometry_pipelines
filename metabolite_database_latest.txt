@@ -1,1 +1,1 @@
-/home/welshea/data/metabolomics/mapping/metabolite_mapping_database_2021-10-18.txt
+/share/data2/welshea/metabolomics/mapping/metabolite_mapping_database_2021-11-29.txt
