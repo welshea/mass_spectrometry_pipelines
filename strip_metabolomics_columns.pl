@@ -379,7 +379,8 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
             $height_area_str = $1;
         
             # conform the sample header
-            $field =~ s/$height_area_str/_/;
+            # string may contain () or [], so escape it with \Q \E
+            $field =~ s/\Q$height_area_str\E/_/;
             
             # deal with inserted _ at beginning/end
             if ($field =~ /^(_+)/)
@@ -411,6 +412,16 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
                 {
                     $field =~ s/_$//;
                 }
+            }
+
+            # deal with dangling ( or ]
+            if ($field =~ /\]$/ && !($field =~ /\[/))
+            {
+                $field =~ s/\]$//;
+            }
+            if ($field =~ /\)$/ && !($field =~ /\(/))
+            {
+                $field =~ s/\)$//;
             }
             
             $field .= ' Peak height';
@@ -423,7 +434,8 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
             $height_area_str = $1;
         
             # conform the sample header
-            $field =~ s/$height_area_str/_/;
+            # string may contain () or [], so escape it with \Q \E
+            $field =~ s/\Q$height_area_str\E/_/;
 
             # deal with inserted _ at beginning/end
             if ($field =~ /^(_+)/)
@@ -455,6 +467,16 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
                 {
                     $field =~ s/_$//;
                 }
+            }
+
+            # deal with dangling ( or ]
+            if ($field =~ /\]$/ && !($field =~ /\[/))
+            {
+                $field =~ s/\]$//;
+            }
+            if ($field =~ /\)$/ && !($field =~ /\(/))
+            {
+                $field =~ s/\)$//;
             }
 
             $field .= ' Peak area';
