@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-11-30:  add support for lipidomics
 # 2021-08-19:  change default back to leaving heavy unscaled
 # 2021-08-19:  --scale-heavy --no-scale-heavy to --heavy-tracer --heavy-spikein
 # 2021-08-19:  add --norm-none flag to disable normalization
@@ -269,24 +270,56 @@ else
 }
 
 
-$cmd_str_strip_pos = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
-                         'csv2tab_not_excel.pl',
-                         $pos_csv_filename,
-                         'strip_metabolomics_columns.pl',
-                         $strip_options_str,
-                         $pos_unidentified_output_name,
-                         $pos_spikeins_output_name,
-                         $pos_cleaned_filename;
+# detect lipidomics data
+$lipidomics_flag = 0;
+$cmd_str = "head -1 $pos_csv_filename";
+$result_str = `$cmd_str`;
+if ($result_str =~ /LipidIon/ ||
+    $result_str =~ /FattyAcid/)
+{
+    $lipidomics_flag = 1;
+}
 
-$cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
-                         'csv2tab_not_excel.pl',
-                         $neg_csv_filename,
-                         'strip_metabolomics_columns.pl',
-                         $strip_options_str,
-                         $neg_unidentified_output_name,
-                         $neg_spikeins_output_name,
-                         $neg_cleaned_filename;
+# lipidomics is already tab-delimited
+if ($lipidomics_flag)
+{
+    $cmd_str_strip_pos = sprintf "%s%s %s \"%s\" \"%s\" > \"%s\"",
+                             'strip_metabolomics_columns.pl',
+                             $strip_options_str,
+                             $pos_csv_filename,
+                             $pos_unidentified_output_name,
+                             $pos_spikeins_output_name,
+                             $pos_cleaned_filename;
 
+    $cmd_str_strip_neg = sprintf "%s%s %s \"%s\" \"%s\" > \"%s\"",
+                             'strip_metabolomics_columns.pl',
+                             $strip_options_str,
+                             $neg_csv_filename,
+                             $neg_unidentified_output_name,
+                             $neg_spikeins_output_name,
+                             $neg_cleaned_filename;
+}
+# MZMine and El-MAVEN files are csv
+else
+{
+    $cmd_str_strip_pos = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
+                             'csv2tab_not_excel.pl',
+                             $pos_csv_filename,
+                             'strip_metabolomics_columns.pl',
+                             $strip_options_str,
+                             $pos_unidentified_output_name,
+                             $pos_spikeins_output_name,
+                             $pos_cleaned_filename;
+
+    $cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
+                             'csv2tab_not_excel.pl',
+                             $neg_csv_filename,
+                             'strip_metabolomics_columns.pl',
+                             $strip_options_str,
+                             $neg_unidentified_output_name,
+                             $neg_spikeins_output_name,
+                             $neg_cleaned_filename;
+}
 
 $norm_extra_options_str = '';
 if ($norm_none_flag)
