@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-11-30:  clean up lipidomics header code
 # 2021-11-29:  support Area[sample name] Height[sample name] format
 # 2021-08-19:  change default back to leaving heavy unscaled
 # 2021-08-19:  --scale-heavy --no-scale-heavy to --heavy-tracer --heavy-spikein
@@ -518,6 +519,14 @@ if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidIon'};
 }
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'IonFormula'};
+}
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'LipidMolec'};
+}
 
 
 # flag columns to remove, as they clutter up the file
@@ -659,17 +668,6 @@ if ($has_pregap_flag == 0)
     print STDERR "           'row number of detected peaks' or 'goodPeakCount' columns not found\n";
 }
 
-
-
-#lipidomics
-if (!defined($name_col))
-{
-    $name_col = $header_col_hash{'IonFormula'};
-}
-if (!defined($name_col))
-{
-    $name_col = $header_col_hash{'LipidMolec'};
-}
 
 
 if (!defined($name_col))
