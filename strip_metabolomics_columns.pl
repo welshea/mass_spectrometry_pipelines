@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-11-29:  support Area[sample name] Height[sample name] format
 # 2021-08-19:  change default back to leaving heavy unscaled
 # 2021-08-19:  --scale-heavy --no-scale-heavy to --heavy-tracer --heavy-spikein
 # 2021-08-18:  add new --scale-heavy and --no-scale-heavy flags
