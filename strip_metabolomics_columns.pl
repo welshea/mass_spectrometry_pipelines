@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-11-30:  better lipidomics support
 # 2021-11-30:  clean up lipidomics header code
 # 2021-11-29:  support Area[sample name] Height[sample name] format
 # 2021-08-19:  change default back to leaving heavy unscaled
@@ -515,17 +516,28 @@ if (!defined($name_col))
 }
 
 # lipidomics
+$lipidomics_flag = 0;
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidIon'};
+    $lipidomics_flag = 1;
 }
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'IonFormula'};
+    $lipidomics_flag = 1;
 }
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidMolec'};
+    $lipidomics_flag = 1;
+}
+
+
+# sometimes use formula for heavy label scanning instead of name
+if ($lipidomics_flag)
+{
+    $formula_col = $header_col_hash{IonFormula};
 }
 
 
@@ -815,7 +827,24 @@ while(defined($line=<INFILE>))
     #  could also be El-MAVEN without heavy labeling enabled,
     #  in which case is_heavy_labeled() may always return false
     $heavy_flag = 0;
-    if (!defined($isotope_col))
+    
+    # use formula column on lipidomics data
+    if ($lipidomics_flag && defined($formula_col))
+    {
+        $formula = $array[$formula_col];
+
+        if (is_heavy_labeled($formula))
+        {
+            $heavy_flag = 1;
+        
+            if ($scale_heavy_flag == 0)
+            {
+                print OUTFILE_SPIKEINS "$rowid\n";
+            }
+        }
+    }
+    # use name column on MZmine data, or El-MAVEN with no isotope column
+    elsif (!defined($isotope_col))
     {
         if (is_heavy_labeled($name))
         {
@@ -827,7 +856,7 @@ while(defined($line=<INFILE>))
             }
         }
     }
-    # El-MAVEN data
+    # use isotope column on El-MAVEN data
     else
     {
         $isotope = $array[$isotope_col];
