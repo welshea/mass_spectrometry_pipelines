@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2021-11-30:  add minimal lipidomics support
 # 2021-10-27:  rename gmiddle to elocal
 # 2021-10-21:  rename glocal to gmiddle
 # 2021-08-17:  begin adding auto heavy label matching support
@@ -18,7 +19,8 @@ use align_text;    # text string alignment module
 $mz_tol_ppm = 10;    # 10 ppm
 $rt_tol     = 1.0;   # minutes
 
-$bad_row_id = 9E99;
+$bad_row_id      = 9E99;
+$lipidomics_flag = 0;
 
 sub is_number
 {
@@ -961,13 +963,26 @@ for ($i = 0; $i < @array; $i++)
     }
 }
 
-
 # use parent m/z if it is El-MAVEN isotope data
 if ($elmaven_isotope_flag)
 {
     $data_mz_col = $data_header_col_hash{'parent'};
 }
 
+# lipidomics m/z
+if (!defined($data_mz_col))
+{
+    $data_mz_col = $data_header_col_hash{'CalcMz'};
+}
+if (!defined($data_name_col))
+{
+    $data_name_col = $data_header_col_hash{'LipidIon'};
+    
+    if (defined($data_name_col))
+    {
+        $lipidomics_flag = 1;
+    }
+}
 
 if (!defined($data_mz_col))
 {
@@ -1492,8 +1507,14 @@ while(defined($line=<DATA>))
             if ($match_flag == 0)
             {
                 $match_type = '9X';
-                printf STDERR "UNMATCHED   %s   %s   %s   %s\n",
-                              $first_field, $mz, $name, $name_oc;
+
+                # we don't currently have any lipidomics identifier mappings
+                # so, for now, don't output any warnings
+                if ($lipidomics_flag == 0)
+                {
+                    printf STDERR "UNMATCHED   %s   %s   %s   %s\n",
+                                  $first_field, $mz, $name, $name_oc;
+                }
 
                 $matched_row_array[$num_matches]  = $bad_row_id;
                 $matched_type_array[$num_matches] = $match_type;
