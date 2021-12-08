@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-12-08:  fix broken spaces in filename support after lipidomics changes
 # 2021-11-30:  add support for lipidomics
 # 2021-08-19:  change default back to leaving heavy unscaled
 # 2021-08-19:  --scale-heavy --no-scale-heavy to --heavy-tracer --heavy-spikein
@@ -272,7 +273,7 @@ else
 
 # detect lipidomics data
 $lipidomics_flag = 0;
-$cmd_str = "head -1 $pos_csv_filename";
+$cmd_str = "head -1 \"$pos_csv_filename\"";
 $result_str = `$cmd_str`;
 if ($result_str =~ /LipidIon/ ||
     $result_str =~ /FattyAcid/)
