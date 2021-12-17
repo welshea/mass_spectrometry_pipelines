@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2021-12-17: add --comp-pool-exclusions flag to exclude samples from pool
 # 2021-10-28: print Usage statement on command line error
 # 2020-10-15: make sure split doesn't remove empty trailing fields
 # 2020-09-22: respect --no-debatch flag when combined with --comp-pool
@@ -225,6 +226,8 @@ sub read_in_data_file
         
         $row++;
     }
+    close INFILE;
+
     $num_rows = $row;
 
     # unlog2 the sample data
@@ -270,6 +273,46 @@ sub store_condensed_data
             }            
         }
     }
+}
+
+
+# file should have no headers, just a list of samples
+sub read_in_comp_pool_exclusions_file
+{
+    $infile = $_[0];
+
+    open INFILE, "$infile" or die "ABORT -- can't open $infile\n";
+    
+    while(defined($line=<INFILE>))
+    {
+        $line =~ s/[\r\n]+//g;
+        $line =~ s/\"//;
+
+        @array = split /\t/, $line;
+
+        for ($i = 0; $i < @array; $i++)
+        {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+        }
+        
+        # Allow multiple columns of exclusions
+        # Since we may have different sample names between pY, pSTY, etc.
+        # Assuming different samples don't share the same name across
+        #  assays, we can put them all in a single file
+        foreach $sample (@array)
+        {
+            if ($sample =~ /\S/)
+            {
+                #printf STDERR "EXCLUDE0\t%s\n",
+                #    $sample;
+
+                $comp_pool_exclude_hash{$sample} = 1;
+            }
+        }
+    }
+    close INFILE;
 }
 
 
@@ -630,6 +673,14 @@ sub iron_pools
                 {
                     $sample = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
                     $col = $sample_to_condensed_col_hash{$sample};
+                    
+                    if (defined($comp_pool_exclude_hash{$sample}))
+                    {
+                        #printf STDERR "EXCLUDE1\t%s\n",
+                        #    $sample;
+
+                        next;
+                    }
                 
                     $value = $condensed_data_array[$row][$col];
                     if (defined($value))
@@ -1098,6 +1149,14 @@ sub correct_abundances
                 {
                     $sample = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
                     $col = $sample_to_condensed_col_hash{$sample};
+
+                    if (defined($comp_pool_exclude_hash{$sample}))
+                    {
+                        #printf STDERR "EXCLUDE2\t%s\n",
+                        #    $sample;
+
+                        next;
+                    }
                 
                     $value = $condensed_data_array[$row][$col];
                     if (defined($value))
@@ -1309,6 +1368,7 @@ $leave_ratios_flag = 0;
 $unlog2_flag       = 0;    # unlog2 the input data
 $no_log2_flag      = 0;    # do not log2 the output data
 $comp_pool_flag    = 0;    # use computational pool instead of real pool
+$comp_pool_exclude_filename = '';
 
 $error_flag = 0;
 for ($i = 0; $i < @ARGV; $i++)
@@ -1323,6 +1383,14 @@ for ($i = 0; $i < @ARGV; $i++)
             $exclusions_filename = $1;
             
             printf STDERR "Using exclusion file: %s\n", $exclusions_filename;
+        }
+        if ($field =~ /^--comp-pool-exclusions\=(\S+)/)
+        {
+            $comp_pool_flag = 1;
+            $comp_pool_exclude_filename = $1;
+            
+            printf STDERR "Using comp pool sample exclusion file: %s\n",
+                          $comp_pool_exclude_filename;
         }
         elsif ($field =~ /^--no-debatch$/)
         {
@@ -1399,6 +1467,8 @@ if ($error_flag)
     print STDERR "    --leave-ratios     leave cross-plex normalized data as log2 ratios\n";
     print STDERR "    --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]\n";
     print STDERR "    --comp-pool        use all-channel geometric mean for cross-plex debatching\n";
+    print STDERR "    --comp-pool-exclusions=filename.txt\n";
+    print STDERR "                       exclude sample identifiers from computational pool\n";
     print STDERR "    --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]\n";
     print STDERR "    --iron-exclusions=filename.txt\n";
     print STDERR "                       exclude row identifiers from IRON training\n";
@@ -1438,8 +1508,16 @@ if (!defined(%fixed_pool_hash))
     $fixed_pool_hash{'TMT-126C'} = 1;
 }
 
+%comp_pool_exclude_hash = ();
+
 read_in_data_file($filename);
 store_condensed_data();
+
+if ($comp_pool_flag && $comp_pool_exclude_filename ne '')
+{
+    read_in_comp_pool_exclusions_file($comp_pool_exclude_filename);
+}
+
 #normalize_crude();
 identify_pools();
 check_outlier_pools();
