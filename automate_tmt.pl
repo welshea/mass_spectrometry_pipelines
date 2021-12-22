@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2021-12-22: add experimental --iron-untilt flag, not fully implemented
 # 2021-12-17: add --comp-pool-exclusions flag to exclude samples from pool
 # 2021-10-28: print Usage statement on command line error
 # 2020-10-15: make sure split doesn't remove empty trailing fields
@@ -65,8 +66,8 @@ sub cmp_scale_lines
     $str_b = $b;
     
     # strip GlobalScale: from beginning
-    $str_a =~ s/^GlobalScale:\s+//ig;
-    $str_b =~ s/^GlobalScale:\s+//ig;
+    $str_a =~ s/^Global(Scale|FitLine):\s+//ig;
+    $str_b =~ s/^Global(Scale|FitLine):\s+//ig;
     
     # make sure header line is always first
     $test_a = ($str_a =~ /SampleID/ && $str_a =~ /PresentSample/);
@@ -740,13 +741,18 @@ sub iron_pools
 
         if ($exclusions_flag)
         {
-          $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^GlobalScale\"",
+          $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|Fit)\"",
               $exclusions_filename, $median_sample, $iron_input_name, $iron_output_name;
         }
         else
         {
-          $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^GlobalScale\"",
+          $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|Fit)\"",
               $median_sample, $iron_input_name, $iron_output_name;
+        }
+        
+        if ($iron_untilt_flag)
+        {
+            $cmd_string =~ s/--proteomics/--rnaseq/g;
         }
 
         `$cmd_string`;
@@ -764,7 +770,7 @@ sub iron_pools
             $line =~ s/[\r\n]+//g;
 
             # strip GlobalScale: from beginning
-            $line =~ s/^GlobalScale:\s+//ig;
+            $line =~ s/^Global(Scale|FitLine):\s+//ig;
             
             # only print the header line once
             if ($i == 0)
@@ -794,6 +800,12 @@ sub iron_pools
             $present_sample  = $array[5];
             $present_dataset = $array[6];
             $frac_train      = $array[7];
+            
+            # FIXME -- shut Perl up until I fix --iron-untilt support
+            if (!defined($frac_train))
+            {
+                $frac_train = '';
+            }
 
             $plex            = 'PoolNorm';
             $log2_scale      = log($scale) / $log2;
@@ -974,13 +986,18 @@ sub iron_samples
 
             if ($exclusions_flag)
             {
-              $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^GlobalScale\"",
+              $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|FitLine)\"",
                   $exclusions_filename, $median_sample, $iron_input_name, $iron_output_name;
             }
             else
             {
-              $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^GlobalScale\"",
+              $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|FitLine)\"",
                   $median_sample, $iron_input_name, $iron_output_name;
+            }
+
+            if ($iron_untilt_flag)
+            {
+                $cmd_string =~ s/--proteomics/--rnaseq/g;
             }
 
             @scale_lines = `$cmd_string`;
@@ -995,7 +1012,7 @@ sub iron_samples
                 $line =~ s/[\r\n]+//g;
 
                 # strip GlobalScale: from beginning
-                $line =~ s/^GlobalScale:\s+//ig;
+                $line =~ s/^Global(Scale|FitLine):\s+//ig;
                 
                 if ($i == 0)
                 {
@@ -1033,6 +1050,12 @@ sub iron_samples
                 $present_sample  = $array[5];
                 $present_dataset = $array[6];
                 $frac_train      = $array[7];
+
+                # FIXME -- shut Perl up until I fix --iron-untilt support
+                if (!defined($frac_train))
+                {
+                    $frac_train = '';
+                }
 
                 $plex            = $tmt_plex;
                 $log2_scale      = log($scale) / $log2;
@@ -1369,6 +1392,7 @@ $unlog2_flag       = 0;    # unlog2 the input data
 $no_log2_flag      = 0;    # do not log2 the output data
 $comp_pool_flag    = 0;    # use computational pool instead of real pool
 $comp_pool_exclude_filename = '';
+$iron_untilt_flag  = 0;    # --rnaseq flag
 
 $error_flag = 0;
 for ($i = 0; $i < @ARGV; $i++)
@@ -1419,6 +1443,10 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--no-comp-pool$/)
         {
             $comp_pool_flag = 0;
+        }
+        elsif ($field =~ /^--iron-untilt$/)
+        {
+            $iron_untilt_flag = 1;
         }
         else
         {
