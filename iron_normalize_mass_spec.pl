@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2021-12-22:  add experimental --iron-untilt flag
 # 2021-08-08:  print usage statement on command line error
 # 2021-04-14:  begin adding lipidomics support
 # 2020-09-24:  add --norm-none flag (has some use for metabolomics pipeline)
@@ -66,8 +67,8 @@ sub cmp_scale_lines
     $str_b = $b;
     
     # strip GlobalScale: from beginning
-    $str_a =~ s/^GlobalScale:\s+//ig;
-    $str_b =~ s/^GlobalScale:\s+//ig;
+    $str_a =~ s/^Global(Scale|FitLine):\s+//ig;
+    $str_b =~ s/^Global(Scale|FitLine):\s+//ig;
     
     # make sure header line is always first
     $test_a = ($str_a =~ /SampleID/ && $str_a =~ /PresentSample/);
@@ -509,9 +510,15 @@ sub iron_samples
     }
 
     # normalize data as usual
-    $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" %s %s %s \"%s\" -o \"%s\" |& grep -P \"^GlobalScale\"",
+    $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" %s %s %s \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|FitLine)\"",
         $median_sample, $exclusions_string, $spikeins_string, $bg_string,
         $iron_input_name, $iron_output_name;
+
+    if ($iron_untilt_flag)
+    {
+        $cmd_string =~ s/--proteomics/--rnaseq/g;
+    }
+
 
     @scale_lines = `$cmd_string`;
     @scale_lines = sort cmp_scale_lines @scale_lines;
@@ -524,7 +531,7 @@ sub iron_samples
         $line =~ s/[\r\n]+//g;
         
         # strip GlobalScale: from beginning
-        $line =~ s/^GlobalScale:\s+//ig;
+        $line =~ s/^Global(Scale|FitLine):\s+//ig;
         
         printf OUTPUT_SCALING "%s\n", $line;
     }
@@ -541,6 +548,12 @@ sub iron_samples
         
         `$cmd_string`;
     }
+
+    if ($iron_untilt_flag)
+    {
+        $cmd_string =~ s/--proteomics/--rnaseq/g;
+    }
+
 
     # open IRON output for reading
     open OUTPUT_FOR_IRON, "$iron_output_name" or die "ABORT -- can't open $iron_output_name\n";
@@ -735,7 +748,9 @@ $strip_sample_names_flag = 1;
 $unlog2_flag             = 0;   # unlog2 the input data
 $no_log2_flag            = 0;   # do not log2 the output data
 $norm_none_flag          = 0;   # do not normalize the data at all
+$iron_untilt_flag        = 0;   # --rnaseq flag
 $global_metabolomics_flag = 0;
+
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -784,6 +799,10 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--norm-none$/)
         {
             $norm_none_flag = 1;
+        }
+        elsif ($field =~ /^--iron-untilt$/)
+        {
+            $iron_untilt_flag = 1;
         }
         else
         {
