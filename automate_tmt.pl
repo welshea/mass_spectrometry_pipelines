@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2021-01-05: add experimental per-plex auto IRON reference sample picking
 # 2021-12-22: add experimental --iron-untilt flag, not fully implemented
 # 2021-12-17: add --comp-pool-exclusions flag to exclude samples from pool
 # 2021-10-28: print Usage statement on command line error
@@ -402,14 +403,26 @@ sub identify_pools
     @fixed_pool_array = sort keys %fixed_pool_hash;
     $num_fixed_pools = @fixed_pool_array;
     
-    # support "variable", since default is now TMT-126C
-    if (defined($fixed_pool_hash{'variable'}))
+    # support auto identification of 2 pool channels
+    # "variable" is deprecated, but currently still accepted
+    if (defined($fixed_pool_hash{'auto2'}) ||
+        defined($fixed_pool_hash{'variable'}))
     {
-        @fixed_pool_array = ();
-        $num_fixed_pools = 0;
+        @fixed_pool_array               = ();
+        $num_fixed_pools                = 0;
+        $auto_single_variable_pool_flag = 0;
+    }
+    # automatically pick the best sample per plex, can be different for each
+    if (defined($fixed_pool_hash{'auto'}) ||
+        defined($fixed_pool_hash{'auto1'}))
+    {
+        @fixed_pool_array               = ();
+        $num_fixed_pools                = 0;
+        $auto_single_variable_pool_flag = 1;
     }
 
     # fixed pool channel(s)
+    $num_pools = 1;             # also for single auto-identified ref sample
     if ($num_fixed_pools > 0)
     {
         for ($fp = 0; $fp < $num_fixed_pools; $fp++)
@@ -491,7 +504,7 @@ sub identify_pools
     
     
     # otherwise, assume 2 pools per plex, automatically guess them
-    if ($num_fixed_pools == 0)
+    if ($num_fixed_pools == 0 && $auto_single_variable_pool_flag == 0)
     {
       $num_pools = 2;
     
@@ -568,13 +581,16 @@ sub identify_pools
         }
       }
     }
+    
+    # else, automatically pick the best sample per plex, can be different
+    # put it off for later, within the sample normalization routine
 }
 
 
 # print warnings to STDERR if the pools look too different
 sub check_outlier_pools
 {
-    if ($num_fixed_pools == 1)
+    if ($num_fixed_pools == 1 || $auto_single_variable_pool_flag)
     {
         return;
     }
@@ -763,7 +779,16 @@ sub iron_pools
 
         # output scaling factor file
         $log2 = log(2.0);
-        open OUTPUT_SCALING, ">>$scales_output_name" or die "ABORT -- can't open scales output file $scales_output_name\n";
+
+        if ($scales_output_init == 0)
+        {
+            open OUTPUT_SCALING, ">$scales_output_name" or die "ABORT -- can't open scales output file $scales_output_name\n";
+        }
+        else
+        {
+            open OUTPUT_SCALING, ">>$scales_output_name" or die "ABORT -- can't open scales output file $scales_output_name\n";
+        }
+
         for ($i = 0; $i < @scale_lines; $i++)
         {
             $line = $scale_lines[$i];
@@ -775,17 +800,22 @@ sub iron_pools
             # only print the header line once
             if ($i == 0)
             {
-                printf OUTPUT_SCALING "%s",   'SampleName';
-                printf OUTPUT_SCALING "\t%s", 'Plex';
-                printf OUTPUT_SCALING "\t%s", 'Scale';
-                printf OUTPUT_SCALING "\t%s", 'Log2Scale';
-                printf OUTPUT_SCALING "\t%s", 'AbsLog2Scale';
-                printf OUTPUT_SCALING "\t%s", 'TrainingSet';
-                printf OUTPUT_SCALING "\t%s", 'PresentBoth';
-                printf OUTPUT_SCALING "\t%s", 'PresentSample';
-                printf OUTPUT_SCALING "\t%s", 'PresentDataset';
-                printf OUTPUT_SCALING "\t%s", 'FractionTrain';
-                printf OUTPUT_SCALING "\n";
+                if ($scales_output_init == 0)
+                {
+                    $scales_output_init = 1;
+
+                    printf OUTPUT_SCALING "%s",   'SampleName';
+                    printf OUTPUT_SCALING "\t%s", 'Plex';
+                    printf OUTPUT_SCALING "\t%s", 'Scale';
+                    printf OUTPUT_SCALING "\t%s", 'Log2Scale';
+                    printf OUTPUT_SCALING "\t%s", 'AbsLog2Scale';
+                    printf OUTPUT_SCALING "\t%s", 'TrainingSet';
+                    printf OUTPUT_SCALING "\t%s", 'PresentBoth';
+                    printf OUTPUT_SCALING "\t%s", 'PresentSample';
+                    printf OUTPUT_SCALING "\t%s", 'PresentDataset';
+                    printf OUTPUT_SCALING "\t%s", 'FractionTrain';
+                    printf OUTPUT_SCALING "\n";
+                }
             
                 next;
             }
@@ -889,25 +919,29 @@ sub iron_samples
     # output temp plex for iron
     for ($p = 0; $p < $num_plexes; $p++)
     {
-        $tmt_plex = $tmt_plex_array[$p];
-        
-        $pool_ch1 = $plex_pool_channels[$p][0];
-        $pool_samp1 = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch1]};
-        $pool_s1 = $sample_to_condensed_col_hash{$pool_samp1};
+        $tmt_plex     = $tmt_plex_array[$p];
+        %temp_ch_hash = ();
 
-        # HACK -- average the single pool with itself, so I don't have to
-        # write more special case code for it
-        if ($num_pools == 1)
+        if ($auto_single_variable_pool_flag == 0)
         {
-            $pool_ch2   = $pool_ch1;
-            $pool_samp2 = $pool_samp1;
-            $pool_s2    = $pool_s1;
-        }
-        else
-        {
-            $pool_ch2 = $plex_pool_channels[$p][1];
-            $pool_samp2 = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch2]};
-            $pool_s2 = $sample_to_condensed_col_hash{$pool_samp2};
+            $pool_ch1 = $plex_pool_channels[$p][0];
+            $pool_samp1 = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch1]};
+            $pool_s1 = $sample_to_condensed_col_hash{$pool_samp1};
+
+            # HACK -- average the single pool with itself, so I don't have to
+            # write more special case code for it
+            if ($num_pools == 1)
+            {
+                $pool_ch2   = $pool_ch1;
+                $pool_samp2 = $pool_samp1;
+                $pool_s2    = $pool_s1;
+            }
+            else
+            {
+                $pool_ch2 = $plex_pool_channels[$p][1];
+                $pool_samp2 = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch2]};
+                $pool_s2 = $sample_to_condensed_col_hash{$pool_samp2};
+            }
         }
         
         # open IRON input file for writing
@@ -917,32 +951,42 @@ sub iron_samples
         printf INPUT_FOR_IRON "%s", 'ProbeID';
         for ($ch = 0; $ch < $num_channels; $ch++)
         {
-            $pool_samp2 = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch2]};
-            printf INPUT_FOR_IRON "\t%s", $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]}
+            $sample = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
+            printf INPUT_FOR_IRON "\t%s", $sample;
+            
+            $temp_ch_hash{$sample} = $ch;
         }
-        printf INPUT_FOR_IRON "\t%s", '__AvgPool__';
+        if ($auto_single_variable_pool_flag == 0)
+        {
+            printf INPUT_FOR_IRON "\t%s", '__AvgPool__';
+
+            # $temp_ch_hash{'__AvgPool__'} = $num_channels;
+        }
         printf INPUT_FOR_IRON "\n";
 
         for ($row = 0; $row < $num_rows; $row++)
         {
             $identifier = $orig_data_array[$row][$id_col];
-        
-            $value1 = $condensed_data_array[$row][$pool_s1];
-            $value2 = $condensed_data_array[$row][$pool_s2];
+            
+            if ($auto_single_variable_pool_flag == 0)
+            {
+                $value1 = $condensed_data_array[$row][$pool_s1];
+                $value2 = $condensed_data_array[$row][$pool_s2];
 
-            $avg = '';
-            if (defined($value1) && defined($value2))
-            {
-#                $avg = 0.5 * ($value1 + $value2);
-                $avg = sqrt($value1 * $value2);
-            }
-            elsif (defined($value1))
-            {
-                $avg = $value1;
-            }
-            elsif (defined($value2))
-            {
-                $avg = $value2;
+                $avg = '';
+                if (defined($value1) && defined($value2))
+                {
+#                    $avg = 0.5 * ($value1 + $value2);
+                    $avg = sqrt($value1 * $value2);
+                }
+                elsif (defined($value1))
+                {
+                    $avg = $value1;
+                }
+                elsif (defined($value2))
+                {
+                    $avg = $value2;
+                }
             }
             
             printf INPUT_FOR_IRON "%s", $identifier;
@@ -959,7 +1003,11 @@ sub iron_samples
 
                 printf INPUT_FOR_IRON "\t%s", $value;
             }
-            printf INPUT_FOR_IRON "\t%s", $avg;
+            if ($auto_single_variable_pool_flag == 0)
+            {
+                printf INPUT_FOR_IRON "\t%s", $avg;
+            }
+            
             printf INPUT_FOR_IRON "\n";
         }
         close INPUT_FOR_IRON;
@@ -967,14 +1015,26 @@ sub iron_samples
         # IRON the samples
         if ($no_iron_flag == 0)
         {
-            if (0)
+            # automatically pick the best sample per plex, can be different
+            if ($auto_single_variable_pool_flag)
             {
                 # find the median sample
                 $cmd_string = sprintf "findmedian --pearson --spreadsheet \"%s\" 2>/dev/null | tail -2 | head -1 | cut -f 4",
                     $iron_input_name;
                 $median_sample = `$cmd_string`;
                 $median_sample =~ s/[\r\n]+//;
+                
+                $pool_ch1   = $temp_ch_hash{$median_sample};
+                $pool_samp1 = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch1]};
+                $pool_s1    = $sample_to_condensed_col_hash{$pool_samp1};
+                
+                $plex_pool_channels[$p][0] = $pool_ch1;
+                $plex_pool_channels[$p][1] = '';
+                $plex_pool_channels[$p][2] = '';
+
+                printf STDERR "POOL\t%s\t%s\n", $tmt_plex, $pool_samp1;
             }
+            # use the fixed or averaged pools
             else
             {
                 $median_sample = '__AvgPool__';
@@ -1005,7 +1065,14 @@ sub iron_samples
 
             # output scaling factor file
             $log2 = log(2.0);
-            open OUTPUT_SCALING, ">>$scales_output_name" or die "ABORT -- can't open scales output file $scales_output_name\n";
+            if ($scales_output_init == 0)
+            {
+                open OUTPUT_SCALING, ">$scales_output_name" or die "ABORT -- can't open scales output file $scales_output_name\n";
+            }
+            else
+            {
+                open OUTPUT_SCALING, ">>$scales_output_name" or die "ABORT -- can't open scales output file $scales_output_name\n";
+            }
             for ($i = 0; $i < @scale_lines; $i++)
             {
                 $line = $scale_lines[$i];
@@ -1014,10 +1081,13 @@ sub iron_samples
                 # strip GlobalScale: from beginning
                 $line =~ s/^Global(Scale|FitLine):\s+//ig;
                 
+                # only print the header line once
                 if ($i == 0)
                 {
-                    if (0)
+                    if ($scales_output_init == 0)
                     {
+                        $scales_output_init = 1;
+                
                         printf OUTPUT_SCALING "%s",   'SampleName';
                         printf OUTPUT_SCALING "\t%s", 'Plex';
                         printf OUTPUT_SCALING "\t%s", 'Scale';
@@ -1388,6 +1458,7 @@ $exclusions_flag   = 0;
 $no_debatch_flag   = 0;
 $no_iron_flag      = 0;
 $leave_ratios_flag = 0;
+$auto_single_variable_pool_flag = 0;
 $unlog2_flag       = 0;    # unlog2 the input data
 $no_log2_flag      = 0;    # do not log2 the output data
 $comp_pool_flag    = 0;    # use computational pool instead of real pool
@@ -1517,9 +1588,10 @@ if ($error_flag)
 
 $process_id = $$;
 
+$scales_output_init =  0;
 $scales_output_name =  $filename;
 $scales_output_name =~ s/\.txt$//i;
-$scales_output_name = sprintf "%s_scaling_factors.txt", $scales_output_name;
+$scales_output_name =  sprintf "%s_scaling_factors.txt", $scales_output_name;
 `rm \"$scales_output_name\" >& /dev/null`;
 
 $row_scales_output_name =  $filename;
@@ -1549,8 +1621,12 @@ if ($comp_pool_flag && $comp_pool_exclude_filename ne '')
 #normalize_crude();
 identify_pools();
 check_outlier_pools();
-iron_pools();
+
+# must come before iron_pools() now, to support auto ref sample picking
 iron_samples();
+
+# must come after iron_samples() now, to support auto ref sample picking
+iron_pools();
 
 if ($no_debatch_flag == 0)
 {
