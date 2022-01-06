@@ -7,6 +7,8 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2021-01-06: refactor scaling factor output, finish untilt support
+# 2021-01-06: remove AbsLog2Scale from scaling factor output
 # 2021-01-05: add experimental per-plex auto IRON reference sample picking
 # 2021-12-22: add experimental --iron-untilt flag, not fully implemented
 # 2021-12-17: add --comp-pool-exclusions flag to exclude samples from pool
@@ -796,6 +798,16 @@ sub iron_pools
 
             # strip GlobalScale: from beginning
             $line =~ s/^Global(Scale|FitLine):\s+//ig;
+
+            # strip Fit from headers
+            # for compatability with older scripts
+            if ($i == 0)
+            {
+                $line =~ s/Fit//g;
+            }
+
+            # do NOT strip off trailing empty fields !!
+            @array = split /\t/, $line, -1;
             
             # only print the header line once
             if ($i == 0)
@@ -803,53 +815,25 @@ sub iron_pools
                 if ($scales_output_init == 0)
                 {
                     $scales_output_init = 1;
-
-                    printf OUTPUT_SCALING "%s",   'SampleName';
+                    
+                    printf OUTPUT_SCALING "%s",   $array[0];
                     printf OUTPUT_SCALING "\t%s", 'Plex';
-                    printf OUTPUT_SCALING "\t%s", 'Scale';
-                    printf OUTPUT_SCALING "\t%s", 'Log2Scale';
-                    printf OUTPUT_SCALING "\t%s", 'AbsLog2Scale';
-                    printf OUTPUT_SCALING "\t%s", 'TrainingSet';
-                    printf OUTPUT_SCALING "\t%s", 'PresentBoth';
-                    printf OUTPUT_SCALING "\t%s", 'PresentSample';
-                    printf OUTPUT_SCALING "\t%s", 'PresentDataset';
-                    printf OUTPUT_SCALING "\t%s", 'FractionTrain';
+                    for ($j = 1; $j < @array; $j++)
+                    {
+                        printf OUTPUT_SCALING "\t%s", $array[$j];
+                    }
                     printf OUTPUT_SCALING "\n";
                 }
             
                 next;
             }
             
-            # do NOT strip off trailing empty fields !!
-            @array = split /\t/, $line, -1;
-            
-            $sample          = $array[0];
-            $scale           = $array[1];
-            $training        = $array[3];
-            $present_both    = $array[4];
-            $present_sample  = $array[5];
-            $present_dataset = $array[6];
-            $frac_train      = $array[7];
-            
-            # FIXME -- shut Perl up until I fix --iron-untilt support
-            if (!defined($frac_train))
+            printf OUTPUT_SCALING "%s",   $array[0];
+            printf OUTPUT_SCALING "\t%s", 'PoolNorm';
+            for ($j = 1; $j < @array; $j++)
             {
-                $frac_train = '';
+                printf OUTPUT_SCALING "\t%s", $array[$j];
             }
-
-            $plex            = 'PoolNorm';
-            $log2_scale      = log($scale) / $log2;
-
-            printf OUTPUT_SCALING "%s",   $sample;
-            printf OUTPUT_SCALING "\t%s", $plex;
-            printf OUTPUT_SCALING "\t%s", $scale;
-            printf OUTPUT_SCALING "\t%s", $log2_scale;
-            printf OUTPUT_SCALING "\t%s", abs($log2_scale);
-            printf OUTPUT_SCALING "\t%s", $training;
-            printf OUTPUT_SCALING "\t%s", $present_both;
-            printf OUTPUT_SCALING "\t%s", $present_sample;
-            printf OUTPUT_SCALING "\t%s", $present_dataset;
-            printf OUTPUT_SCALING "\t%s", $frac_train;
             printf OUTPUT_SCALING "\n";
         }
         close OUTPUT_SCALING;
@@ -1080,24 +1064,30 @@ sub iron_samples
 
                 # strip GlobalScale: from beginning
                 $line =~ s/^Global(Scale|FitLine):\s+//ig;
-                
+
+                # strip Fit from headers
+                # for compatability with older scripts
+                if ($i == 0)
+                {
+                    $line =~ s/Fit//g;
+                }
+
+                # do NOT strip off trailing empty fields !!
+                @array = split /\t/, $line, -1;
+
                 # only print the header line once
                 if ($i == 0)
                 {
                     if ($scales_output_init == 0)
                     {
                         $scales_output_init = 1;
-                
-                        printf OUTPUT_SCALING "%s",   'SampleName';
+                        
+                        printf OUTPUT_SCALING "%s",   $array[0];
                         printf OUTPUT_SCALING "\t%s", 'Plex';
-                        printf OUTPUT_SCALING "\t%s", 'Scale';
-                        printf OUTPUT_SCALING "\t%s", 'Log2Scale';
-                        printf OUTPUT_SCALING "\t%s", 'AbsLog2Scale';
-                        printf OUTPUT_SCALING "\t%s", 'TrainingSet';
-                        printf OUTPUT_SCALING "\t%s", 'PresentBoth';
-                        printf OUTPUT_SCALING "\t%s", 'PresentSample';
-                        printf OUTPUT_SCALING "\t%s", 'PresentDataset';
-                        printf OUTPUT_SCALING "\t%s", 'FractionTrain';
+                        for ($j = 1; $j < @array; $j++)
+                        {
+                            printf OUTPUT_SCALING "\t%s", $array[$j];
+                        }
                         printf OUTPUT_SCALING "\n";
                     }
                 
@@ -1110,37 +1100,12 @@ sub iron_samples
                     next;
                 }
                 
-                # do NOT strip off trailing empty fields !!
-                @array = split /\t/, $line, -1;
-                
-                $sample          = $array[0];
-                $scale           = $array[1];
-                $training        = $array[3];
-                $present_both    = $array[4];
-                $present_sample  = $array[5];
-                $present_dataset = $array[6];
-                $frac_train      = $array[7];
-
-                # FIXME -- shut Perl up until I fix --iron-untilt support
-                if (!defined($frac_train))
+                printf OUTPUT_SCALING "%s",   $array[0];
+                printf OUTPUT_SCALING "\t%s", $tmt_plex;
+                for ($j = 1; $j < @array; $j++)
                 {
-                    $frac_train = '';
+                    printf OUTPUT_SCALING "\t%s", $array[$j];
                 }
-
-                $plex            = $tmt_plex;
-                $log2_scale      = log($scale) / $log2;
-#   #           $sample          = sprintf "%s_%s", $plex, $sample;
-
-                printf OUTPUT_SCALING "%s",   $sample;
-                printf OUTPUT_SCALING "\t%s", $plex;
-                printf OUTPUT_SCALING "\t%s", $scale;
-                printf OUTPUT_SCALING "\t%s", $log2_scale;
-                printf OUTPUT_SCALING "\t%s", abs($log2_scale);
-                printf OUTPUT_SCALING "\t%s", $training;
-                printf OUTPUT_SCALING "\t%s", $present_both;
-                printf OUTPUT_SCALING "\t%s", $present_sample;
-                printf OUTPUT_SCALING "\t%s", $present_dataset;
-                printf OUTPUT_SCALING "\t%s", $frac_train;
                 printf OUTPUT_SCALING "\n";
             }
             close OUTPUT_SCALING;
