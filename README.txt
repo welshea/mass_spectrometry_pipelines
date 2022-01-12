@@ -16,6 +16,11 @@ Brief overview of running the proteomics and metabolomics pipelines:
     sh run_stuff.sh
 
 
+    If the input data is lipidomics, split_lipidomics_into_pos_neg.pl must
+    be run first, followed by generate_metabolomics_glue_script.pl on the
+    resulting separate pos and neg files.
+
+
   Species and edited auto-detect parameters file arguments are optional and
   usually not needed.
 
@@ -413,6 +418,18 @@ scan_oct.pl
 
     Output files contain rows identified as potential OCT, and OCT abundance-
     related metrics, respectively.
+
+
+
+split_lipidomics_into_pos_neg.pl
+
+    Split single tab-delimited lipidomics file into separate pos/neg files.
+
+    Usage: split_lipidomics_into_pos_neg.pl tab_delimited.txt
+             [outfile_pos outfile_neg]
+
+    outfile_pos and outfile_neg default to lipidomics_split_pos.txt and
+    lipidomics_split_neg.txt if no output filenames are specified.
 
 
 
