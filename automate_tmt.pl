@@ -1563,7 +1563,7 @@ for ($i = 0; $i < @ARGV; $i++)
             $comp_pool_exclude_flag = 1;
             $comp_pool_exclude_filename = $1;
             
-            printf STDERR "Using comp pool sample exclusion file: %s\n",
+            printf STDERR "Auto-detecting comp pool dark channel exclusions\n",
                           $comp_pool_exclude_filename;
         }
         elsif ($field =~ /^--comp-pool-exclusions$/)
