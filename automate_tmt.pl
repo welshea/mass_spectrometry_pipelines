@@ -7,6 +7,8 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2022-01-19: ability to auto-flag and exclude dark samples from comp pool
+# 2022-01-19: remove deprecated "variable" reference channel (now auto2)
 # 2021-01-06: refactor scaling factor output, finish untilt support
 # 2021-01-06: remove AbsLog2Scale from scaling factor output
 # 2021-01-05: add experimental per-plex auto IRON reference sample picking
@@ -28,10 +30,17 @@
 
 use Scalar::Util qw(looks_like_number);
 
+# any sample with a scaling factor more than +log2(6x) from that of the
+# median log2 scaling factor is probably a bad sample
+# this should be fairly conservative, we can maybe tighten it a bit
+$log2_sf_above_median_cutoff = log(6.0) / log(2.0);
+
 
 # all functions are effectively macros, since there are no local variables
 
 # we assume that there can be no more than 2 pools per plex
+
+
 
 sub is_number
 {
@@ -320,6 +329,58 @@ sub read_in_comp_pool_exclusions_file
 }
 
 
+# scan through the stored log2 scaling factors for each plex
+# flag any sample that is much worse than the median for that plex as bad
+sub auto_flag_failed_samples
+{
+    for ($p = 0; $p < $num_plexes; $p++)
+    {
+        @temp_array     = ();
+        $median_log2_sf = '';
+
+        for ($ch = 0; $ch < $num_channels; $ch++)
+        {
+            $log2_sf         = $log2_sf_array[$p][$ch];
+            $temp_array[$ch] = $log2_sf;
+        }
+
+        @temp_array = sort {$a <=> $b} @temp_array;
+    
+        $num_ch_half = $num_channels >> 1;
+        # odd
+        if ($num_channels % 2)
+        {
+            $median_log2_sf = $temp_array[$num_ch_half];
+        }
+        # even
+        else
+        {
+            $median_log2_sf = 0.5 *
+                              ($temp_array[$num_ch_half - 1] +
+                               $temp_array[$num_ch_half]);
+        }
+
+        $tmt_plex = $tmt_plex_array[$p];
+
+        for ($ch = 0; $ch < $num_channels; $ch++)
+        {
+            $sample  = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
+            $log2_sf = $log2_sf_array[$p][$ch];
+            $delta   = $log2_sf - $median_log2_sf;
+            
+            # fudge it a little, for round off error
+            if ($delta > $log2_sf_above_median_cutoff - 1E-5)
+            {
+                printf STDERR "Auto-exclude dark channel from comp pool:\t%s\n",
+                    $sample;
+
+                $comp_pool_exclude_hash{$sample} = 1;
+            }
+        }
+    }
+}
+
+
 # crudely scale each log sample to be roughly normalized
 # assume they all have roughly the same distributions
 # scale each 6-plex independently
@@ -406,9 +467,8 @@ sub identify_pools
     $num_fixed_pools = @fixed_pool_array;
     
     # support auto identification of 2 pool channels
-    # "variable" is deprecated, but currently still accepted
-    if (defined($fixed_pool_hash{'auto2'}) ||
-        defined($fixed_pool_hash{'variable'}))
+    # "auto2" is now what used to be "variable" mode
+    if (defined($fixed_pool_hash{'auto2'}))
     {
         @fixed_pool_array               = ();
         $num_fixed_pools                = 0;
@@ -776,10 +836,10 @@ sub iron_pools
         `$cmd_string`;
         # `cp -a $iron_output_name debug_iron_pools.txt`;
 
-        @scale_lines = `$cmd_string`;
-        @scale_lines = sort cmp_scale_lines @scale_lines;
+        @scale_lines_unsorted = `$cmd_string`;
+        @scale_lines = sort cmp_scale_lines @scale_lines_unsorted;
 
-        # output scaling factor file
+        # output scaling factors file
         $log2 = log(2.0);
 
         if ($scales_output_init == 0)
@@ -823,6 +883,17 @@ sub iron_pools
                         printf OUTPUT_SCALING "\t%s", $array[$j];
                     }
                     printf OUTPUT_SCALING "\n";
+                    
+
+                    # store which column has the log2 scaling factor
+                    for ($j = 0; $j < @array; $j++)
+                    {
+                        if ($array[$j] =~ /Log2/i &&
+                            $array[$j] =~ /Scale/i)
+                        {
+                            $global_log2_sf_col = $j;
+                        }
+                    }
                 }
             
                 next;
@@ -1044,10 +1115,10 @@ sub iron_samples
                 $cmd_string =~ s/--proteomics/--rnaseq/g;
             }
 
-            @scale_lines = `$cmd_string`;
-            @scale_lines = sort cmp_scale_lines @scale_lines;
+            @scale_lines_unsorted = `$cmd_string`;
+            @scale_lines = sort cmp_scale_lines @scale_lines_unsorted;
 
-            # output scaling factor file
+            # output scaling factors file
             $log2 = log(2.0);
             if ($scales_output_init == 0)
             {
@@ -1057,6 +1128,8 @@ sub iron_samples
             {
                 open OUTPUT_SCALING, ">>$scales_output_name" or die "ABORT -- can't open scales output file $scales_output_name\n";
             }
+
+            # output scaling factors file
             for ($i = 0; $i < @scale_lines; $i++)
             {
                 $line = $scale_lines[$i];
@@ -1089,6 +1162,17 @@ sub iron_samples
                             printf OUTPUT_SCALING "\t%s", $array[$j];
                         }
                         printf OUTPUT_SCALING "\n";
+
+
+                        # store which column has the log2 scaling factor
+                        for ($j = 0; $j < @array; $j++)
+                        {
+                            if ($array[$j] =~ /Log2/i &&
+                                $array[$j] =~ /Scale/i)
+                            {
+                                $global_log2_sf_col = $j;
+                            }
+                        }
                     }
                 
                     next;
@@ -1109,6 +1193,34 @@ sub iron_samples
                 printf OUTPUT_SCALING "\n";
             }
             close OUTPUT_SCALING;
+
+
+            # store scaling factors
+            # must use original unsorted lines, since that lines up with
+            #  all the other bookkeeping
+            $k = 0;
+            for ($i = 1; $i < @scale_lines; $i++)
+            {
+                $line = $scale_lines_unsorted[$i];
+                $line =~ s/[\r\n]+//g;
+
+                # strip GlobalScale: from beginning
+                $line =~ s/^Global(Scale|FitLine):\s+//ig;
+
+                # skip average pool
+                if ($line =~ /^__AvgPool__/)
+                {
+                    next;
+                }
+
+                # do NOT strip off trailing empty fields !!
+                @array = split /\t/, $line, -1;
+                
+                # store the log2 scaling factors for later
+                $log2_sf               = $array[$global_log2_sf_col];
+                $log2_sf_array[$p][$k] = $log2_sf;
+                $k++;
+            }
         }
         # copy input to output if we didn't run IRON
         else
@@ -1427,6 +1539,7 @@ $auto_single_variable_pool_flag = 0;
 $unlog2_flag       = 0;    # unlog2 the input data
 $no_log2_flag      = 0;    # do not log2 the output data
 $comp_pool_flag    = 0;    # use computational pool instead of real pool
+$comp_pool_exclude_flag     = 0;
 $comp_pool_exclude_filename = '';
 $iron_untilt_flag  = 0;    # --rnaseq flag
 
@@ -1444,10 +1557,20 @@ for ($i = 0; $i < @ARGV; $i++)
             
             printf STDERR "Using exclusion file: %s\n", $exclusions_filename;
         }
-        if ($field =~ /^--comp-pool-exclusions\=(\S+)/)
+        elsif ($field =~ /^--comp-pool-exclusions\=(\S+)/)
         {
-            $comp_pool_flag = 1;
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
             $comp_pool_exclude_filename = $1;
+            
+            printf STDERR "Using comp pool sample exclusion file: %s\n",
+                          $comp_pool_exclude_filename;
+        }
+        elsif ($field =~ /^--comp-pool-exclusions$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_filename = '';
             
             printf STDERR "Using comp pool sample exclusion file: %s\n",
                           $comp_pool_exclude_filename;
@@ -1531,8 +1654,9 @@ if ($error_flag)
     print STDERR "    --leave-ratios     leave cross-plex normalized data as log2 ratios\n";
     print STDERR "    --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]\n";
     print STDERR "    --comp-pool        use all-channel geometric mean for cross-plex debatching\n";
-    print STDERR "    --comp-pool-exclusions=filename.txt\n";
+    print STDERR "    --comp-pool-exclusions(=filename.txt)\n";
     print STDERR "                       exclude sample identifiers from computational pool\n";
+    print STDERR "                       auto-excludes dark samples if =filename.txt is omitted\n";
     print STDERR "    --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]\n";
     print STDERR "    --iron-exclusions=filename.txt\n";
     print STDERR "                       exclude row identifiers from IRON training\n";
@@ -1578,7 +1702,8 @@ if (!defined(%fixed_pool_hash))
 read_in_data_file($filename);
 store_condensed_data();
 
-if ($comp_pool_flag && $comp_pool_exclude_filename ne '')
+if ($comp_pool_flag && $comp_pool_exclude_flag &&
+    $comp_pool_exclude_filename ne '')
 {
     read_in_comp_pool_exclusions_file($comp_pool_exclude_filename);
 }
@@ -1590,8 +1715,17 @@ check_outlier_pools();
 # must come before iron_pools() now, to support auto ref sample picking
 iron_samples();
 
+# scan scaling factors for samples to auto-exclude from comp pool
+# must come after iron_samples() and before iron_pools()
+if ($comp_pool_flag && $comp_pool_exclude_flag &&
+    $comp_pool_exclude_filename eq '')
+{
+    auto_flag_failed_samples();
+}
+
 # must come after iron_samples() now, to support auto ref sample picking
 iron_pools();
+
 
 if ($no_debatch_flag == 0)
 {
