@@ -152,8 +152,9 @@ automate_tmt.pl
     --leave-ratios     leave cross-plex normalized data as log2 ratios
     --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]
     --comp-pool        use all-channel geometric mean for cross-plex debatching
-    --comp-pool-exclusions=filename.txt
+    --comp-pool-exclusions(=filename.txt)
                        exclude sample identifiers from computational pool
+                       auto-excludes dark samples if =filename.txt is omitted
     --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]
     --iron-exclusions=filename.txt
                        exclude row identifiers from IRON training
