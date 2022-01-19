@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-01-19:  auto-exclude dark samples from injection replicates comp pool
+# 2022-01-19:  add some support for auto reference channels
 # 2021-10-28:  support --(no-)iron --(no-)debatch --(no-)comp-pool
 # 2021-09-08:  print usage statement to STDERR instead of STDOUT
 # 2021-07-23:  add _log2 to iron output filenames to indicate it is log2
@@ -394,9 +396,10 @@ if (defined($autodetect_hash{TMT}) &&
     # multiple plexes, 100% injection replicates
     elsif ($autodetect_hash{TMT} eq 'injection' &&
            defined($autodetect_hash{TMT_Channel}) &&
-                   $autodetect_hash{TMT_Channel} =~ /TMT/)
+           ($autodetect_hash{TMT_Channel} =~ /TMT/ ||
+            $autodetect_hash{TMT_Channel} eq 'auto'))
     {
-        $pipeline_norm_str = sprintf "%s %s --comp-pool \"%s%s\" %s \\\n  > \"%s%s\"",
+        $pipeline_norm_str = sprintf "%s %s --comp-pool --comp-pool-exclusions \"%s%s\" %s \\\n  > \"%s%s\"",
             'automate_tmt.pl',
             $options_str,
             $output_root_name, '_orig_intensity.txt',
