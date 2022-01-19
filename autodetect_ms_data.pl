@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2022-01-19: default 100% injection replicates to "auto" reference channel
 # 2021-08-12: change deprecated "if (defined(%plex_hash))" to "if (%plex_hash)"
 # 2021-07-28: respect species argument override, autodetect if non-mouse/human
 # 2021-05-21: added --boost and --last-ch flags to force last channel norm
@@ -470,6 +471,10 @@ if ($tmt_flag && $multi_plex_flag)
 if ($tmt_flag && ($boost_flag || $py_flag))
 {
     $tmt_channel = 'TMT-' . $channel_map_table[$max_channel+1][$max_channel]
+}
+if ($tmt_flag && $injection_plex_flag)
+{
+    $tmt_channel = 'auto';
 }
 
 if ($ibaq_flag)
