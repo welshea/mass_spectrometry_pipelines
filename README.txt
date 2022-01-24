@@ -154,12 +154,12 @@ automate_tmt.pl
 
     --comp-pool        use all-channel geometric mean for cross-plex debatching
     --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]
-    --comp-pool-exclusions=filename.txt
-                       exclude sample identifiers from computational pool
     --comp-pool-exclusions-dark.txt
                        auto-excludes dark samples from computational pool
     --comp-pool-exclusions-boost.txt
                        excludes boosting channels (N, N-2) from comp pool
+    --comp-pool-exclusions=filename.txt
+                       load comp pool sample exclusions from tab-delimited file
     --iron-exclusions=filename.txt
                        exclude row identifiers from IRON training
 
@@ -270,12 +270,12 @@ generate_proteomics_glue_script.pl
 
     --comp-pool     average all plex channels for cross-plex de-batching
     --no-comp-pool  use reference channel for de-batching (default)
-    --comp-pool-exclusions=filename.txt
-                       exclude sample identifiers from computational pool
     --comp-pool-exclusions-dark.txt
                        auto-excludes dark samples from computational pool
     --comp-pool-exclusions-boost.txt
                        excludes boosting channels (N, N-2) from comp pool
+    --comp-pool-exclusions=filename.txt
+                       load comp pool sample exclusions from tab-delimited file
 
   Output:
     .sh file to glue the various scripts together.
