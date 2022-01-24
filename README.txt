@@ -151,11 +151,15 @@ automate_tmt.pl
     --no-debatch       do not perform cross-plex normalization
     --leave-ratios     leave cross-plex normalized data as log2 ratios
     --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]
+
     --comp-pool        use all-channel geometric mean for cross-plex debatching
-    --comp-pool-exclusions(=filename.txt)
-                       exclude sample identifiers from computational pool
-                       auto-excludes dark samples if =filename.txt is omitted
     --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]
+    --comp-pool-exclusions=filename.txt
+                       exclude sample identifiers from computational pool
+    --comp-pool-exclusions-dark.txt
+                       auto-excludes dark samples from computational pool
+    --comp-pool-exclusions-boost.txt
+                       excludes boosting channels (N, N-2) from comp pool
     --iron-exclusions=filename.txt
                        exclude row identifiers from IRON training
 
@@ -255,8 +259,23 @@ generate_proteomics_glue_script.pl
   Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh
 
   Options:
-    --boost     use highest channel for normalization
-    --last-ch   use highest channel for normalization
+    --boost         use highest channel for normalization
+    --last-ch       use highest channel for normalization
+
+    --iron          apply IRON normalization (default)
+    --no-iron       disable IRON normalization
+
+    --debatch       cross-plex de-batch TMT data (default)
+    --no-debatch    disable cross-plex de-batching
+
+    --comp-pool     average all plex channels for cross-plex de-batching
+    --no-comp-pool  use reference channel for de-batching (default)
+    --comp-pool-exclusions=filename.txt
+                       exclude sample identifiers from computational pool
+    --comp-pool-exclusions-dark.txt
+                       auto-excludes dark samples from computational pool
+    --comp-pool-exclusions-boost.txt
+                       excludes boosting channels (N, N-2) from comp pool
 
   Output:
     .sh file to glue the various scripts together.
