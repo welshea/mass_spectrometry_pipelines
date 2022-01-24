@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-01-24:  support passing new comp pool exclusions flags
 # 2022-01-19:  auto-exclude dark samples from injection replicates comp pool
 # 2022-01-19:  add some support for auto reference channels
 # 2021-10-28:  support --(no-)iron --(no-)debatch --(no-)comp-pool
@@ -24,7 +25,11 @@ $num_non_options   = 0;
 $boost_flag        = 0;
 $no_debatch_flag   = 0;
 $no_iron_flag      = 0;
-$comp_pool_flag    = 0;    # use computational pool instead of real pool
+$comp_pool_flag               = 0;    # use comp pool instead of real pool
+$comp_pool_exclude_flag       = 0;
+$comp_pool_exclude_filename   = '';
+$comp_pool_exclude_dark_flag  = 0;
+$comp_pool_exclude_boost_flag = 0;
 
 
 $syntax_error_flag = 0;
@@ -65,6 +70,26 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--no-comp-pool$/)
         {
             $comp_pool_flag = 0;
+        }
+        elsif ($field =~ /^--comp-pool-exclusions\=(\S+)/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_filename = $1;
+        }
+        elsif ($field =~ /^--comp-pool-exclusions-dark$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_filename = '';
+            $comp_pool_exclude_dark_flag = 1;
+        }
+        elsif ($field =~ /^--comp-pool-exclusions-boost$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_boost_flag = 1;
+            $comp_pool_exclude_filename = '';
         }
 
         else
@@ -107,20 +132,26 @@ if ($input_filename eq '')
 
 if ($syntax_error_flag)
 {
-    printf STDERR "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
-    printf STDERR "\n";
-    printf STDERR "  Options:\n";
-    printf STDERR "    --boost         use highest channel for normalization\n";
-    printf STDERR "    --last-ch       use highest channel for normalization\n";
-    printf STDERR "\n";
-    printf STDERR "    --iron          apply IRON normalization (default)\n";
-    printf STDERR "    --no-iron       disable IRON normalization\n";
-    printf STDERR "\n";
-    printf STDERR "    --debatch       cross-plex de-batch TMT data (default)\n";
-    printf STDERR "    --no-debatch    disable cross-plex de-batching\n";
-    printf STDERR "\n";
-    printf STDERR "    --comp-pool     average all plex channels for cross-plex de-batching\n";
-    printf STDERR "    --no-comp-pool  use reference channel for de-batching (default)\n";
+    print STDERR "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
+    print STDERR "\n";
+    print STDERR "  Options:\n";
+    print STDERR "    --boost         use highest channel for normalization\n";
+    print STDERR "    --last-ch       use highest channel for normalization\n";
+    print STDERR "\n";
+    print STDERR "    --iron          apply IRON normalization (default)\n";
+    print STDERR "    --no-iron       disable IRON normalization\n";
+    print STDERR "\n";
+    print STDERR "    --debatch       cross-plex de-batch TMT data (default)\n";
+    print STDERR "    --no-debatch    disable cross-plex de-batching\n";
+    print STDERR "\n";
+    print STDERR "    --comp-pool     average all plex channels for cross-plex de-batching\n";
+    print STDERR "    --no-comp-pool  use reference channel for de-batching (default)\n";
+    print STDERR "    --comp-pool-exclusions=filename.txt\n";
+    print STDERR "                       exclude sample identifiers from computational pool\n";
+    print STDERR "    --comp-pool-exclusions-dark.txt\n";
+    print STDERR "                       auto-excludes dark samples from computational pool\n";
+    print STDERR "    --comp-pool-exclusions-boost.txt\n";
+    print STDERR "                       excludes boosting channels (N, N-2) from comp pool\n";
     
     exit(1);
 }
@@ -379,6 +410,23 @@ if (defined($autodetect_hash{TMT}) &&
     {
         $options_str .= ' --comp-pool';
     }
+    if ($comp_pool_flag && $comp_pool_exclude_flag &&
+        $comp_pool_exclude_filename ne '')
+    {
+        $options_str .= sprintf " --comp-pool-exclusions=\"%s\"",
+            $comp_pool_exclude_filename;
+    }
+    if ($comp_pool_flag && $comp_pool_exclude_flag &&
+        $comp_pool_exclude_dark_flag)
+    {
+        $options_str .= ' --comp-pool-exclusions-dark';
+    }
+    if ($comp_pool_flag && $comp_pool_exclude_flag &&
+        $comp_pool_exclude_boost_flag)
+    {
+        $options_str .= ' --comp-pool-exclusions-boost';
+    }
+
     $options_str =~ s/^\s+//;
 
     # multiple plexes
@@ -399,7 +447,7 @@ if (defined($autodetect_hash{TMT}) &&
            ($autodetect_hash{TMT_Channel} =~ /TMT/ ||
             $autodetect_hash{TMT_Channel} eq 'auto'))
     {
-        $pipeline_norm_str = sprintf "%s %s --comp-pool --comp-pool-exclusions \"%s%s\" %s \\\n  > \"%s%s\"",
+        $pipeline_norm_str = sprintf "%s %s --comp-pool --comp-pool-exclusions-dark \"%s%s\" %s \\\n  > \"%s%s\"",
             'automate_tmt.pl',
             $options_str,
             $output_root_name, '_orig_intensity.txt',
