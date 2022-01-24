@@ -1704,12 +1704,12 @@ if ($error_flag)
     print STDERR "    --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]\n";
     print STDERR "    --comp-pool        use all-channel geometric mean for cross-plex debatching\n";
     print STDERR "    --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]\n";
-    print STDERR "    --comp-pool-exclusions=filename.txt\n";
-    print STDERR "                       exclude sample identifiers from computational pool\n";
     print STDERR "    --comp-pool-exclusions-dark.txt\n";
     print STDERR "                       auto-excludes dark samples from computational pool\n";
     print STDERR "    --comp-pool-exclusions-boost.txt\n";
     print STDERR "                       excludes boosting channels (N, N-2) from comp pool\n";
+    print STDERR "    --comp-pool-exclusions=filename.txt\n";
+    print STDERR "                       load comp pool sample exclusions from tab-delimited file\n";
     print STDERR "    --iron-exclusions=filename.txt\n";
     print STDERR "                       exclude row identifiers from IRON training\n";
     print STDERR "\n";
