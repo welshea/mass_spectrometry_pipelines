@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2022-01-24: add --comp-pool-exclusions-boost; exclude last and last -2
 # 2022-01-19: ability to auto-flag and exclude dark samples from comp pool
 # 2022-01-19: remove deprecated "variable" reference channel (now auto2)
 # 2021-01-06: refactor scaling factor output, finish untilt support
@@ -112,6 +113,21 @@ sub cmp_scale_lines
     }
     
     return $str_a cmp $str_b;
+}
+
+
+sub cmp_orig_sample_order
+{
+    my $col_a;
+    my $col_b;
+
+    $col_a = $sample_to_file_col_hash{$a};
+    $col_b = $sample_to_file_col_hash{$b};
+
+    if ($col_a < $col_b) { return -1; }
+    if ($col_a > $col_b) { return  1; }
+
+    return ($a cmp $b);
 }
 
 
@@ -371,12 +387,34 @@ sub auto_flag_failed_samples
             # fudge it a little, for round off error
             if ($delta > $log2_sf_above_median_cutoff - 1E-5)
             {
-                printf STDERR "Auto-exclude dark channel from comp pool:\t%s\n",
-                    $sample;
+                #printf STDERR "Auto-exclude dark channel from comp pool:\t%s\n",
+                #    $sample;
 
                 $comp_pool_exclude_hash{$sample} = 1;
             }
         }
+    }
+}
+
+
+# exclude the last and 2nd to last channels
+sub flag_boosting_channels
+{
+    @temp_array = sort cmp_orig_sample_order @sample_array;
+
+    for ($p = 0; $p < $num_plexes; $p++)
+    {
+        $tmt_plex = $tmt_plex_array[$p];
+
+        $sample = $temp_array[($p * $num_channels) - 1];
+        #printf STDERR "Auto-exclude boost channel from comp pool:\t%s\n",
+        #    $sample;
+        $comp_pool_exclude_hash{$sample} = 1;
+
+        $sample = $temp_array[($p * $num_channels) - 3];
+        #printf STDERR "Auto-exclude boost channel from comp pool:\t%s\n",
+        #    $sample;
+        $comp_pool_exclude_hash{$sample} = 1;
     }
 }
 
@@ -1538,9 +1576,11 @@ $leave_ratios_flag = 0;
 $auto_single_variable_pool_flag = 0;
 $unlog2_flag       = 0;    # unlog2 the input data
 $no_log2_flag      = 0;    # do not log2 the output data
-$comp_pool_flag    = 0;    # use computational pool instead of real pool
-$comp_pool_exclude_flag     = 0;
-$comp_pool_exclude_filename = '';
+$comp_pool_flag               = 0;    # use comp pool instead of real pool
+$comp_pool_exclude_flag       = 0;
+$comp_pool_exclude_filename   = '';
+$comp_pool_exclude_dark_flag  = 0;
+$comp_pool_exclude_boost_flag = 0;
 $iron_untilt_flag  = 0;    # --rnaseq flag
 
 $error_flag = 0;
@@ -1562,17 +1602,27 @@ for ($i = 0; $i < @ARGV; $i++)
             # $comp_pool_flag = 1;
             $comp_pool_exclude_flag = 1;
             $comp_pool_exclude_filename = $1;
-            
+
             printf STDERR "Using comp pool sample exclusion file: %s\n",
                           $comp_pool_exclude_filename;
         }
-        elsif ($field =~ /^--comp-pool-exclusions$/)
+        elsif ($field =~ /^--comp-pool-exclusions-dark$/)
         {
             # $comp_pool_flag = 1;
             $comp_pool_exclude_flag = 1;
             $comp_pool_exclude_filename = '';
-            
+            $comp_pool_exclude_dark_flag = 1;
+
             printf STDERR "Auto-detecting comp pool dark channel exclusions\n";
+        }
+        elsif ($field =~ /^--comp-pool-exclusions-boost$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_boost_flag = 1;
+            $comp_pool_exclude_filename = '';
+
+            printf STDERR "Excluding boost and boost-blank channels from comp pool\n",
         }
         elsif ($field =~ /^--no-debatch$/)
         {
@@ -1653,10 +1703,13 @@ if ($error_flag)
     print STDERR "    --leave-ratios     leave cross-plex normalized data as log2 ratios\n";
     print STDERR "    --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]\n";
     print STDERR "    --comp-pool        use all-channel geometric mean for cross-plex debatching\n";
-    print STDERR "    --comp-pool-exclusions(=filename.txt)\n";
-    print STDERR "                       exclude sample identifiers from computational pool\n";
-    print STDERR "                       auto-excludes dark samples if =filename.txt is omitted\n";
     print STDERR "    --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]\n";
+    print STDERR "    --comp-pool-exclusions=filename.txt\n";
+    print STDERR "                       exclude sample identifiers from computational pool\n";
+    print STDERR "    --comp-pool-exclusions-dark.txt\n";
+    print STDERR "                       auto-excludes dark samples from computational pool\n";
+    print STDERR "    --comp-pool-exclusions-boost.txt\n";
+    print STDERR "                       excludes boosting channels (N, N-2) from comp pool\n";
     print STDERR "    --iron-exclusions=filename.txt\n";
     print STDERR "                       exclude row identifiers from IRON training\n";
     print STDERR "\n";
@@ -1717,10 +1770,26 @@ iron_samples();
 # scan scaling factors for samples to auto-exclude from comp pool
 # must come after iron_samples() and before iron_pools()
 if ($comp_pool_flag && $comp_pool_exclude_flag &&
-    $comp_pool_exclude_filename eq '')
+    $comp_pool_exclude_dark_flag)
 {
     auto_flag_failed_samples();
 }
+if ($comp_pool_flag && $comp_pool_exclude_flag &&
+    $comp_pool_exclude_boost_flag)
+{
+    flag_boosting_channels();
+}
+foreach $sample (sort keys %comp_pool_exclude_hash)
+{
+    # only print excluded samples that exist in this file
+    if (defined($sample_to_file_col_hash{$sample}))
+    {
+        printf STDERR "Excluding sample from comp pool:\t%s\n",
+            $sample;
+    }
+}
+
+
 
 # must come after iron_samples() now, to support auto ref sample picking
 iron_pools();
