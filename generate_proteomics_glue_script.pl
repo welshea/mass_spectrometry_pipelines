@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-02-03:  bugfix: honor auto-detected species
 # 2022-01-24:  support passing new comp pool exclusions flags
 # 2022-01-19:  auto-exclude dark samples from injection replicates comp pool
 # 2022-01-19:  add some support for auto reference channels
@@ -258,6 +259,10 @@ if (defined($autodetect_hash{TMT}) &&
 
 $human_flag = 0;
 $mouse_flag = 0;
+if (defined($autodetect_hash{Species}))
+{
+    $species = $autodetect_hash{Species};
+}
 if ($species =~ /Mouse/i) { $mouse_flag = 1; }
 if ($species =~ /Human/i) { $human_flag = 1; }
 
@@ -266,7 +271,6 @@ if ($species =~ /Human/i) { $human_flag = 1; }
 $annotation_species = 'human';
 $annotation_source  = 'uniprot';
 
-#$annotation_file  = 'ipi_uniprot_annotation_human.txt';
 $annotation_file  = 'merged_protein_annotations_human.txt';
 
 # use refseq instead
@@ -276,7 +280,7 @@ if (defined($autodetect_hash{RefSeq}) &&
     $annotation_source = 'refseq';
     
     # default to human
-    $annotation_file   = 'human_refseq_table.txt';
+    $annotation_file   = 'merged_protein_annotations_human.txt';
     
     # override with combined IPI + Uniprot + Refseq + some Ensembl
     $annotation_file   = 'merged_protein_annotations_human.txt';
@@ -288,11 +292,11 @@ if ($mouse_flag && $human_flag == 0)
     $annotation_species = 'mouse';
 
     # default to uniprot
-    $annotation_file = 'ipi_uniprot_annotation_mouse.txt';
+    $annotation_file = 'merged_protein_annotations_mouse.txt';
     
     if ($annotation_source eq 'refseq')
     {
-        $annotation_file = 'mouse_refseq_table.txt';
+        $annotation_file = 'merged_protein_annotations_mouse.txt';
     }
 
     # override with combined IPI + Uniprot + Refseq + some Ensembl
@@ -305,11 +309,11 @@ if ($mouse_flag && $human_flag)
     $annotation_species = 'human_plus_mouse';
 
     # default to uniprot
-    $annotation_file = 'ipi_uniprot_annotation_human_mouse.txt';
+    $annotation_file = 'merged_protein_annotations_human_mouse.txt';
     
     if ($annotation_source eq 'refseq')
     {
-        $annotation_file = 'human_mouse_refseq_table.txt';
+        $annotation_file = 'merged_protein_annotations_human_mouse.txt';
     }
 
     # override with combined IPI + Uniprot + Refseq + some Ensembl
