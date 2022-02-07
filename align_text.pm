@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-02-07:  implement missing traceback positive match count tie breaking
 # 2021-10-27:  rename gmiddle to elocal, for extended local
 # 2021-10-26:  restructure affine gap tracebacks to be more correct
 # 2021-10-25:  more affine gap traceback buxfixes
@@ -131,6 +132,7 @@ sub score_substring_mismatch
     my $best_tb_row        = 0;
     my $best_tb_col        = 0;
     my $best_tb_score      = -9E99;
+    my $best_num_positive  = 0;
     my $num_positive;
     my $is_positive;
     my $seq_align1;
@@ -575,37 +577,57 @@ sub score_substring_mismatch
             # keep track of best non-global alignments
 
             # maximize local score
-            $score_best = $$pointer{score_best};
+            $score_best   = $$pointer{score_best};
+            $num_positive = $$pointer{num_positive};
             if ($type eq 'local')
             {
-                if ($score_best > $best_tb_score)
+                # best score
+                # break ties on num_positive
+                if ($score_best >= $best_tb_score)
                 {
-                    $best_tb_score = $score_best;
-                    $best_tb_row   = $row;
-                    $best_tb_col   = $col;
+                    if ($score_best > $best_tb_score ||
+                        $num_positive > $best_num_positive)
+                    {
+                        $best_tb_score     = $score_best;
+                        $best_tb_row       = $row;
+                        $best_tb_col       = $col;
+                        $best_num_positive = $num_positive;
+                    }
                 }
             }
             # anchor at least the near or far end of either sequence
             elsif ($type eq 'overlap')
             {
                 # best score, must be on far edges
-                if ($score_best > $best_tb_score &&
+                # break ties on num_positive
+                if ($score_best >= $best_tb_score &&
                     ($row == $len1 || $col == $len2))
                 {
-                    $best_tb_score = $score_best;
-                    $best_tb_row   = $row;
-                    $best_tb_col   = $col;
+                    if ($score_best > $best_tb_score ||
+                        $num_positive > $best_num_positive)
+                    {
+                        $best_tb_score     = $score_best;
+                        $best_tb_row       = $row;
+                        $best_tb_col       = $col;
+                        $best_num_positive = $num_positive;
+                    }
                 }
             }
             # best middle alignment, whether anchored or not
             elsif ($type eq 'elocal')
             {
                 # best score
-                if ($score_best > $best_tb_score)
+                # break ties on num_positive
+                if ($score_best >= $best_tb_score)
                 {
-                    $best_tb_score = $score_best;
-                    $best_tb_row   = $row;
-                    $best_tb_col   = $col;
+                    if ($score_best > $best_tb_score ||
+                        $num_positive > $best_num_positive)
+                    {
+                        $best_tb_score     = $score_best;
+                        $best_tb_row       = $row;
+                        $best_tb_col       = $col;
+                        $best_num_positive = $num_positive;
+                    }
                 }
             }
             
