@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-02-15:  include PPM as 3rd field of m/z WARNING messages
 # 2021-11-30:  add minimal lipidomics support
 # 2021-10-27:  rename gmiddle to elocal
 # 2021-10-21:  rename glocal to gmiddle
@@ -1268,10 +1269,15 @@ while(defined($line=<DATA>))
                             $matched_type_array[$num_matches] = $match_type;
                             $num_matches++;
 
-                            printf STDERR "WARNING -- mz differ:\t%s\t%f\t%f\t%s\t%s\n",
+                            $ppm = 1000000 *
+                                   abs(($annotation_hash{$row}{mz} - $mz)
+                                        / $annotation_hash{$row}{mz});
+
+                            printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
                                 $first_field,
                                 $mz,
                                 $annotation_hash{$row}{mz},
+                                $ppm,
                                 $name_delim,
                                 $annotation_hash{$row}{name},
                         }
@@ -1307,10 +1313,15 @@ while(defined($line=<DATA>))
                             $matched_type_array[$num_matches] = $match_type;
                             $num_matches++;
 
-                            printf STDERR "WARNING -- mz differ:\t%s\t%f\t%f\t%s\t%s\n",
+                            $ppm = 1000000 *
+                                   abs(($annotation_hash{$row}{mz} - $mz)
+                                        / $annotation_hash{$row}{mz});
+
+                            printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
                                 $first_field,
                                 $mz,
                                 $annotation_hash{$row}{mz},
+                                $ppm,
                                 $name_delim,
                                 $annotation_hash{$row}{name},
                         }
