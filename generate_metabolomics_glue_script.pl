@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-02-22:  detect whether each input file is csv or tab-delimited
 # 2021-12-08:  fix broken spaces in filename support after lipidomics changes
 # 2021-11-30:  add support for lipidomics
 # 2021-08-19:  change default back to leaving heavy unscaled
@@ -281,46 +282,71 @@ if ($result_str =~ /LipidIon/ ||
     $lipidomics_flag = 1;
 }
 
-# lipidomics is already tab-delimited
-if ($lipidomics_flag)
-{
-    $cmd_str_strip_pos = sprintf "%s%s %s \"%s\" \"%s\" > \"%s\"",
-                             'strip_metabolomics_columns.pl',
-                             $strip_options_str,
-                             $pos_csv_filename,
-                             $pos_unidentified_output_name,
-                             $pos_spikeins_output_name,
-                             $pos_cleaned_filename;
 
-    $cmd_str_strip_neg = sprintf "%s%s %s \"%s\" \"%s\" > \"%s\"",
-                             'strip_metabolomics_columns.pl',
-                             $strip_options_str,
-                             $neg_csv_filename,
-                             $neg_unidentified_output_name,
-                             $neg_spikeins_output_name,
-                             $neg_cleaned_filename;
-}
-# MZMine and El-MAVEN files are csv
-else
-{
-    $cmd_str_strip_pos = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
-                             'csv2tab_not_excel.pl',
-                             $pos_csv_filename,
-                             'strip_metabolomics_columns.pl',
-                             $strip_options_str,
-                             $pos_unidentified_output_name,
-                             $pos_spikeins_output_name,
-                             $pos_cleaned_filename;
+# read in each file, determine whether it is comma or tab-delimited
+$count_comma_pos = 0;
+$count_comma_neg = 0;
+$count_tab_pos   = 0;
+$count_tab_neg   = 0;
 
-    $cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
-                             'csv2tab_not_excel.pl',
-                             $neg_csv_filename,
-                             'strip_metabolomics_columns.pl',
-                             $strip_options_str,
-                             $neg_unidentified_output_name,
-                             $neg_spikeins_output_name,
-                             $neg_cleaned_filename;
+open INFILE, "$pos_csv_filename" or die "can't open file $pos_csv_filename\n";
+while (defined($line=<INFILE>))
+{
+    $line_keep_comma = $line;
+    $line_keep_tab   = $line;
+    
+    $line_keep_comma =~ s/[^,]//g;
+    $line_keep_tab   =~ s/[^\t]//g;
+    
+    $count_comma_pos += length $line_keep_comma;
+    $count_tab_pos   += length $line_keep_tab;
 }
+close INFILE;
+
+open INFILE, "$neg_csv_filename" or die "can't open file $neg_csv_filename\n";
+while (defined($line=<INFILE>))
+{
+    $line_keep_comma = $line;
+    $line_keep_tab   = $line;
+    
+    $line_keep_comma =~ s/[^,]//g;
+    $line_keep_tab   =~ s/[^\t]//g;
+    
+    $count_comma_neg += length $line_keep_comma;
+    $count_tab_neg   += length $line_keep_tab;
+}
+close INFILE;
+
+
+$csv_command_pos = 'cat';
+$csv_command_neg = 'cat';
+if ($count_comma_pos > $count_tab_pos)
+{
+    $csv_command_pos = 'csv2tab_not_excel.pl';
+}
+if ($count_comma_pos > $count_tab_pos)
+{
+    $csv_command_neg = 'csv2tab_not_excel.pl';
+}
+
+
+$cmd_str_strip_pos = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
+                         $csv_command_pos,
+                         $pos_csv_filename,
+                         'strip_metabolomics_columns.pl',
+                         $strip_options_str,
+                         $pos_unidentified_output_name,
+                         $pos_spikeins_output_name,
+                         $pos_cleaned_filename;
+
+$cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
+                         $csv_command_neg,
+                         $neg_csv_filename,
+                         'strip_metabolomics_columns.pl',
+                         $strip_options_str,
+                         $neg_unidentified_output_name,
+                         $neg_spikeins_output_name,
+                         $neg_cleaned_filename;
 
 $norm_extra_options_str = '';
 if ($norm_none_flag)
