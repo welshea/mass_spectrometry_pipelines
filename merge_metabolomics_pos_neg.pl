@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-02-23:  handle merging sample-specific pos/neg metadata separately
+# 2022-02-22:  fill in missing pos/neg in sample names when 100% missing
 # 2021-10-19:  bugfix auto-shortened sample names
 # 2021-08-19:  better support for samples missing pos/neg in their names
 # 2021-08-11:  support auto-shortening when blank samples break naming convention
@@ -144,15 +146,17 @@ sub read_in_file
     my @array = ();
     my @header_col_array  = ();
     my %header_col_hash   = ();
-    my %sample_col_hash   = ();
+    my %cols_to_merge_hash   = ();
     my %metadata_col_hash = ();
-    my @sample_col_array  = ();
+    my @tomerge_col_array  = ();
     my @metadata_col_array = ();
-    my $sample_col;
+    my $tomerge_col;
     my $metadata_col;
-    my $sample;
+    my $tomerge;
     my $header;
     my $field;
+    my $count_non_pos = 0;
+    my $count_non_neg = 0;
 
     open INFILE, "$filename" or die "can't open $filename\n";
 
@@ -214,7 +218,14 @@ sub read_in_file
             $field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
             $field =~ /(pos|neg)$/i)
         {
-            $sample_col_hash{$col} = $field;
+            $cols_to_merge_hash{$col} = $field;
+
+            # keep track of which columns should be actual sample data
+            if ($field =~ /^IRON /i ||
+                $field =~ /([^A-Za-z0-9]*(Height|Area)[^A-Za-z0-9]*)/i)
+            {
+                $actual_sample_col_hash{$col} = 1;
+            }
         }
         else
         {
@@ -222,37 +233,61 @@ sub read_in_file
         }
     }
     
-    @sample_col_array   = sort {$a<=>$b} keys %sample_col_hash;
+    @tomerge_col_array   = sort {$a<=>$b} keys %cols_to_merge_hash;
     @metadata_col_array = sort {$a<=>$b} keys %metadata_col_hash;
 
     $all_pos_start_flag = 1;
     $all_neg_start_flag = 1;
-    foreach $sample_col (@sample_col_array)
+    foreach $tomerge_col (@tomerge_col_array)
     {
-        $sample = $header_col_array[$sample_col];
-        $sample =~ s/^IRON //;
+        $tomerge = $header_col_array[$tomerge_col];
+        $tomerge =~ s/^IRON //;
 
-        if ($pos_neg eq 'pos')
+        # ^pos _pos_ _pos$
+        #
+        if (!($tomerge =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i ||
+              $tomerge =~ s/pos$//i))
         {
-            # ^pos _pos_ _pos$
-            #
-            if (!($sample =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i ||
-                  $sample =~ s/pos$//i))
-            {
-                $all_pos_start_flag = 0;
-            }
-            $all_neg_start_flag = 0;
-        }
-        elsif ($pos_neg eq 'neg')
-        {
-            if (!($sample =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i ||
-                  $sample =~ s/neg$//i))
-            {
-                $all_neg_start_flag = 0;
-            }
             $all_pos_start_flag = 0;
+            $count_non_pos++;
+        }
+
+        if (!($tomerge =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i ||
+              $tomerge =~ s/neg$//i))
+        {
+            $all_neg_start_flag = 0;
+            $count_non_neg++;
         }
     }
+
+    
+    # uh oh, we are missing pos/neg in all samples
+    # assume that we gave the files in the correct order,
+    # prepend pos/neg to the ends
+    if ($all_pos_start_flag == 0 &&
+        $all_neg_start_flag == 0 &&
+        $count_non_pos == @tomerge_col_array &&
+        $count_non_neg == @tomerge_col_array)
+    {
+        printf STDERR "WARNING -- missing pos/neg from sample names, prepending %s\n",
+            $pos_neg;
+
+        foreach $tomerge_col (@tomerge_col_array)
+        {
+            $header_col_array[$tomerge_col] = sprintf "%s_%s",
+                $pos_neg, $header_col_array[$tomerge_col];
+        }
+        
+        if ($pos_neg eq 'pos')
+        {
+            $all_pos_start_flag = 1;
+        }
+        if ($pos_neg eq 'neg')
+        {
+            $all_neg_start_flag = 1;
+        }
+    }
+    
     
     $row = 0;
     while(defined($line=<INFILE>))
@@ -304,57 +339,66 @@ sub read_in_file
         $global_row_id_hash{$row_id} = 1;
         
         # store data
-        foreach $sample_col (@sample_col_array)
+        foreach $tomerge_col (@tomerge_col_array)
         {
-            $sample          = $header_col_array[$sample_col];
-            $sample          =~ s/^IRON //;
-            $sample_origname = $sample;
+            $tomerge          = $header_col_array[$tomerge_col];
+            $tomerge          =~ s/^((?:pos|neg)[^A-Za-z0-9]*)IRON /$1/;
+            $tomerge          =~ s/^IRON //;
+            $tomerge_origname = $tomerge;
             
             # strip pos/neg from sample name
             if ($all_pos_start_flag)
             {
-                $sample =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i;
-                $sample =~ s/pos$//i;
+                $tomerge =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i;
+                $tomerge =~ s/pos$//i;
 
                 # clean up underscores, etc.
-                $sample =~ s/[_ ]+/_/g;
-                $sample =~ s/\-+/\-/g;
-                $sample =~ s/^[_ -]//;
-                $sample =~ s/[_ -]$//;
+                $tomerge =~ s/[_ ]+/_/g;
+                $tomerge =~ s/\-+/\-/g;
+                $tomerge =~ s/^[_ -]//;
+                $tomerge =~ s/[_ -]$//;
+
             }
             elsif ($all_neg_start_flag)
             {
-                $sample =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i;
-                $sample =~ s/neg$//i;
+                $tomerge =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i;
+                $tomerge =~ s/neg$//i;
 
                 # clean up underscores, etc.
-                $sample =~ s/[_ ]+/_/g;
-                $sample =~ s/\-+/\-/g;
-                $sample =~ s/^[_ -]//;
-                $sample =~ s/[_ -]$//;
+                $tomerge =~ s/[_ ]+/_/g;
+                $tomerge =~ s/\-+/\-/g;
+                $tomerge =~ s/^[_ -]//;
+                $tomerge =~ s/[_ -]$//;
             }
 
             # strip .raw from end of sample name
-            $sample =~ s/\.raw(?=(\s|[_ ]|$))//;
+            $tomerge =~ s/\.raw(?=(\s|[_ ]|$))//;
             
             # restore spaces in Peak height/area after conforming
-            $sample =~ s/_Peak_(height|area)/ Peak $1/ig;
+            $tomerge =~ s/_Peak_(height|area)/ Peak $1/ig;
 
 
-            $sample_lc = lc $sample;
-            $sample_lc_to_origcase_hash{$sample_lc}{$sample} = 1;
+            $tomerge_lc = lc $tomerge;
+            $tomerge_lc_to_origcase_hash{$tomerge_lc}{$tomerge} = 1;
             
             if ($pos_neg eq 'pos')
             {
-                $sample_lc_to_origpos_hash{$sample_lc}{$sample_origname} = 1;
+                $tomerge_lc_to_origpos_hash{$tomerge_lc}{$tomerge_origname} = 1;
             }
             elsif ($pos_neg eq 'neg')
             {
-                $sample_lc_to_origneg_hash{$sample_lc}{$sample_origname} = 1;
+                $tomerge_lc_to_origneg_hash{$tomerge_lc}{$tomerge_origname} = 1;
             }
             
-            $global_data_hash{$row_id}{$sample_lc} = $array[$sample_col];
-            $global_sample_hash{$sample_lc} = 1;
+            $global_data_hash{$row_id}{$tomerge_lc} = $array[$tomerge_col];
+            $global_tomerge_hash{$tomerge_lc} = 1;
+            
+            # keep track of which headers are actual sample data, rather
+            # than sample-related metadata
+            if (defined($actual_sample_col_hash{$tomerge_col}))
+            {
+                $actual_sample_lc_hash{$tomerge_lc} = 1;
+            }
             
             foreach $metadata_col (@metadata_col_array)
             {
@@ -404,10 +448,10 @@ read_in_file($filename_neg, 'neg');
 # global header order
 $index = 0;
 @global_header_array = ();
-@global_sample_array   = sort keys %global_metadata_hash;
 #@global_metadata_array = sort keys %global_metadata_hash;
-@global_sample_array   = sort keys %global_sample_hash;
-@global_row_id_array   = sort keys %global_row_id_hash;
+@global_tomerge_array   = sort keys %global_tomerge_hash;
+@global_row_id_array    = sort keys %global_row_id_hash;
+@actual_sample_lc_array = sort keys %actual_sample_lc_hash;
 %seen_header_hash = ();
 
 # put row identifier first, regardless of its original order
@@ -457,76 +501,17 @@ foreach $header (@global_concat_header_array)
         $seen_header_hash{$header} = 1;
     }
 }
-# add in final flag columns, so we can use them to know the rest are samples
-foreach $header (@global_concat_header_array)
+
+# sample-related metadata, such as Rt[] columns
+foreach $header (@global_tomerge_array)
 {
-    if (!defined($seen_header_hash{$header}) &&
-        defined($global_metadata_hash{$header}))
+    # skip actual sample column, we'll handle those later
+    if (defined($actual_sample_lc_hash{$header}))
     {
-        if ($header =~ /^Number of non-zero peaks$/i  ||
-            $header =~ /^Percent pre-gap peaks$/i     ||
-            $header =~ /^Percent non-zero peaks$/i    ||
-            $header =~ /^Heavy-labeled flag$/i        ||
-            $header =~ /^Potential Spikein Flag$/i    ||
-            $header =~ /^Identified flag$/i           ||
-            $header =~ /^Non-heavy identified flag$/i ||
-            $header =~ /^Non-Spikein Identified Flag$/i)
-        {
-            $global_header_array[$index]       = $header;
-            $global_header_array_print[$index] = $header;
-            $index++;
-        
-            $seen_header_hash{$header} = 1;
-        }
+        next;
     }
-}
 
-
-# warn on unmatched pairs
-foreach $header (@global_sample_array)
-{
-    @temp_array = sort keys %{$sample_lc_to_origcase_hash{$header}};
-
-    @pos_sample_matches = sort keys %{$sample_lc_to_origpos_hash{$header}};
-    @neg_sample_matches = sort keys %{$sample_lc_to_origneg_hash{$header}};
-    $count_pos_matches  = @pos_sample_matches;
-    $count_neg_matches  = @neg_sample_matches;
-    
-    if ($count_pos_matches > 1)
-    {
-        $dupe_str = join "\t", @pos_sample_matches;
-
-        printf STDERR "WARNING -- duplicate samples:\t%s\n", $dupe_str;
-    }
-    if ($count_neg_matches > 1)
-    {
-        $dupe_str = join "\t", @neg_sample_matches;
-
-        printf STDERR "WARNING -- duplicate samples:\t%s\n", $dupe_str;
-    }
-    
-    foreach $pos_sample (@pos_sample_matches)
-    {
-        if ($count_neg_matches == 0)
-        {
-            printf STDERR "WARNING -- unmatched pos/neg sample:\t%s\n",
-                $pos_sample;
-        }
-    }
-    foreach $neg_sample (@neg_sample_matches)
-    {
-        if ($count_pos_matches == 0)
-        {
-            printf STDERR "WARNING -- unmatched pos/neg sample:\t%s\n",
-                $neg_sample;
-        }
-    }
-}
-
-
-foreach $header (@global_sample_array)
-{
-    @temp_array = sort keys %{$sample_lc_to_origcase_hash{$header}};
+    @temp_array = sort keys %{$tomerge_lc_to_origcase_hash{$header}};
     
     $header_chosen = $temp_array[0];
     
@@ -561,31 +546,136 @@ foreach $header (@global_sample_array)
 }
 
 
+# add in final flag columns, so we can use them to know the rest are samples
+foreach $header (@global_concat_header_array)
+{
+    if (!defined($seen_header_hash{$header}) &&
+        defined($global_metadata_hash{$header}))
+    {
+        if ($header =~ /^Number of non-zero peaks$/i  ||
+            $header =~ /^Percent pre-gap peaks$/i     ||
+            $header =~ /^Percent non-zero peaks$/i    ||
+            $header =~ /^Heavy-labeled flag$/i        ||
+            $header =~ /^Potential Spikein Flag$/i    ||
+            $header =~ /^Identified flag$/i           ||
+            $header =~ /^Non-heavy identified flag$/i ||
+            $header =~ /^Non-Spikein Identified Flag$/i)
+        {
+            $global_header_array[$index]       = $header;
+            $global_header_array_print[$index] = $header;
+            $index++;
+        
+            $seen_header_hash{$header} = 1;
+        }
+    }
+}
+
+
+# all the actual sample data
+foreach $header (@actual_sample_lc_array)
+{
+    @temp_array = sort keys %{$tomerge_lc_to_origcase_hash{$header}};
+    
+    $header_chosen = $temp_array[0];
+    
+    # \p{Uppercase} matching a single Unicode uppercase character
+    # [A-Z] won't include unicode uppercase, so we have to get fancier
+    $count_uc_best = () = $header_chosen =~ m/\p{Lu}/g;
+
+    # pick conflicting header case by choosing one with more uppercase
+    if (@temp_array > 1)
+    {
+        foreach $header_case (@temp_array)
+        {
+            $count_uc = () = $header_case =~ m/\p{Uppercase}/g;
+
+#            printf STDERR "Conflicting case:\t%s\t%d\t%d\n",
+#                $header_case, $count_uc_best, $count_uc;
+
+            if ($count_uc > $count_uc_best)
+            {
+                $header_chosen = $header_case;
+                $count_uc_best = $count_uc;
+            }
+        }
+    }
+
+    $global_header_array[$index]       = $header;
+    $global_header_array_print[$index] = $header_chosen;
+    $chosen_header_case_hash{$header}  = $header_chosen;
+    $index++;
+
+    $seen_header_hash{$header} = 1;
+}
+
+
+# warn on unmatched pairs
+foreach $header (@global_tomerge_array)
+{
+    @temp_array = sort keys %{$tomerge_lc_to_origcase_hash{$header}};
+
+    @pos_tomerge_matches = sort keys %{$tomerge_lc_to_origpos_hash{$header}};
+    @neg_tomerge_matches = sort keys %{$tomerge_lc_to_origneg_hash{$header}};
+    $count_pos_matches  = @pos_tomerge_matches;
+    $count_neg_matches  = @neg_tomerge_matches;
+    
+    if ($count_pos_matches > 1)
+    {
+        $dupe_str = join "\t", @pos_tomerge_matches;
+
+        printf STDERR "WARNING -- duplicate tomerges:\t%s\n", $dupe_str;
+    }
+    if ($count_neg_matches > 1)
+    {
+        $dupe_str = join "\t", @neg_tomerge_matches;
+
+        printf STDERR "WARNING -- duplicate tomerges:\t%s\n", $dupe_str;
+    }
+    
+    foreach $pos_tomerge (@pos_tomerge_matches)
+    {
+        if ($count_neg_matches == 0)
+        {
+            printf STDERR "WARNING -- unmatched pos/neg tomerge:\t%s\n",
+                $pos_tomerge;
+        }
+    }
+    foreach $neg_tomerge (@neg_tomerge_matches)
+    {
+        if ($count_pos_matches == 0)
+        {
+            printf STDERR "WARNING -- unmatched pos/neg tomerge:\t%s\n",
+                $neg_tomerge;
+        }
+    }
+}
+
+
 
 # guess at common prefix and/or suffix
 %common_prefix_hash = ();
 %common_suffix_hash = ();
-for ($i = 0; $i < @global_sample_array; $i++)
+for ($i = 0; $i < @actual_sample_lc_array; $i++)
 {
-    $sample_1     = $global_sample_array[$i];
-    $sample_1_rev = reverse $sample_1;
+    $tomerge_1     = $actual_sample_lc_array[$i];
+    $tomerge_1_rev = reverse $tomerge_1;
 
-    for ($j = $i+1; $j < @global_sample_array; $j++)
+    for ($j = $i+1; $j < @actual_sample_lc_array; $j++)
     {
-        $sample_2     = $global_sample_array[$j];
-        $sample_2_rev = reverse $sample_2;
+        $tomerge_2     = $actual_sample_lc_array[$j];
+        $tomerge_2_rev = reverse $tomerge_2;
         
         # find common prefix, Perl "dark magic"
-        $xor = "$sample_1" ^ "$sample_2";
+        $xor = "$tomerge_1" ^ "$tomerge_2";
         $xor =~ /^\0*/;
         $len = $+[0];
-        $common_prefix = substr $sample_1, 0, $len;
+        $common_prefix = substr $tomerge_1, 0, $len;
 
         # find common suffix, Perl "dark magic"
-        $xor = "$sample_1_rev" ^ "$sample_2_rev";
+        $xor = "$tomerge_1_rev" ^ "$tomerge_2_rev";
         $xor =~ /^\0*/;
         $len = $+[0];
-        $common_suffix = substr $sample_1_rev, 0, $len;
+        $common_suffix = substr $tomerge_1_rev, 0, $len;
         $common_suffix = reverse $common_suffix;
         
         # strip them to begin/end with a non- alphanumeric character
@@ -615,15 +705,15 @@ for ($i = 0; $i < @global_sample_array; $i++)
 
 @common_prefix_array = sort keys %common_prefix_hash;
 @common_suffix_array = sort keys %common_suffix_hash;
-$count_sample_total  = @global_sample_array;
+$count_tomerge_total  = @actual_sample_lc_array;
 $common_prefix_all   = '';
 $common_suffix_all   = '';
 
 $count_blank = 0;
-foreach $sample (@global_sample_array)
+foreach $tomerge (@actual_sample_lc_array)
 {
-    if ($sample =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
-        $sample =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
+    if ($tomerge =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
+        $tomerge =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
     {
         $count_blank++;
     }
@@ -633,15 +723,15 @@ foreach $common_prefix (@common_prefix_array)
 {
     $count = 0;
 
-    foreach $sample (@global_sample_array)
+    foreach $tomerge (@actual_sample_lc_array)
     {
-        if ($sample =~ /^$common_prefix/)
+        if ($tomerge =~ /^\Q$common_prefix\E/)
         {
             $count++;
         }
     }
     
-    if ($count >= $count_sample_total - $count_blank)
+    if ($count >= $count_tomerge_total - $count_blank)
     {
         $common_prefix_all = $common_prefix;
         last;
@@ -652,15 +742,15 @@ foreach $common_suffix (@common_suffix_array)
 {
     $count = 0;
 
-    foreach $sample (@global_sample_array)
+    foreach $tomerge (@actual_sample_lc_array)
     {
-        if ($sample =~ /$common_suffix$/)
+        if ($tomerge =~ /\Q$common_suffix\E$/)
         {
             $count++;
         }
     }
     
-    if ($count >= $count_sample_total - $count_blank)
+    if ($count >= $count_tomerge_total - $count_blank)
     {
         $common_suffix_all = $common_suffix;
         last;
@@ -688,34 +778,34 @@ printf OUTFILE "\t%s", 'SampleNEG';
 printf OUTFILE "\t%s", 'SampleAutoShortened';
 printf OUTFILE "\n";
 
-foreach $header (@global_sample_array)
+foreach $header (@actual_sample_lc_array)
 {
-    @temp_array = sort keys %{$sample_lc_to_origcase_hash{$header}};
+    @temp_array = sort keys %{$tomerge_lc_to_origcase_hash{$header}};
 
-    @pos_sample_matches = sort keys %{$sample_lc_to_origpos_hash{$header}};
-    @neg_sample_matches = sort keys %{$sample_lc_to_origneg_hash{$header}};
-    $count_pos_matches  = @pos_sample_matches;
-    $count_neg_matches  = @neg_sample_matches;
+    @pos_tomerge_matches = sort keys %{$tomerge_lc_to_origpos_hash{$header}};
+    @neg_tomerge_matches = sort keys %{$tomerge_lc_to_origneg_hash{$header}};
+    $count_pos_matches  = @pos_tomerge_matches;
+    $count_neg_matches  = @neg_tomerge_matches;
 
-    $sample_case = $chosen_header_case_hash{$header};
-    $pos_sample  = '';
-    $neg_sample  = '';
+    $tomerge_case = $chosen_header_case_hash{$header};
+    $pos_tomerge  = '';
+    $neg_tomerge  = '';
 
-    $sample_short = $sample_case;
-    $sample_short =~ s/^$common_prefix_all//i;
-    $sample_short =~ s/$common_suffix_all$//i;
+    $tomerge_short = $tomerge_case;
+    $tomerge_short =~ s/^$common_prefix_all//i;
+    $tomerge_short =~ s/$common_suffix_all$//i;
     
     if ($count_pos_matches)
     {
-        $pos_sample = $pos_sample_matches[0];
+        $pos_tomerge = $pos_tomerge_matches[0];
     }
     if ($count_neg_matches)
     {
-        $neg_sample = $neg_sample_matches[0];
+        $neg_tomerge = $neg_tomerge_matches[0];
     }
     
     printf OUTFILE "%s\t%s\t%s\t%s\n",
-        $sample_case, $pos_sample, $neg_sample, $sample_short;
+        $tomerge_case, $pos_tomerge, $neg_tomerge, $tomerge_short;
 }
 close OUTFILE;
 
