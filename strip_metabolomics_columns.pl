@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2021-02-23:  use #[old_name]:new_name.raw headers to rename samples
+# 2022-02-23:  extend sample renaming to non- height/area columns
+# 2022-02-23:  use #[old_name]:new_name.raw headers to rename samples
 # 2021-11-30:  better lipidomics support
 # 2021-11-30:  clean up lipidomics header code
 # 2021-11-29:  support Area[sample name] Height[sample name] format
@@ -338,6 +339,17 @@ for ($col = 0; $col < @header_col_array; $col++)
     }
     $field =~ s/[ ._]+$//;
 
+
+    # rename samples from comment lines in lipidomics data
+    if ($field =~ /\[([^]]+)\]/)
+    {
+        $new_name = $sample_rename_hash{$1};
+        if (defined($new_name))
+        {
+            $field =~ s/\[[^]]+\]/\[$new_name\]/g;
+        }
+    }
+
     $header_col_array[$col] = $field;
 }
 $num_header_cols = @header_col_array;
@@ -363,15 +375,31 @@ for ($col = 0; $col < @header_col_array; $col++)
     }
     
     # lipidomics
-    if ($field =~ /^Area,/i)
+    if ($field =~ /^Area[,[]/i)
     {
          $peak_area_flag = 1;
          next;
     }
-    if ($field =~ /^Height,/i)
+    if ($field =~ /^Height[,[]/i)
     {
          $peak_height_flag = 1;
          next;
+    }
+}
+
+
+# conform the Height[] and Area[] columns so the rest of the pipeline is happy
+for ($col = 0; $col < @header_col_array; $col++)
+{
+    $field = $header_col_array[$col];
+    
+    if ($field =~ /^Height\[([^]]+)\]$/)
+    {
+        $header_col_array[$col] = $1 . ' Peak height';
+    }
+    if ($field =~ /^Area\[([^]]+)\]$/)
+    {
+        $header_col_array[$col] = $1 . ' Peak area';
     }
 }
 
@@ -389,7 +417,7 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
         if ($field =~ /([^A-Za-z0-9]*Height[^A-Za-z0-9]*)/i)
         {
             $height_area_str = $1;
-        
+
             # conform the sample header
             # string may contain () or [], so escape it with \Q \E
             $field =~ s/\Q$height_area_str\E/_/;
@@ -574,11 +602,11 @@ for ($col = 0; $col < @header_col_array; $col++)
         $field =~ / Peak \S+$/ ||
         $field =~ /row identity/ ||
         $field =~ /row comment/ ||
-        $field =~ /^Area,/i)
+        $field =~ /^Area[,[]/i)
     {
         # always keep peak height
         if ($field =~ / Peak height$/i ||
-            $field =~ /^Height,/i)
+            $field =~ /^Height[,[]/i)
         {
             next;
         }
@@ -586,7 +614,7 @@ for ($col = 0; $col < @header_col_array; $col++)
         # only keep peak area if no peak height
         if ($peak_height_flag == 0 &&
             ($field =~ / Peak area$/i ||
-             $field =~ /^Area,/i))
+             $field =~ /^Area[,[]/i))
         {
             next;
         }
@@ -621,8 +649,8 @@ for ($col = 0; $col < @header_col_array; $col++)
 
     if ($field =~ / Peak height$/i ||
         $field =~ / Peak area$/i ||
-        $field =~ /^Area,/i ||
-        $field =~ /^Height,/i)
+        $field =~ /^Area[,[]/i ||
+        $field =~ /^Height[,[]/i)
     {
         if (!defined($col_to_remove_hash{$col}))
         {
