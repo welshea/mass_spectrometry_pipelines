@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-02-23:  use #[old_name]:new_name.raw headers to rename samples
 # 2021-11-30:  better lipidomics support
 # 2021-11-30:  clean up lipidomics header code
 # 2021-11-29:  support Area[sample name] Height[sample name] format
@@ -270,8 +271,16 @@ open INFILE, "$filename" or die "can't open $filename\n";
 while($line=<INFILE>)
 {
     # skip comment lines
+    # comment may contain sample renaming information, so check for it
     if ($line =~ /^#/)
     {
+        if ($line =~ /^#\[([^\]]+)\]:(.*?)\.raw\s*$/)
+        {
+            $sample_rename_hash{$1} = $2;
+            printf STDERR "Renaming:\t%s\t%s\n",
+                $1, $2;
+        }
+    
         next;
     }
 
@@ -427,6 +436,13 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
                 $field =~ s/\)$//;
             }
             
+            # rename samples from comment lines
+            $new_name = $sample_rename_hash{$field};
+            if (defined($new_name))
+            {
+                $field = $new_name;
+            }
+            
             $field .= ' Peak height';
 
             $header_col_array[$col] = $field;
@@ -480,6 +496,13 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
             if ($field =~ /\)$/ && !($field =~ /\(/))
             {
                 $field =~ s/\)$//;
+            }
+
+            # rename samples from comment lines
+            $new_name = $sample_rename_hash{$field};
+            if (defined($new_name))
+            {
+                $field = $new_name;
             }
 
             $field .= ' Peak area';
