@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2022-03-03:  if log input data, globally shift pos/neg to have equal means;
+#              we may need this for main ion filtering of lipidomics data;
+#              DISABLE FOR NOW
 # 2022-02-23:  handle merging sample-specific pos/neg metadata separately
 # 2022-02-22:  fill in missing pos/neg in sample names when 100% missing
 # 2021-10-19:  bugfix auto-shortened sample names
@@ -398,6 +401,26 @@ sub read_in_file
             if (defined($actual_sample_col_hash{$tomerge_col}))
             {
                 $actual_sample_lc_hash{$tomerge_lc} = 1;
+                
+                # update info for pos/neg averages
+                $value = $array[$tomerge_col];
+                if (defined($value) && is_number($value) &&
+                    $value > 0)
+                {
+                    if (!defined($pos_neg_stats_hash{$pos_neg}))
+                    {
+                        $pos_neg_stats_hash{$pos_neg}{sum}   = 0;
+                        $pos_neg_stats_hash{$pos_neg}{count} = 0;
+                    }
+                
+                    $pos_neg_stats_hash{$pos_neg}{sum}   += $value;
+                    $pos_neg_stats_hash{$pos_neg}{count} += 1;
+                    
+                    if ($value > 100)
+                    {
+                        $all_logged_flag = 0;
+                    }
+                }
             }
             
             foreach $metadata_col (@metadata_col_array)
@@ -407,6 +430,8 @@ sub read_in_file
                 $global_data_hash{$row_id}{$header} = $array[$metadata_col];
                 $global_metadata_hash{$header} = 1;
             }
+            
+            $row_id_pos_neg_hash{$row_id} = $pos_neg;
         }
         
         $row++;
@@ -441,8 +466,38 @@ if (!($filename_pos =~ /pos/i) ||
 $global_concat_header_count = 0;
 $global_row_id_str = '';
 
+$all_logged_flag = 1;
 read_in_file($filename_pos, 'pos');
 read_in_file($filename_neg, 'neg');
+
+
+# pos/neg stats
+$pos_avg = 0;
+$neg_avg = 0;
+if (defined($pos_neg_stats_hash{pos}))
+{
+    $pos_avg = $pos_neg_stats_hash{pos}{sum} /
+               $pos_neg_stats_hash{pos}{count};
+}
+if (defined($pos_neg_stats_hash{neg}))
+{
+    $neg_avg = $pos_neg_stats_hash{neg}{sum} /
+               $pos_neg_stats_hash{neg}{count};
+}
+
+$pos_neg_avg_avg = 0.5 * ($pos_avg + $neg_avg);
+$pos_shift       = $pos_neg_avg_avg - $pos_avg;
+$neg_shift       = $pos_neg_avg_avg - $neg_avg;
+
+# only shift pos/neg to be equal means if data is logged and both present
+$shift_flag = 0;
+if ($all_logged_flag && $pos_avg && $neg_avg)
+{
+    $shift_flag = 1;
+    
+    printf STDERR "Shifting pos/neg mean log2 values to be equal:\t%f\t%f\n",
+        $pos_shift, $neg_shift;
+}
 
 
 # global header order
@@ -857,8 +912,26 @@ foreach $row_id (@global_row_id_array)
             $value = '';
         }
         
-#        $value = reformat_sci($value);
+        #$value = reformat_sci($value);
         
+
+        # shift pos/neg sample data
+        $pos_neg = $row_id_pos_neg_hash{$row_id};
+        if (0 && $shift_flag &&
+            is_number($value) &&
+            defined($actual_sample_col_hash{$col}))
+        {
+            if ($pos_neg eq 'pos')
+            {
+                $value += $pos_shift;
+            }
+            elsif ($pos_neg eq 'neg')
+            {
+                $value += $neg_shift;
+            }
+        }
+
+
         if ($col)
         {
             print "\t";
