@@ -1,8 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2022-03-03:  if log input data, globally shift pos/neg to have equal means;
-#              we may need this for main ion filtering of lipidomics data;
-#              DISABLE FOR NOW
+# 2022-03-04:  globally shift all pos/neg so that pos/neg have equal means;
+#              we may want this for main ion filtering of lipidomics data
 # 2022-02-23:  handle merging sample-specific pos/neg metadata separately
 # 2022-02-22:  fill in missing pos/neg in sample names when 100% missing
 # 2021-10-19:  bugfix auto-shortened sample names
@@ -36,6 +35,7 @@
 
 
 use Scalar::Util qw(looks_like_number);
+use File::Basename;
 use POSIX;
 
 sub is_number
@@ -151,6 +151,7 @@ sub read_in_file
     my %header_col_hash   = ();
     my %cols_to_merge_hash   = ();
     my %metadata_col_hash = ();
+    my %actual_sample_col_hash = ();
     my @tomerge_col_array  = ();
     my @metadata_col_array = ();
     my $tomerge_col;
@@ -402,24 +403,13 @@ sub read_in_file
             {
                 $actual_sample_lc_hash{$tomerge_lc} = 1;
                 
-                # update info for pos/neg averages
+                # check to see if all data is logged or not
+                # any value > 100 is unlikely to have been logged
                 $value = $array[$tomerge_col];
                 if (defined($value) && is_number($value) &&
-                    $value > 0)
+                    $value > 100)
                 {
-                    if (!defined($pos_neg_stats_hash{$pos_neg}))
-                    {
-                        $pos_neg_stats_hash{$pos_neg}{sum}   = 0;
-                        $pos_neg_stats_hash{$pos_neg}{count} = 0;
-                    }
-                
-                    $pos_neg_stats_hash{$pos_neg}{sum}   += $value;
-                    $pos_neg_stats_hash{$pos_neg}{count} += 1;
-                    
-                    if ($value > 100)
-                    {
-                        $all_logged_flag = 0;
-                    }
+                    $all_logged_flag = 0;
                 }
             }
             
@@ -442,9 +432,67 @@ sub read_in_file
 
 # begin main()
 
-$filename_pos   = shift;
-$filename_neg   = shift;
-$outname_user   = shift;    # optional, user-provided sample table filename
+$log_of_two       = log(2.0);
+$filename_pos     = '';
+$filename_neg     = '';
+$outname_user     = '';    # optional, user-provided sample table filename
+$equal_means_flag = 1;     # shift pos/neg log2 means to be equal
+
+$syntax_error_flag = 0;
+$num_files         = 0;
+for ($i = 0; $i < @ARGV; $i++)
+{
+    $field = $ARGV[$i];
+
+    if ($field =~ /^--/)
+    {
+        if ($field =~ /^--equal-means/)
+        {
+            $equal_means_flag = 1;
+        }
+        elsif ($field =~ /^--no-equal-means/)
+        {
+            $equal_means_flag = 0;
+        }
+        else
+        {
+            printf "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
+    }
+    else
+    {
+        if ($num_files == 0)
+        {
+            $filename_pos = $field;
+            $num_files++;
+        }
+        elsif ($num_files == 1)
+        {
+            $filename_neg = $field;
+            $num_files++;
+        }
+        elsif ($num_files == 2)
+        {
+            $outname_user = $field;
+            $num_files++;
+        }
+    }
+}
+
+if ($syntax_error_flag || $num_files == 0)
+{
+    $program_name = basename($0);
+
+    printf STDERR "Usage: $program_name [options] pos_data.txt neg_data.txt [output_name.txt]\n";
+    printf STDERR "\n";
+    printf STDERR "  Options:\n";
+    printf STDERR "    --equal-means     scale pos/neg means to be equal (default)\n";
+    printf STDERR "    --no-equal-means  disable pos/neg mean scaling\n";
+
+    exit(1);
+}
+
 
 if ($filename_pos =~ /neg/i &&
     !($filename_pos =~ /pos/i))
@@ -471,43 +519,17 @@ read_in_file($filename_pos, 'pos');
 read_in_file($filename_neg, 'neg');
 
 
-# pos/neg stats
-$pos_avg = 0;
-$neg_avg = 0;
-if (defined($pos_neg_stats_hash{pos}))
-{
-    $pos_avg = $pos_neg_stats_hash{pos}{sum} /
-               $pos_neg_stats_hash{pos}{count};
-}
-if (defined($pos_neg_stats_hash{neg}))
-{
-    $neg_avg = $pos_neg_stats_hash{neg}{sum} /
-               $pos_neg_stats_hash{neg}{count};
-}
-
-$pos_neg_avg_avg = 0.5 * ($pos_avg + $neg_avg);
-$pos_shift       = $pos_neg_avg_avg - $pos_avg;
-$neg_shift       = $pos_neg_avg_avg - $neg_avg;
-
-# only shift pos/neg to be equal means if data is logged and both present
-$shift_flag = 0;
-if ($all_logged_flag && $pos_avg && $neg_avg)
-{
-    $shift_flag = 1;
-    
-    printf STDERR "Shifting pos/neg mean log2 values to be equal:\t%f\t%f\n",
-        $pos_shift, $neg_shift;
-}
+@global_header_array     = ();
+#@global_metadata_array  = sort keys %global_metadata_hash;
+@global_tomerge_array    = sort keys %global_tomerge_hash;
+@global_row_id_array     = sort keys %global_row_id_hash;
+@actual_sample_lc_array  = sort keys %actual_sample_lc_hash;
 
 
 # global header order
 $index = 0;
-@global_header_array = ();
-#@global_metadata_array = sort keys %global_metadata_hash;
-@global_tomerge_array   = sort keys %global_tomerge_hash;
-@global_row_id_array    = sort keys %global_row_id_hash;
-@actual_sample_lc_array = sort keys %actual_sample_lc_hash;
 %seen_header_hash = ();
+
 
 # put row identifier first, regardless of its original order
 foreach $header (@global_concat_header_array)
@@ -664,6 +686,78 @@ foreach $header (@actual_sample_lc_array)
 }
 
 
+# only shift pos/neg to be equal means if data is logged and both present
+if ($equal_means_flag)
+{
+    foreach $row_id (@global_row_id_array)
+    {
+        $pos_neg = $row_id_pos_neg_hash{$row_id};
+    
+        for ($col = 0; $col < @global_header_array; $col++)
+        {
+            $header = $global_header_array[$col];
+            $value  = $global_data_hash{$row_id}{$header};
+
+            # sum the pos/neg log2 values over all data rows
+            if (defined($actual_sample_lc_hash{$header}) &&
+                defined($value) && is_number($value) && $value > 0)
+            {
+                if (!defined($pos_neg_stats_hash{$pos_neg}))
+                {
+                    $pos_neg_stats_hash{$pos_neg}{sum}   = 0;
+                    $pos_neg_stats_hash{$pos_neg}{count} = 0;
+                }
+
+                # data already logged
+                if ($all_logged_flag)
+                {
+                    $pos_neg_stats_hash{$pos_neg}{sum} += $value;
+                }
+                # log2 transform prior to summing
+                else
+                {
+                    $pos_neg_stats_hash{$pos_neg}{sum} += log($value) /
+                                                          $log_of_two;
+                }
+
+                $pos_neg_stats_hash{$pos_neg}{count} += 1;
+            }
+        }
+    }
+
+    # pos/neg stats
+    $pos_avg = 0;
+    $neg_avg = 0;
+    if (defined($pos_neg_stats_hash{pos}))
+    {
+        $pos_avg = $pos_neg_stats_hash{pos}{sum} /
+                   $pos_neg_stats_hash{pos}{count};
+    }
+    if (defined($pos_neg_stats_hash{neg}))
+    {
+        $neg_avg = $pos_neg_stats_hash{neg}{sum} /
+                   $pos_neg_stats_hash{neg}{count};
+    }
+
+    $pos_neg_avg_avg = 0.5 * ($pos_avg + $neg_avg);
+    $pos_shift       = $pos_neg_avg_avg - $pos_avg;
+    $neg_shift       = $pos_neg_avg_avg - $neg_avg;
+    $pos_scale       = 2 ** $pos_shift;
+    $neg_scale       = 2 ** $neg_shift;
+
+    if ($all_logged_flag)
+    {
+        printf STDERR "Shifting log pos/neg mean values to be equal:\t%f\t%f\n",
+            $pos_shift, $neg_shift;
+    }
+    else
+    {
+        printf STDERR "Scaling pos/neg geometric mean values to be equal:\t%f\t%f\n",
+            $pos_shift, $neg_shift;
+    }
+}
+
+
 # warn on unmatched pairs
 foreach $header (@global_tomerge_array)
 {
@@ -760,7 +854,7 @@ for ($i = 0; $i < @actual_sample_lc_array; $i++)
 
 @common_prefix_array = sort keys %common_prefix_hash;
 @common_suffix_array = sort keys %common_suffix_hash;
-$count_tomerge_total  = @actual_sample_lc_array;
+$count_tomerge_total = @actual_sample_lc_array;
 $common_prefix_all   = '';
 $common_suffix_all   = '';
 
@@ -816,7 +910,7 @@ foreach $common_suffix (@common_suffix_array)
 # output sample mapping table
 # take first of duplicate samples (should never occur)
 #
-if (defined($outname_user))
+if (defined($outname_user) && $outname_user =~ /\S/)
 {
     $outfile_name = $outname_user;
 }
@@ -832,6 +926,7 @@ printf OUTFILE "\t%s", 'SamplePOS';
 printf OUTFILE "\t%s", 'SampleNEG';
 printf OUTFILE "\t%s", 'SampleAutoShortened';
 printf OUTFILE "\n";
+
 
 foreach $header (@actual_sample_lc_array)
 {
@@ -904,8 +999,7 @@ foreach $row_id (@global_row_id_array)
     for ($col = 0; $col < @global_header_array; $col++)
     {
         $header = $global_header_array[$col];
-        
-        $value = $global_data_hash{$row_id}{$header};
+        $value  = $global_data_hash{$row_id}{$header};
         
         if (!defined($value))
         {
@@ -913,21 +1007,38 @@ foreach $row_id (@global_row_id_array)
         }
         
         #$value = reformat_sci($value);
-        
 
         # shift pos/neg sample data
         $pos_neg = $row_id_pos_neg_hash{$row_id};
-        if (0 && $shift_flag &&
-            is_number($value) &&
-            defined($actual_sample_col_hash{$col}))
+        if ($equal_means_flag &&
+            defined($actual_sample_lc_hash{$header}) &&
+            is_number($value))
         {
-            if ($pos_neg eq 'pos')
+            # data is logged, shift the values
+            if ($all_logged_flag)
             {
-                $value += $pos_shift;
+                if ($pos_neg eq 'pos')
+                {
+                    $value += $pos_shift;
+                }
+                elsif ($pos_neg eq 'neg')
+                {
+                    $value += $neg_shift;
+                }
             }
-            elsif ($pos_neg eq 'neg')
+            # data is unlogged, scale the values
+            #
+            # WARNING: negative values will likely behave strangely
+            else
             {
-                $value += $neg_shift;
+                if ($pos_neg eq 'pos')
+                {
+                    $value *= $pos_scale;
+                }
+                elsif ($pos_neg eq 'neg')
+                {
+                    $value *= $neg_scale;
+                }
             }
         }
 
