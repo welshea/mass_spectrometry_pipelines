@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-03-09:  change debug filter mean message to print pos/neg fractional rows
 # 2022-03-09:  use "Non-heavy identified flag" column to ignore points
 #              during pos/neg scaling training
 # 2022-03-04:  globally shift all pos/neg so that pos/neg have equal means;
@@ -527,6 +528,7 @@ read_in_file($filename_neg, 'neg');
 @global_tomerge_array    = sort keys %global_tomerge_hash;
 @global_row_id_array     = sort keys %global_row_id_hash;
 @actual_sample_lc_array  = sort keys %actual_sample_lc_hash;
+$num_actual_samples      = @actual_sample_lc_array;
 
 
 # global header order
@@ -768,8 +770,9 @@ if ($equal_means_flag)
 
     if (defined($nhid_flag_col))
     {
-        printf STDERR "Using 'Non-heavy identified flag' to filter mean calculations:  %d  %d\n",
-            $pos_neg_stats_hash{pos}{count}, $pos_neg_stats_hash{neg}{count};
+        printf STDERR "Using 'Non-heavy identified flag' to filter mean calculations:  %f  %f\n",
+            $pos_neg_stats_hash{pos}{count} / $num_actual_samples,
+            $pos_neg_stats_hash{neg}{count} / $num_actual_samples;
     }
 
     if ($all_logged_flag)
