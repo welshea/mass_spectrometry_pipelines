@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2021-03-09:  disable external identifier annotation for lipidomics
 # 2021-02-22:  detect whether each input file is csv or tab-delimited
 # 2021-12-08:  fix broken spaces in filename support after lipidomics changes
 # 2021-11-30:  add support for lipidomics
@@ -274,7 +275,10 @@ else
 
 # detect lipidomics data
 $lipidomics_flag = 0;
-$cmd_str = "head -1 \"$pos_csv_filename\"";
+
+# lipidomics data can have comments and blank lines at the top
+# attempt to remove them before retrieving the first line as header line
+$cmd_str = "grep -v \'^#\' \"$pos_csv_filename\" | grep \'[^ \\t]\' - | head -1 -";
 $result_str = `$cmd_str`;
 if ($result_str =~ /LipidIon/ ||
     $result_str =~ /FattyAcid/)
@@ -399,16 +403,24 @@ if ($mz_tol_ppm ne '')
     $annotate_options_str = '--ppm ' . $mz_tol_ppm;
 }
 
-$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s | %s %s \"%s/%s\" - > \"%s\"",
+$annotate_pipe_str = '';
+if ($lipidomics_flag == 0)
+{
+    $annotate_pipe_str = sprintf " | %s %s \"%s/%s\" - ",
+                             'annotate_metabolomics.pl',
+                             $annotate_options_str,
+                             $script_path,
+                             'metabolite_database_latest.txt';
+}
+
+$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s %s > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
                          $pos_iron_filename,
                          $neg_iron_filename,
                          $sample_table_filename,
-                         'annotate_metabolomics.pl',
-                         $annotate_options_str,
-                         $script_path,
-                         'metabolite_database_latest.txt',
+                         $annotate_pipe_str,
                          $merged_filename;
+$cmd_str_merge     =~ s/ +/ /g;
 
 $cmd_str_qc        = sprintf "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" > \"%s\"",
                          'metabolomics_qc.pl',
