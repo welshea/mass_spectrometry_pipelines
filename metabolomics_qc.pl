@@ -1,5 +1,9 @@
 #!/usr/bin/perl -w
 
+
+# 2022-03-09:  re-score after initial scoring to update median sample
+# 2021-08-19:  initial release
+
 use Scalar::Util qw(looks_like_number);
 use POSIX;
 use File::Basename;
@@ -810,4 +814,5 @@ read_in_scaling_factors_file($filename_sf_neg, 'neg');
 read_in_findmedian_file($filename_fm_pos, 'pos');
 read_in_findmedian_file($filename_fm_neg, 'neg');
 score_qc();
+score_qc();    # score again with updated median sample
 print_qc();
