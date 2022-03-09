@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-03-09:  use "Non-heavy identified flag" column to ignore points
+#              during pos/neg scaling training
 # 2022-03-04:  globally shift all pos/neg so that pos/neg have equal means;
 #              we may want this for main ion filtering of lipidomics data
 # 2022-02-23:  handle merging sample-specific pos/neg metadata separately
@@ -197,7 +199,8 @@ sub read_in_file
         $header_col_hash{'Index'} = 0;
     }
     
-    $row_id_col = $header_col_hash{'row ID'};
+    $row_id_col    = $header_col_hash{'row ID'};
+    $nhid_flag_col = $header_col_hash{'Non-heavy identified flag'};
     
     if (!defined($row_id_col))
     {
@@ -691,6 +694,24 @@ if ($equal_means_flag)
 {
     foreach $row_id (@global_row_id_array)
     {
+        # use Non-heavy identified flag to exclude rows from training
+        if (defined($nhid_flag_col))
+        {
+            $nhid_flag    =
+                $global_data_hash{$row_id}{'Non-heavy identified flag'};
+
+            $use_row_flag = 0;
+            if (is_number($nhid_flag) && $nhid_flag >= 1)
+            {
+                $use_row_flag = 1;
+            }
+
+            if ($use_row_flag == 0)
+            {
+                next;
+            }
+        }
+    
         $pos_neg = $row_id_pos_neg_hash{$row_id};
     
         for ($col = 0; $col < @global_header_array; $col++)
@@ -744,6 +765,12 @@ if ($equal_means_flag)
     $neg_shift       = $pos_neg_avg_avg - $neg_avg;
     $pos_scale       = 2 ** $pos_shift;
     $neg_scale       = 2 ** $neg_shift;
+
+    if (defined($nhid_flag_col))
+    {
+        printf STDERR "Using 'Non-heavy identified flag' to filter mean calculations:  %d  %d\n",
+            $pos_neg_stats_hash{pos}{count}, $pos_neg_stats_hash{neg}{count};
+    }
 
     if ($all_logged_flag)
     {
