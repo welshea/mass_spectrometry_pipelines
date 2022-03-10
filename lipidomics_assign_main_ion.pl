@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-03-10:  edit usage statement to use current program name
 # 2022-03-10:  surround adduct column in [] to keep Excel happy
 # 2022-03-10:  change singleton/primary,secondary to main,blank
 
@@ -11,6 +12,8 @@
 
 use Scalar::Util qw(looks_like_number);
 use POSIX;
+use File::Basename;
+
 
 # number of standard deviations outwards from mean
 #
@@ -280,7 +283,9 @@ for ($i = 0; $i < @ARGV; $i++)
 
 if (!defined($filename) || $syntax_error_flag)
 {
-    printf STDERR "Usage: filter_lipidomics.pl iron_log2_merged.txt\n";
+    $program_name = basename($0);
+
+    printf STDERR "Usage: $program_name iron_log2_merged.txt\n";
     exit(1);
 }
 
@@ -922,7 +927,7 @@ foreach $fattyacid_base (@fattyacid_base_array)
         $temp_group_row_hash{$group}{$row}    = 1;
     }
     
-    $num_groups = $group;
+    #$num_groups = $group;
 
 
     # identify the "main" ion within each group
