@@ -1,15 +1,17 @@
 #!/usr/bin/perl -w
 
 
+# 2022-03-10:  changelog edits
 # 2022-03-09:  re-score after initial scoring to update median sample
-# 2021-08-19:  initial release
+# 2021-08-19:  bugfix: print some errors to STDERR instead of STDOUT
+# 2021-08-13:  print samples sorted by worst score first
+# 2021-08-13:  fix typo in median sample indexing for odd N
+
 
 use Scalar::Util qw(looks_like_number);
 use POSIX;
 use File::Basename;
 
-# 2021-08-13:  print samples sorted by worst score first
-# 2021-08-13:  fix typo in median sample indexing for odd N
 
 
 sub is_number
