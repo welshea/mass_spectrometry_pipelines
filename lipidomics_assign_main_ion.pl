@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-03-10:  annotate lipid class with more descriptive categories
 # 2022-03-10:  edit usage statement to use current program name
 # 2022-03-10:  surround adduct column in [] to keep Excel happy
 # 2022-03-10:  change singleton/primary,secondary to main,blank
@@ -12,7 +13,13 @@
 
 use Scalar::Util qw(looks_like_number);
 use POSIX;
+use File::Spec;
 use File::Basename;
+
+# this correctly doesn't follow symlinked scripts, so you get the right path
+# various other methods return the destination linked path instead,
+#  which we don't want here
+$script_path   = dirname(File::Spec->rel2abs(__FILE__));
 
 
 # number of standard deviations outwards from mean
@@ -258,6 +265,86 @@ sub reformat_sci
 }
 
 
+# for now, hard code the annotation file name
+sub read_in_lipid_class_annotation
+{
+    $annotation_filename = 'lipid_class_annotation.txt';
+    $full_path = $script_path . '/' . $annotation_filename;
+    
+    open ANNOTATION, "$full_path" or die "ABORT -- can't open $full_path\n";
+    
+    $line = <ANNOTATION>;
+    $line =~ s/[\r\n]+$//;
+    @array = split /\t/, $line;
+    for ($i = 0; $i < @array; $i++)
+    {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        
+        $changed_flag = 1;
+        while ($changed_flag)
+        {
+            $changed_flag = ($array[$i] =~ s/^\"(.*)\"$/$1/);
+        }
+        
+        if ($array[$i] =~ /\S/)
+        {
+            $header_col_array[$i] = $array[$i];
+            $header_col_hash{$array[$i]} = $i;
+        }
+    }
+    
+    $abbrev_col   = $header_col_hash{Abbreviation};
+    $supclass_col = $header_col_hash{SuperClass};
+    $subclass_col = $header_col_hash{SubClass};
+    
+    if (!defined($abbrev_col))
+    {
+        printf "ABORT -- Abbreviation column not found in %s\n", $full_path;
+        exit(2);
+    }
+    if (!defined($supclass_col))
+    {
+        printf "ABORT -- SuperClass column not found in %s\n", $full_path;
+        exit(2);
+    }
+    if (!defined($subclass_col))
+    {
+        printf "ABORT -- SubClass column not found in %s\n", $full_path;
+        exit(2);
+    }
+    
+    while(defined($line=<ANNOTATION>))
+    {
+        $line =~ s/[\r\n]+$//;
+        @array = split /\t/, $line;
+        for ($i = 0; $i < @array; $i++)
+        {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+        
+            $changed_flag = 1;
+            while ($changed_flag)
+            {
+                $changed_flag = ($array[$i] =~ s/^\"(.*)\"$/$1/);
+            }
+        }
+        
+        $abbrev   = $array[$abbrev_col];
+        $supclass = $array[$supclass_col];
+        $subclass = $array[$subclass_col];
+        
+        if ($abbrev =~ /\S/)
+        {
+            $class_annotation_hash{$abbrev}{super} = $supclass;
+            $class_annotation_hash{$abbrev}{sub}   = $subclass;
+        }
+    }
+    close ANNOTATION;
+}
+
+
+
 
 $num_files     = 0;
 
@@ -290,7 +377,10 @@ if (!defined($filename) || $syntax_error_flag)
 }
 
 
-open INFILE,      "$filename"      or die "can't open $filename\n";
+# read in the lipid class annotation file, hardcoded file name
+read_in_lipid_class_annotation();
+
+open INFILE,      "$filename"      or die "ABORT -- can't open $filename\n";
 
 
 # skip down to first line that has anything on it
@@ -1004,6 +1094,8 @@ for ($col = 0; $col < $first_rt_col; $col++)
 
 # insert our new columns
 printf "\t%s", 'Lipid';
+printf "\t%s", 'SuperClass';
+printf "\t%s", 'SubClass';
 printf "\t%s", 'Adduct';
 printf "\t%s", 'IsomerBBSR';
 printf "\t%s", 'MainIonBBSR';
@@ -1047,7 +1139,7 @@ foreach $fattyacid_base (@fattyacid_base_array)
         $rt_sd    = $row_rt_sd_array[$row];
         $data_avg = $row_data_avg_array[$row];
         $data_sum = $row_data_sum_array[$row];
-        
+
         $rt_min = $rt_avg - $num_sd * $rt_sd;
         $rt_max = $rt_avg + $num_sd * $rt_sd;
         
@@ -1057,6 +1149,26 @@ foreach $fattyacid_base (@fattyacid_base_array)
         if (!defined($main))
         {
             $main = '';
+        }
+
+        $lipid_class = $fattyacid_base;
+        $lipid_class =~ s/\(.*//;
+        $supclass = $class_annotation_hash{$lipid_class}{super};
+        $subclass = $class_annotation_hash{$lipid_class}{sub};
+        if (!defined($supclass) && !defined($subclass))
+        {
+            $supclass = '';
+            $subclass = '';
+            
+            $missing_class_annotation_hash{$lipid_class} = 1;
+        }
+        elsif (!defined($supclass))
+        {
+            $supclass = '';
+        }
+        elsif (!defined($subclass))
+        {
+            $subclass = '';
         }
         
         # print columns before first Rt column
@@ -1078,6 +1190,8 @@ foreach $fattyacid_base (@fattyacid_base_array)
         
         # insert our new columns
         printf "\t%s",     $fattyacid_base;
+        printf "\t%s",     $supclass;
+        printf "\t%s",     $subclass;
         printf "\t\[%s\]", $adduct;
         printf "\t%s",     $group;
         printf "\t%s",     $main;
@@ -1103,4 +1217,11 @@ foreach $fattyacid_base (@fattyacid_base_array)
         }
         printf "\n";
     }
+}
+
+
+foreach $lipid_class (sort keys %missing_class_annotation_hash)
+{
+    printf STDERR "WARNING -- missing lipid class annotation:  %s\n",
+        $lipid_class;
 }
