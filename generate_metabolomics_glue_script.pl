@@ -1,7 +1,8 @@
 #!/usr/bin/perl -w
 
-# 2021-03-09:  disable external identifier annotation for lipidomics
-# 2021-02-22:  detect whether each input file is csv or tab-delimited
+# 2022-03-10:  annotate lipidomics with main ions
+# 2022-03-09:  disable external identifier annotation for lipidomics
+# 2022-02-22:  detect whether each input file is csv or tab-delimited
 # 2021-12-08:  fix broken spaces in filename support after lipidomics changes
 # 2021-11-30:  add support for lipidomics
 # 2021-08-19:  change default back to leaving heavy unscaled
@@ -403,8 +404,16 @@ if ($mz_tol_ppm ne '')
     $annotate_options_str = '--ppm ' . $mz_tol_ppm;
 }
 
+
 $annotate_pipe_str = '';
-if ($lipidomics_flag == 0)
+if ($lipidomics_flag)
+{
+    # annotate with main ion assignments
+    $annotate_pipe_str = sprintf " | %s - ",
+                             'lipidomics_assign_main_ion.pl';
+}
+# regular metabolomics
+else
 {
     $annotate_pipe_str = sprintf " | %s %s \"%s/%s\" - ",
                              'annotate_metabolomics.pl',
