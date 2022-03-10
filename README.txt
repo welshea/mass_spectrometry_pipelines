@@ -321,6 +321,16 @@ iron_normalize_mass_spec.pl
 
 
 
+lipidomics_assign_main_ion.pl
+
+  Assign lipid isomer groups based on retention times, flag the most abundant
+  ion within each lipid isomer gorup as the main ion.
+
+  Usage:
+    lipidomics_assign_main_ion.pl iron_log2_merged.txt > output.txt
+
+
+
 merge_cleaned_modification_site_files.pl
 
   Merge multiple different cleaned modification site proteomics files together
