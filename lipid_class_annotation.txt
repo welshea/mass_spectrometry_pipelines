@@ -1,0 +1,36 @@
+Abbreviation	SuperClass	SubClass
+Co	Coenzymes	Coenzymes
+FA	Fatty Acyls	Fatty Acyls
+AcCa	Fatty Esters	Acyl Carnitines
+DG	Glycerolipids	Diradylglycerolipids
+MG	Glycerolipids	Monoradylglycerolipids
+TG	Glycerolipids	Triradylglycerolipids
+[glycan]-GP	Glycerophospholipids	Glycosylglycerophospholipids
+[glycan]-PI	Glycerophospholipids	Glycerophosphoinositolglycans
+CDP-DG	Glycerophospholipids	CDP-glycerols
+CL	Glycerophospholipids	Glycerophosphoglycerophosphoglycerols (Cardiolipins)
+PA	Glycerophospholipids	Glycerophosphates
+PC	Glycerophospholipids	Glycerophosphocholines
+PE	Glycerophospholipids	Glycerophosphoethanolamines
+PG	Glycerophospholipids	Glycerophosphoglycerols
+PGP	Glycerophospholipids	Glycerophosphoglycerophosphates
+PI	Glycerophospholipids	Glycerophosphoinositols
+PIP	Glycerophospholipids	Glycerophosphoinositol monophosphates
+PIP2	Glycerophospholipids	Glycerophosphoinositol bis-phosphates
+PIP3	Glycerophospholipids	Glycerophosphoinositol tris-phosphates
+PnC	Glycerophospholipids	Glycerophosphonocholines
+PnE	Glycerophospholipids	Glycerophosphonoethanolamines
+PPA	Glycerophospholipids	Glyceropyrophosphates
+PS	Glycerophospholipids	Glycerophosphoserines
+LPA	Glycerophospholipids (lyso)	Glycerophosphates
+LPC	Glycerophospholipids (lyso)	Glycerophosphocholines
+LPE	Glycerophospholipids (lyso)	Glycerophosphoethanolamines
+LPG	Glycerophospholipids (lyso)	Glycerophosphoglycerols
+LPI	Glycerophospholipids (lyso)	Glycerophosphoinositols
+LPS	Glycerophospholipids (lyso)	Glycerophosphoserines
+LSM	Glycerophospholipids (lyso)	Sphingomyelins
+[glycan]-Cer	Sphingolipids	Glycosphingolipids
+Cer	Sphingolipids	Ceramides
+SM	Sphingolipids	Sphingomyelins
+SPH	Sphingolipids	Sphingoid bases
+ChE	Steroids	Cholesterol Esters
