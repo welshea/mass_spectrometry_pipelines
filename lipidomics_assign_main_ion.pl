@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-03-10:  change singleton/primary,secondary to main,blank
+
 
 # run this on already normalized, logged data
 # assume we've only kept height or area, not both
@@ -929,18 +931,20 @@ foreach $fattyacid_base (@fattyacid_base_array)
             sort cmp_row_main keys %{$temp_group_row_hash{$group}};
 
         $row_main = $group_row_array[0];
-        $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'primary';
+        $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'main';
+        ##$fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'primary';
 
-        if (@group_row_array > 1)
-        {
-            $row_main = $group_row_array[1];
-            $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'secondary';
-        }
-        
+        #if (@group_row_array > 1)
+        #{
+        #    $row_main = $group_row_array[1];
+        #    $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'secondary';
+        #}
+
         if (@group_row_array == 1)
         {
             $row_main = $group_row_array[0];
-            $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'singleton';
+            $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'main';
+            ##$fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'singleton';
         }
     }
 }
@@ -957,7 +961,8 @@ foreach $fattyacid_base (sort keys %fattyacid_hash)
         $main_str = $fattyacid_hash{$fattyacid_base}{$row}{main};
         
         if (defined($main_str) &&
-            ($main_str eq 'primary' || $main_str eq 'singleton'))
+            ($main_str eq 'main' ||
+             $main_str eq 'primary' || $main_str eq 'singleton'))
         {
             $adduct = $row_adduct_array[$row];
 
