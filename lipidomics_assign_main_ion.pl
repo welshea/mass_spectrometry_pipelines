@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-03-10:  surround adduct column in [] to keep Excel happy
 # 2022-03-10:  change singleton/primary,secondary to main,blank
 
 
@@ -1071,13 +1072,13 @@ foreach $fattyacid_base (@fattyacid_base_array)
         }
         
         # insert our new columns
-        printf "\t%s", $fattyacid_base;
-        printf "\t%s", $adduct;
-        printf "\t%s", $group;
-        printf "\t%s", $main;
-        printf "\t%s", $rt_avg;
-        printf "\t%s", $data_avg;
-        printf "\t%s", $data_sum;
+        printf "\t%s",     $fattyacid_base;
+        printf "\t\[%s\]", $adduct;
+        printf "\t%s",     $group;
+        printf "\t%s",     $main;
+        printf "\t%s",     $rt_avg;
+        printf "\t%s",     $data_avg;
+        printf "\t%s",     $data_sum;
 
         # print the rest of the columns
         for ($col = $first_rt_col; $col < @header_col_array; $col++)
