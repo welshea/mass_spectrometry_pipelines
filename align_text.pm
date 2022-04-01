@@ -65,8 +65,8 @@ $BOGUS_SCORE = -DBL_MAX();
 #     Traceback begins at highest score within entire matrix
 #     Traceback ends at aforementioned first positive match along the path
 #
-#   Ties are broken broken by number of positive matches, which usually
-#   results in keeping a longer alignment over a shorter one.
+#   Ties are broken by number of positive matches, which usually results in
+#    keeping a longer alignment over a shorter one.
 #
 #
 #
@@ -208,10 +208,10 @@ sub score_substring_mismatch
     @char_array2 = split //, uc $string2, -1;
     
     # allocate max dimensions
-    $matrix[$len1][$len2]{score_best}  = 0;    # best of the 3 scores
-    $matrix[$len1][$len2]{diag}{score} = 0;    # from previous aligned seq1:seq2
-    $matrix[$len1][$len2]{left}{score} = 0;    # from previous gap in seq2
-    $matrix[$len1][$len2]{up}{score}   = 0;    # from previous gap in seq1
+    $matrix[$len1][$len2]{score_best}  = 0;   # best of the 3 scores
+    $matrix[$len1][$len2]{diag}{score} = 0;   # from previous aligned seq1:seq2
+    $matrix[$len1][$len2]{left}{score} = 0;   # from previous gap in seq2
+    $matrix[$len1][$len2]{up}{score}   = 0;   # from previous gap in seq1
     
     # fill 0,0
     # the full first row and first col are initialized further down
@@ -341,7 +341,6 @@ sub score_substring_mismatch
         for ($col = 1; $col <= $len2; $col++)
         {
             $pointer          = \%{$matrix[$row][$col]};
-
 
 
             # diag: [row - 1][col - 1]
@@ -613,7 +612,7 @@ sub score_substring_mismatch
                     }
                 }
             }
-            # best middle alignment, whether anchored or not
+            # best middle alignment, not anchored to either end
             elsif ($type eq 'elocal')
             {
                 # best score
