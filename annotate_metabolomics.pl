@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-04-04:  conform [1-7] to [abgdezh], "Acid,*ic" to "*ic acid"
 # 2022-02-15:  include PPM as 3rd field of m/z WARNING messages
 # 2021-11-30:  add minimal lipidomics support
 # 2021-10-27:  rename gmiddle to elocal
@@ -392,6 +393,15 @@ sub is_heavy_labeled
 # strip spaces
 # maybe strip -
 
+# lookup table for converting numbers into ordered greek letters
+$number_letter_hash{1} = 'a';
+$number_letter_hash{2} = 'b';
+$number_letter_hash{3} = 'g';
+$number_letter_hash{4} = 'd';
+$number_letter_hash{5} = 'e';
+$number_letter_hash{6} = 'z';
+$number_letter_hash{7} = 'h';
+
 sub preprocess_name
 {
     my $name       = $_[0];
@@ -399,6 +409,9 @@ sub preprocess_name
     my $half_name_len;
     my $name_half1 = '';
     my $name_half2 = '';
+
+    my @temp_array;
+    my $i;
     
     # lowercase everything
     $name = lc $name;
@@ -411,6 +424,21 @@ sub preprocess_name
     $name =~ s/\bepsilon\b/e/g;
     $name =~ s/\bzeta\b/z/g;
     $name =~ s/\beta\b/h/g;
+    
+    # replace single numbers with greek letters
+    #    2-aminoethylphosphonate --> b-aminoethylphosphonate
+    @temp_array = split /\b([1-7])\b/, $name;
+    for ($i = 1; $i < @temp_array; $i += 2)
+    {
+        $temp_array[$i] = $number_letter_hash{$temp_array[$i]};
+    }
+    $name = join '', @temp_array;
+
+    # conform acids
+    $name =~ s/acid,(.*)ic$/$1ic acid/;   # reorder weird MeSH, HMDB notation
+    $name =~ s/anoic/yric/g;              # Butanoic acid --> Butyric acid
+    $name =~ s/anoate\b/yrate/g;          # Butanoate     --> Butyrate
+    $name =~ s/ic acid\b/ate/g;           # Glutamic acid --> Glutamate
     
     # strip the L- from L-aminoacids
     # only on word boundary, so we don't strip DL-aminoacid
@@ -452,12 +480,7 @@ sub preprocess_name
     # ethyl, methyl, etc.
     $name =~ s/thane/thyl/g;          # (2-Aminoethane)phosphonic acid
                                       # 2-Aminoethylphosphonate
-    
-    # conform acids
-    $name =~ s/anoic/yric/g;          # Butanoic acid --> Butyric acid
-    $name =~ s/anoate\b/yrate/g;      # Butanoate     --> Butyrate
-    $name =~ s/ic acid\b/ate/g;       # Glutamic acid --> Glutamate
-    
+
     # mono is redundant and often left out in synonyms
     $name =~ s/mono(\S)/$1/g;
     
@@ -483,7 +506,7 @@ sub preprocess_name
     #                       1-galacturonate       -->   1galacturonate
     $name =~ s/MINUS/-/g;
     $name =~ s/-+/-/g;
-    
+
     # check for tandem duplicate names after conforming
     $name_len = length $name;
     if ($name_len % 2 == 0)
