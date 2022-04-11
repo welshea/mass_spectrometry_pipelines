@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-04-11:  attempt to auto-prepend pos/neg auto-prepended during merging
 # 2022-03-10:  changelog edits
 # 2022-03-09:  re-score after initial scoring to update median sample
 # 2021-08-19:  bugfix: print some errors to STDERR instead of STDOUT
@@ -263,10 +264,18 @@ sub read_in_scaling_factors_file
         if ($pos_neg =~ /pos/i)
         {
             $sample_merged = $global_pos_map_hash{$sampleid};
+            
+            # maybe pos/neg were auto-prepended elsewhere
+            if (!defined($sample_merged))
+            {
+                $sample_merged = $sampleid;
+                $sample_merged = 'pos_' . $sample_merged;
+                $sample_merged = $global_pos_map_hash{$sample_merged};
+            }
 
             if (!defined($sample_merged))
             {
-                printf STDERR "ABORT -- scaling factors %s not mapped to merged sample name\n",
+                printf STDERR "ABORT -- pos scaling factors %s not mapped to merged sample name\n",
                     $sampleid;
 
                 exit(3);
@@ -276,9 +285,17 @@ sub read_in_scaling_factors_file
         {
             $sample_merged = $global_neg_map_hash{$sampleid};
 
+            # maybe pos/neg were auto-prepended elsewhere
             if (!defined($sample_merged))
             {
-                printf STDERR "ABORT -- scaling factors %s not mapped to merged sample name\n",
+                $sample_merged = $sampleid;
+                $sample_merged = 'neg_' . $sample_merged;
+                $sample_merged = $global_neg_map_hash{$sample_merged};
+            }
+
+            if (!defined($sample_merged))
+            {
+                printf STDERR "ABORT -- neg scaling factors %s not mapped to merged sample name\n",
                     $sampleid;
 
                 exit(3);
@@ -389,9 +406,17 @@ sub read_in_findmedian_file
         {
             $sample_merged = $global_pos_map_hash{$sample};
 
+            # maybe pos/neg were auto-prepended elsewhere
             if (!defined($sample_merged))
             {
-                printf STDERR "ABORT -- findmedian %s not mapped to merged sample name\n",
+                $sample_merged = $sample;
+                $sample_merged = 'pos_' . $sample_merged;
+                $sample_merged = $global_pos_map_hash{$sample_merged};
+            }
+
+            if (!defined($sample_merged))
+            {
+                printf STDERR "ABORT -- pos findmedian %s not mapped to merged sample name\n",
                     $sample;
 
                 exit(3);
@@ -401,9 +426,17 @@ sub read_in_findmedian_file
         {
             $sample_merged = $global_neg_map_hash{$sample};
 
+            # maybe pos/neg were auto-prepended elsewhere
             if (!defined($sample_merged))
             {
-                printf STDERR "ABORT -- findmedian %s not mapped to merged sample name\n",
+                $sample_merged = $sample;
+                $sample_merged = 'neg_' . $sample_merged;
+                $sample_merged = $global_neg_map_hash{$sample_merged};
+            }
+
+            if (!defined($sample_merged))
+            {
+                printf STDERR "ABORT -- neg findmedian %s not mapped to merged sample name\n",
                     $sample;
 
                 exit(3);
