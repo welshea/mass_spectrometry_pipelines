@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-04-11:  comment out metabolmoics_qc.pl fix, fixed in metabolomics_qc.pl
+# 2022-04-11:  fix missing pos/neg sample names to work with metabolomics_qc.pl
 # 2022-03-09:  change debug filter mean message to print pos/neg fractional rows
 # 2022-03-09:  use "Non-heavy identified flag" column to ignore points
 #              during pos/neg scaling training
@@ -280,6 +282,15 @@ sub read_in_file
         printf STDERR "WARNING -- missing pos/neg from sample names, prepending %s\n",
             $pos_neg;
 
+        if ($pos_neg =~ /pos/)
+        {
+            $prepended_pos_flag = 1;
+        }
+        if ($pos_neg =~ /neg/)
+        {
+            $prepended_neg_flag = 1;
+        }
+
         foreach $tomerge_col (@tomerge_col_array)
         {
             $header_col_array[$tomerge_col] = sprintf "%s_%s",
@@ -519,6 +530,9 @@ $global_concat_header_count = 0;
 $global_row_id_str = '';
 
 $all_logged_flag = 1;
+$prepended_pos_flag = 0;
+$prepended_neg_flag = 0;
+
 read_in_file($filename_pos, 'pos');
 read_in_file($filename_neg, 'neg');
 
@@ -983,6 +997,16 @@ foreach $header (@actual_sample_lc_array)
     {
         $neg_tomerge = $neg_tomerge_matches[0];
     }
+    
+    ## strip inserted pos/neg so that they match original scaling factor files
+    #if ($prepended_pos_flag)
+    #{
+    #    $pos_tomerge =~ s/^pos_//;
+    #}
+    #if ($prepended_neg_flag)
+    #{
+    #    $neg_tomerge =~ s/^neg_//;
+    #}
     
     printf OUTFILE "%s\t%s\t%s\t%s\n",
         $tomerge_case, $pos_tomerge, $neg_tomerge, $tomerge_short;
