@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2022-04-19: strip accidental .txt from --comp-pool flags documentation
 # 2022-01-24: add --comp-pool-exclusions-boost; exclude last and last -2
 # 2022-01-19: ability to auto-flag and exclude dark samples from comp pool
 # 2022-01-19: remove deprecated "variable" reference channel (now auto2)
@@ -1704,9 +1705,9 @@ if ($error_flag)
     print STDERR "    --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]\n";
     print STDERR "    --comp-pool        use all-channel geometric mean for cross-plex debatching\n";
     print STDERR "    --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]\n";
-    print STDERR "    --comp-pool-exclusions-dark.txt\n";
+    print STDERR "    --comp-pool-exclusions-dark\n";
     print STDERR "                       auto-excludes dark samples from computational pool\n";
-    print STDERR "    --comp-pool-exclusions-boost.txt\n";
+    print STDERR "    --comp-pool-exclusions-boost\n";
     print STDERR "                       excludes boosting channels (N, N-2) from comp pool\n";
     print STDERR "    --comp-pool-exclusions=filename.txt\n";
     print STDERR "                       load comp pool sample exclusions from tab-delimited file\n";
