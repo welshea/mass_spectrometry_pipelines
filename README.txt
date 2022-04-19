@@ -154,9 +154,9 @@ automate_tmt.pl
 
     --comp-pool        use all-channel geometric mean for cross-plex debatching
     --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]
-    --comp-pool-exclusions-dark.txt
+    --comp-pool-exclusions-dark
                        auto-excludes dark samples from computational pool
-    --comp-pool-exclusions-boost.txt
+    --comp-pool-exclusions-boost
                        excludes boosting channels (N, N-2) from comp pool
     --comp-pool-exclusions=filename.txt
                        load comp pool sample exclusions from tab-delimited file
