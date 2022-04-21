@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2022-04-21: begin adding Proteome Discoverer support
 # 2022-01-19: default 100% injection replicates to "auto" reference channel
 # 2021-08-12: change deprecated "if (defined(%plex_hash))" to "if (%plex_hash)"
 # 2021-07-28: respect species argument override, autodetect if non-mouse/human
@@ -199,6 +200,18 @@ for($i = 0; $i < @header_array; $i++)
         $tmt_flag = 1;
     }
 
+    # Proteome Discoverer
+    if ($header =~ /^Abundances \(Grouped\):\s*/)
+    {
+        # I haven't seen multi plex data yet,
+        # so the script only supports single plex data right now
+        $plex             = 'Plex1';
+        $plex_hash{$plex} = 1;
+    
+        $tmt_flag         = 1;
+        $intensity_flag   = 1;
+    }
+
     if ($header =~ /^Intensity \S/i)
     {
         $intensity_flag = 1;
@@ -221,6 +234,39 @@ for($i = 0; $i < @header_array; $i++)
     }
 }
 
+
+# Uh oh, this isn't a MaxQuant formatted TMT file
+if ($tmt_flag && $max_channel < 0)
+{
+    %channel_order_hash = ();
+    $num_seen_channels = 0;
+    $max_channel = -9E99;
+    if ($min_channel == 9E99)
+    {
+        # Proteome Discoverer
+        for ($i = 0; $i < @header_array; $i++)
+        {
+            $header = $header_array[$i];
+        
+            if ($header =~ /^Abundances \(Grouped\):\s*([0-9NC]+)/)
+            {
+                $channel = $1;
+
+                if (!defined($channel_order_hash{$channel}))
+                {
+                    $channel_order_hash{$channel} = $num_seen_channels;
+                    $num_seen_channels++;
+                }
+            }
+        }
+        $max_channel = $num_seen_channels - 1;
+
+        if ($max_channel >= 0)
+        {
+            $min_channel = 0;
+        }
+    }
+}
 
 # check to see if we have multiple plexes
 if (%plex_hash)
