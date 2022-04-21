@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2022-04-21:  make sure split doesn't remove empty trailing fields
 # 2021-12-22:  add experimental --iron-untilt flag
 # 2021-08-08:  print usage statement on command line error
 # 2021-04-14:  begin adding lipidomics support
@@ -114,7 +115,7 @@ sub read_in_data_file
     $line =~ s/[\r\n]+//g;
     $line =~ s/\"//;
 
-    @array = split /\t/, $line;
+    @array = split /\t/, $line, -1;
     for ($i = 0; $i < @array; $i++)
     {
         $array[$i] =~ s/^\s+//;
@@ -333,7 +334,8 @@ sub read_in_data_file
         $line =~ s/[\r\n]+//g;
         $line =~ s/\"//;
 
-        @array = split /\t/, $line;
+        # be sure to not skip trailing blank fields
+        @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
@@ -568,7 +570,7 @@ sub iron_samples
         $line =~ s/[\r\n]+//g;
         $line =~ s/\"//;
 
-        @array = split /\t/, $line;
+        @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
@@ -713,6 +715,12 @@ sub output_final_data
             }
 
             $value = $orig_data_array[$row][$col];
+            
+            # in case the line removed trailing blank fields
+            if (!defined($value))
+            {
+                $value = '';
+            }
             
             $array[$col_new++] = $value;
         }
