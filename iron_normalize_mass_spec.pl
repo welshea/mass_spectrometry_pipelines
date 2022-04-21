@@ -3,6 +3,8 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2022-04-21:  begin adding support for Proteome Discoverer
+# 2022-04-21:  remove all double quotes, not just the first one per line (oops)
 # 2022-04-21:  make sure split doesn't remove empty trailing fields
 # 2021-12-22:  add experimental --iron-untilt flag
 # 2021-08-08:  print usage statement on command line error
@@ -113,7 +115,7 @@ sub read_in_data_file
     # read in header line
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//;
+    $line =~ s/\"//g;
 
     @array = split /\t/, $line, -1;
     for ($i = 0; $i < @array; $i++)
@@ -277,6 +279,13 @@ sub read_in_data_file
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
         }
+
+        # Proteome Discoverer
+        if ($field =~ /^Abundances \(Grouped\):\s*/)
+        {
+            $sample_to_file_col_hash{$field} = $i;
+            $sample_array[$num_samples++] = $field;
+        }
         
 
         # check to see if it is cleaned up TMT column headers
@@ -332,7 +341,7 @@ sub read_in_data_file
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
+        $line =~ s/\"//g;
 
         # be sure to not skip trailing blank fields
         @array = split /\t/, $line, -1;
@@ -418,6 +427,9 @@ sub iron_samples
 
         # strip Skyline stuff
         $sample =~ s/ Total Area$//i;
+        
+        # strip Proteome Discoverer stuff
+        $sample =~ s/^Abundances \(Grouped\):\s*//i;
         
         printf INPUT_FOR_IRON "\t%s", $sample;
     }
@@ -568,7 +580,7 @@ sub iron_samples
     while(defined($line=<OUTPUT_FOR_IRON>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
+        $line =~ s/\"//g;
 
         @array = split /\t/, $line, -1;
 
@@ -661,6 +673,12 @@ sub output_final_data
             elsif ($sample =~ / Total Area$/i)
             {
                 $sample =~ s/ Total Area$//i;
+            }
+
+            # strip Proteome Discoverer stuff
+            elsif ($sample =~ /^Abundances \(Grouped\):\s*/i)
+            {
+                $sample =~ s/^Abundances \(Grouped\):\s*//i;
             }
             
             # TMT data
