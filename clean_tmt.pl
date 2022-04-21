@@ -1,9 +1,11 @@
 #!/usr/bin/perl -w
 
+# 2022-04-21: make sure split doesn't remove empty trailing fields
+# 2022-04-21: begin adding support for Proteome Discoverer
+# 2022-04-21: remove all double quotes, not just the first one per line (oops)
 # 2021-11-02: preserve and reformat run# in single-plex injection replicates
 # 2020-08-03: finish support for TMT16, improve unsupported #channels error
 # 2020-07-09: add support for TMT16, add letters to the ends of ALL channels
-#
 # 2020-02-28: replace | with ~ in RowIdentifier
 
 sub bless_delimiter_space
@@ -163,7 +165,7 @@ open INFILE, "$infile" or die "can't open $infile\n";
 # read in header line
 $line = <INFILE>;
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//;
+$line =~ s/\"//g;
 
 @array = split /\t/, $line;
 
@@ -307,6 +309,21 @@ if (defined($header_to_col_hash{'MS/MS IDs'}))
     $strip_col_flags{$header_to_col_hash{'MS/MS IDs'}}    = 1;
 }
 
+# Proteome Discoverer
+for ($i = 0; $i < @array; $i++)
+{
+    $header = $array[$i];
+
+    if ($header =~ /^Found in Sample/i)
+    {
+        $strip_col_flags{$header_to_col_hash{$header}}    = 1;
+    }
+    if ($header =~ /CV \[%\]/)
+    {
+        $strip_col_flags{$header_to_col_hash{$header}}    = 1;
+    }
+}
+
 
 # if there is just one plex, maxquant DOES NOT print the individual
 # plex columns, and instead only prints the summary columns
@@ -354,6 +371,37 @@ foreach $header (keys %header_to_col_hash)
 # ** DAMN IT, THEY CHANGED IT BACK AGAIN !! **
 #  current code should still handle it, though
 $max_channel -= $min_channel;
+
+
+# Uh oh, this isn't a MaxQuant formatted TMT file
+%channel_order_hash = ();
+$num_seen_channels = 0;
+$max_channel = -9E99;
+if ($min_channel == 9E99)
+{
+    # Proteome Discoverer
+    for ($i = 0; $i < @array; $i++)
+    {
+        $header = $array[$i];
+    
+        if ($header =~ /^Abundances \(Grouped\):\s*([0-9NC]+)/)
+        {
+            $channel = $1;
+
+            if (!defined($channel_order_hash{$channel}))
+            {
+                $channel_order_hash{$channel} = $num_seen_channels;
+                $num_seen_channels++;
+            }
+        }
+    }
+    $max_channel = $num_seen_channels - 1;
+
+    if ($max_channel >= 0)
+    {
+        $min_channel = 0;
+    }
+}
 
 
 # fill channel string map for appropriate plex size
@@ -581,6 +629,26 @@ foreach $header (keys %header_to_col_hash)
         
         $intensities_col_hash{$header_to_col_hash{$header}} = $sample_name;
     }
+    
+    # Proteome Discoverer
+    #
+    # I only have single-plex data so far
+    # I don't know what multiple plex data looks like yet
+    #
+    if ($header =~ /^Abundances \(Grouped\):\s*([0-9NC]+)/)
+    {
+        $channel_orig   = $1;
+        $channel_number = $channel_order_hash{$channel_orig};
+
+        $plex           = 'Plex1';
+        $channel        = $channel_map[$channel_number];
+
+        $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
+        
+        $array[$header_to_col_hash{$header}] = $sample_name;
+        
+        $intensities_col_hash{$header_to_col_hash{$header}} = $sample_name;
+    }
 }
 @intensities_col_array = sort keys %intensities_col_hash;
 
@@ -617,7 +685,7 @@ while(defined($line=<INFILE>))
 {
     $line =~ s/[\r\n]+//g;
 
-    @array = split /\t/, $line;
+    @array = split /\t/, $line, -1;
 
     for ($i = 0; $i < @array; $i++)
     {
