@@ -146,6 +146,7 @@ automate_tmt.pl
 
   Options:
     --iron             normalize within-plex prior to other calcuations [default]
+    --iron-untilt      account for relative dynamic range
     --no-iron          do not normalize within each plex first
     --debatch          use reference channel for cross-plex normalization [default]
     --no-debatch       do not perform cross-plex normalization
@@ -263,6 +264,7 @@ generate_proteomics_glue_script.pl
     --last-ch       use highest channel for normalization
 
     --iron          apply IRON normalization (default)
+    --iron-untilt   account for relative dynamic range
     --no-iron       disable IRON normalization
 
     --debatch       cross-plex de-batch TMT data (default)
@@ -298,20 +300,15 @@ iron_normalize_mass_spec.pl
     iron_normalize_mass_spec.pl [options] input_data.pl > normalized_output.txt
 
   Options:
-    --iron-exclusions=exclusions.txt
-      list of row identifiers to exclude from findmedian and IRON training
-    --iron-spieins=spikeins.txt
-      list of row identifiers to exclude from calculations and normalization;
-      similar to --iron-exlusions but also leaves them un-normalized
-    --no-strip-sample-names
-      do not strip various strings from sample names, such as:
-        Intensity, Peak height, Peak area, .mzXML, Total Area
-    --log2   (default)
-      output log2 abundances
-    --no-log2
-      output unlogged abundances
-    --unlog2
-      un-log2 the input data prior to normalization
+    --iron-untilt                 account for relative dynamic range
+    --iron-exclusions=filename    identifiers to exclude from training
+    --iron-spikeins=filename      list of spikein identifiers
+
+    --log2                        output log2 abundances [default]
+    --no-strip-sample-names       keep original full sample headers
+    --no-log2                     output unlogged abundances
+    --norm-none                   disable normalization
+    --unlog2                      exponentiate input data, pow(2, value)
 
   Output:
     Assuming the input file format is recognized and it is therefore able
