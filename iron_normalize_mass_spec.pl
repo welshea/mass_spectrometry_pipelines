@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2022-04-26:  add --iron-untilt to usage statement (no longer experimental)
 # 2022-04-21:  begin adding support for Proteome Discoverer
 # 2022-04-21:  remove all double quotes, not just the first one per line (oops)
 # 2022-04-21:  make sure split doesn't remove empty trailing fields
@@ -858,6 +859,7 @@ if ($syntax_error_flag || $num_files == 0)
     printf STDERR "Usage: $program_name [options] input_file.txt [reference_sample]\n";
     printf STDERR "\n";
     printf STDERR "  Options:\n";
+    printf STDERR "    --iron-untilt                 account for relative dynamic range\n";
     printf STDERR "    --iron-exclusions=filename    identifiers to exclude from training\n";
     printf STDERR "    --iron-spikeins=filename      list of spikein identifiers\n";
     printf STDERR "\n";
