@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-04-06:  add --iron-untilt to address rare dynamic range compression
 # 2022-02-03:  bugfix: honor auto-detected species
 # 2022-01-24:  support passing new comp pool exclusions flags
 # 2022-01-19:  auto-exclude dark samples from injection replicates comp pool
@@ -31,6 +32,7 @@ $comp_pool_exclude_flag       = 0;
 $comp_pool_exclude_filename   = '';
 $comp_pool_exclude_dark_flag  = 0;
 $comp_pool_exclude_boost_flag = 0;
+$iron_untilt_flag             = 0;
 
 
 $syntax_error_flag = 0;
@@ -92,7 +94,11 @@ for ($i = 0; $i < @ARGV; $i++)
             $comp_pool_exclude_boost_flag = 1;
             $comp_pool_exclude_filename = '';
         }
-
+        elsif ($field =~ /^--iron-untilt$/)
+        {
+            $iron_untilt_flag = 1;
+            $no_iron_flag     = 0;
+        }
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -140,6 +146,7 @@ if ($syntax_error_flag)
     print STDERR "    --last-ch       use highest channel for normalization\n";
     print STDERR "\n";
     print STDERR "    --iron          apply IRON normalization (default)\n";
+    print STDERR "    --iron-untilt   account for relative dynamic range\n";
     print STDERR "    --no-iron       disable IRON normalization\n";
     print STDERR "\n";
     print STDERR "    --debatch       cross-plex de-batch TMT data (default)\n";
@@ -392,6 +399,10 @@ if ($no_iron_flag)
 {
     $options_str = '--norm-none';
 }
+if ($iron_untilt_flag)
+{
+    $options_str = '--iron-untilt';
+}
 $pipeline_norm_str = sprintf "%s %s \"%s%s\" \\\n  > \"%s%s\"",
     'iron_normalize_mass_spec.pl',
     $options_str,
@@ -406,6 +417,11 @@ if (defined($autodetect_hash{TMT}) &&
     {
         $options_str .= ' --no-iron';
     }
+    elsif ($iron_untilt_flag)
+    {
+        $options_str .= ' --iron-untilt';
+    }
+    
     if ($no_debatch_flag)
     {
         $options_str .= ' --no-debatch';
