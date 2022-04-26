@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2022-04-26: add --iron-untilt to usage statement (no longer experimental)
 # 2022-04-19: strip accidental .txt from --comp-pool flags documentation
 # 2022-01-24: add --comp-pool-exclusions-boost; exclude last and last -2
 # 2022-01-19: ability to auto-flag and exclude dark samples from comp pool
@@ -1698,6 +1699,7 @@ if ($error_flag)
     print STDERR "\n";
     print STDERR "  Options:\n";
     print STDERR "    --iron             normalize within-plex prior to other calcuations [default]\n";
+    print STDERR "    --iron-untilt      account for relative dynamic range\n";
     print STDERR "    --no-iron          do not normalize within each plex first\n";
     print STDERR "    --debatch          use reference channel for cross-plex normalization [default]\n";
     print STDERR "    --no-debatch       do not perform cross-plex normalization\n";
