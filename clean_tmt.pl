@@ -625,8 +625,6 @@ foreach $header (keys %header_to_col_hash)
             $plex = sprintf "Plex1_run%d", $replicate;
         }
 
-printf STDERR "FOOBAR\t%s\t%s\n", $max_channel, $channel_number;
-
         $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
         
         $array[$header_to_col_hash{$header}] = $sample_name;
