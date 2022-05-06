@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-05-06:  support missing Positions Within Proteins column (old MaxQuant)
 # 2021-10-28:  add support for Biotin-HPDP
 # 2021-08-30:  deal with missing accessions/positions in various fields
 
@@ -669,10 +670,10 @@ if (!defined($proteins_col))
 {
     die "Proteins column not found in file $filename\n";
 }
-if (!defined($positions_within_col))
-{
-    die "Positions Within Proteins column not found in file $filename\n";
-}
+#if (!defined($positions_within_col))
+#{
+#    die "Positions Within Proteins column not found in file $filename\n";
+#}
 
 if (!defined($reverse_col))
 {
@@ -918,7 +919,14 @@ while(defined($line=<INFILE>))
     $mass_err          = $array[$mass_err_col];
 
     $proteins          = $array[$proteins_col];
-    $positions_within  = $array[$positions_within_col];
+    if (defined($positions_within_col))
+    {
+        $positions_within = $array[$positions_within_col];
+    }
+    else
+    {
+        $positions_within = '';
+    }
     
     $leading_prot      = $array[$leading_prot_col];
     $positions_prot    = $array[$positions_prot_col];
@@ -1003,9 +1011,14 @@ while(defined($line=<INFILE>))
     # pick one of the two paired sources of accessions/positions
     # choose Proteins / Positions Within Proteins first
     # use Leading Proteins / Positions if it has more
+    #
+    # Positions Within Proteins is missing from older MaxQuant output
+    # Use Positions column when that is the only choice available
+    #
     $proteins_chosen  = $proteins;
     $positions_chosen = $positions_within;
-    if ($leading_count > $proteins_count)
+    if ($leading_count > $proteins_count ||
+        $positions_within eq '')
     {
         $proteins_chosen  = $leading_prot;
         $positions_chosen = $positions_prot;
