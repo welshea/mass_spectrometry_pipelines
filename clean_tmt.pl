@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-05-06: fixed sample channel detection bug introduced on 2022-04-21
 # 2022-04-21: make sure split doesn't remove empty trailing fields
 # 2022-04-21: begin adding support for Proteome Discoverer
 # 2022-04-21: remove all double quotes, not just the first one per line (oops)
@@ -376,9 +377,10 @@ $max_channel -= $min_channel;
 # Uh oh, this isn't a MaxQuant formatted TMT file
 %channel_order_hash = ();
 $num_seen_channels = 0;
-$max_channel = -9E99;
 if ($min_channel == 9E99)
 {
+    $max_channel = -9E99;
+
     # Proteome Discoverer
     for ($i = 0; $i < @array; $i++)
     {
@@ -622,7 +624,9 @@ foreach $header (keys %header_to_col_hash)
 #            $plex = sprintf "TMT%d", $replicate;
             $plex = sprintf "Plex1_run%d", $replicate;
         }
-        
+
+printf STDERR "FOOBAR\t%s\t%s\n", $max_channel, $channel_number;
+
         $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
         
         $array[$header_to_col_hash{$header}] = $sample_name;
