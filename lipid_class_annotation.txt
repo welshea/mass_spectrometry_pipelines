@@ -12,9 +12,9 @@ D7ChE	Steroids	Deuterated Cholesterol Esters
 DG	Glycerolipids	Diradylglycerolipids
 DLCL	Glycerophospholipids	Dilysocardiolipin
 FA	Fatty Acyls	Fatty Acyls
-Hex1Cer	Sphingolipids	"Ceramides, 1 sugar moiety"
-Hex2Cer	Sphingolipids	"Ceramides, 2 sugar moieties"
-Hex3Cer	Sphingolipids	"Ceramides, 3 sugar moieties"
+Hex1Cer	Sphingolipids	Ceramides, 1 sugar moiety
+Hex2Cer	Sphingolipids	Ceramides, 2 sugar moieties
+Hex3Cer	Sphingolipids	Ceramides, 3 sugar moieties
 LPA	Glycerophospholipids (lyso)	Glycerophosphates
 LPC	Glycerophospholipids (lyso)	Glycerophosphocholines
 LPE	Glycerophospholipids (lyso)	Glycerophosphoethanolamines
