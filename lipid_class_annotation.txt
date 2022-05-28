@@ -1,4 +1,4 @@
-Abbreviation	SuperClass	SubClass
+Abbreviation	Class	SubClass
 [glycan]-Cer	Sphingolipids	Glycosphingolipids
 [glycan]-GP	Glycerophospholipids	Glycosylglycerophospholipids
 [glycan]-PI	Glycerophospholipids	Glycerophosphoinositolglycans
