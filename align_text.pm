@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-01:  convert to/from UTF8 unicode, to condense/expand single chars
 # 2022-02-07:  implement missing traceback positive match count tie breaking
 # 2021-10-27:  rename gmiddle to elocal, for extended local
 # 2021-10-26:  restructure affine gap tracebacks to be more correct
@@ -156,6 +157,10 @@ sub score_substring_mismatch
     my $last_match_row     = 0;
     my $last_match_col     = 0;
     my $pos;
+    
+    # decode UTF-8 unicode character into single internal characters
+    utf8::decode($string1);
+    utf8::decode($string2);
 
     # HACK -- enable debug output by appending _debug to type
     $type = $type_orig;
@@ -849,6 +854,10 @@ sub score_substring_mismatch
     {
         $my_score = 0;
     }
+    
+    # convert sequence alignments back into UTF-8 prior to printing
+    utf8::encode($seq_align1);
+    utf8::encode($seq_align2);
     
     if ($type_orig =~ /_debug$/)
     {
