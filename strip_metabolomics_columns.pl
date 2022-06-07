@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-07:  less stringent heavy label string matching
 # 2022-05-09:  added BOC to heavy labeled detection
 # 2022-02-23:  extend sample renaming to non- height/area columns
 # 2022-02-23:  use #[old_name]:new_name.raw headers to rename samples
@@ -164,6 +165,11 @@ sub is_heavy_labeled
     if ($string =~ /\([^()]*\b14N[0-9]*\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\bD[0-9]*\b[^()]*\)/)   { return 1; }
     if ($string =~ /\([^()]*\bBOC\b[^()]*\)/)       { return 1; }
+
+    if ($string =~ /\b13C[0-9]+\b/) { return 1; }
+    if ($string =~ /\b14N[0-9]+\b/) { return 1; }
+    if ($string =~ /\bD[0-9]+\b/)   { return 1; }
+    if ($string =~ /\bBOC\b/)       { return 1; }
     
     return 0;
 }
