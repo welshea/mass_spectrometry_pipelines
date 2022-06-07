@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-07:  add support for single input file
 # 2022-03-10:  annotate lipidomics with main ions
 # 2022-03-09:  disable external identifier annotation for lipidomics
 # 2022-02-22:  detect whether each input file is csv or tab-delimited
@@ -203,6 +204,27 @@ if ($syntax_error_flag ||
 }
 
 
+$single_file_mode = '';
+if ($pos_csv_filename eq 'NULL' || $neg_csv_filename eq 'NULL')
+{
+    if ($pos_csv_filename ne 'NULL')
+    {
+        $single_file_mode = 'pos';
+    }
+    if ($neg_csv_filename ne 'NULL')
+    {
+        $single_file_mode = 'neg';
+    }
+    
+    # ABORT -- they both can't be NULL
+    if ($pos_csv_filename eq $neg_csv_filename)
+    {
+        printf STDERR "ABORT -- at least one input filename must be not \"NULL\"\n";
+        exit(2);
+    }
+}
+
+
 if (!defined($output_root_name))
 {
     $output_root_name = 'metabolomics_pipeline';
@@ -220,6 +242,11 @@ $pos_cleaned_filename         = sprintf "%s_pos_cleaned.txt",
                                    $output_root_name;
 $pos_iron_filename            = sprintf "%s_pos_iron_log2.txt",
                                    $output_root_name;
+$pos_sf_filename              = sprintf "%s_pos_cleaned_scaling_factors.txt",
+                                   $output_root_name;
+$pos_fm_filename              = sprintf "%s_pos_cleaned_findmedian.txt",
+                                   $output_root_name;
+
 $neg_unidentified_output_name = sprintf "%s_neg_unidentified.txt",
                                    $output_root_name;
 $neg_spikeins_output_name     = sprintf "%s_neg_spikeins.txt",
@@ -228,21 +255,16 @@ $neg_cleaned_filename         = sprintf "%s_neg_cleaned.txt",
                                    $output_root_name;
 $neg_iron_filename            = sprintf "%s_neg_iron_log2.txt",
                                    $output_root_name;
+$neg_sf_filename              = sprintf "%s_neg_cleaned_scaling_factors.txt",
+                                   $output_root_name;
+$neg_fm_filename              = sprintf "%s_neg_cleaned_findmedian.txt",
+                                   $output_root_name;
+
 $merged_filename              = sprintf "%s_iron_log2_merged.txt",
                                    $output_root_name;
 $sample_table_filename        = sprintf "%s_sample_table.txt",
                                    $output_root_name;
 $sample_qc_filename           = sprintf "%s_sample_qc_table.txt",
-                                   $output_root_name;
-
-
-$pos_sf_filename              = sprintf "%s_pos_cleaned_scaling_factors.txt",
-                                   $output_root_name;
-$neg_sf_filename              = sprintf "%s_neg_cleaned_scaling_factors.txt",
-                                   $output_root_name;
-$pos_fm_filename              = sprintf "%s_pos_cleaned_findmedian.txt",
-                                   $output_root_name;
-$neg_fm_filename              = sprintf "%s_neg_cleaned_findmedian.txt",
                                    $output_root_name;
 
 
@@ -279,7 +301,14 @@ $lipidomics_flag = 0;
 
 # lipidomics data can have comments and blank lines at the top
 # attempt to remove them before retrieving the first line as header line
-$cmd_str = "grep -v \'^#\' \"$pos_csv_filename\" | grep \'[^ \\t]\' - | head -1 -";
+if ($single_file_mode ne 'neg')
+{
+    $cmd_str = "grep -v \'^#\' \"$pos_csv_filename\" | grep \'[^ \\t]\' - | head -1 -";
+}
+elsif ($single_file_mode ne 'pos')
+{
+    $cmd_str = "grep -v \'^#\' \"$neg_csv_filename\" | grep \'[^ \\t]\' - | head -1 -";
+}
 $result_str = `$cmd_str`;
 if ($result_str =~ /LipidIon/ ||
     $result_str =~ /FattyAcid/)
@@ -294,34 +323,39 @@ $count_comma_neg = 0;
 $count_tab_pos   = 0;
 $count_tab_neg   = 0;
 
-open INFILE, "$pos_csv_filename" or die "can't open file $pos_csv_filename\n";
-while (defined($line=<INFILE>))
+if ($single_file_mode ne 'neg')
 {
-    $line_keep_comma = $line;
-    $line_keep_tab   = $line;
-    
-    $line_keep_comma =~ s/[^,]//g;
-    $line_keep_tab   =~ s/[^\t]//g;
-    
-    $count_comma_pos += length $line_keep_comma;
-    $count_tab_pos   += length $line_keep_tab;
+    open INFILE, "$pos_csv_filename" or die "can't open file $pos_csv_filename\n";
+    while (defined($line=<INFILE>))
+    {
+        $line_keep_comma = $line;
+        $line_keep_tab   = $line;
+
+        $line_keep_comma =~ s/[^,]//g;
+        $line_keep_tab   =~ s/[^\t]//g;
+
+        $count_comma_pos += length $line_keep_comma;
+        $count_tab_pos   += length $line_keep_tab;
+    }
 }
 close INFILE;
 
-open INFILE, "$neg_csv_filename" or die "can't open file $neg_csv_filename\n";
-while (defined($line=<INFILE>))
+if ($single_file_mode ne 'pos')
 {
-    $line_keep_comma = $line;
-    $line_keep_tab   = $line;
-    
-    $line_keep_comma =~ s/[^,]//g;
-    $line_keep_tab   =~ s/[^\t]//g;
-    
-    $count_comma_neg += length $line_keep_comma;
-    $count_tab_neg   += length $line_keep_tab;
-}
-close INFILE;
+    open INFILE, "$neg_csv_filename" or die "can't open file $neg_csv_filename\n";
+    while (defined($line=<INFILE>))
+    {
+        $line_keep_comma = $line;
+        $line_keep_tab   = $line;
 
+        $line_keep_comma =~ s/[^,]//g;
+        $line_keep_tab   =~ s/[^\t]//g;
+
+        $count_comma_neg += length $line_keep_comma;
+        $count_tab_neg   += length $line_keep_tab;
+    }
+    close INFILE;
+}
 
 $csv_command_pos = 'cat';
 $csv_command_neg = 'cat';
@@ -329,7 +363,7 @@ if ($count_comma_pos > $count_tab_pos)
 {
     $csv_command_pos = 'csv2tab_not_excel.pl';
 }
-if ($count_comma_pos > $count_tab_pos)
+if ($count_comma_neg > $count_tab_neg)
 {
     $csv_command_neg = 'csv2tab_not_excel.pl';
 }
@@ -422,16 +456,41 @@ else
                              'metabolite_database_latest.txt';
 }
 
-$cmd_str_merge     = sprintf "%s \"%s\" \"%s\" %s %s > \"%s\"",
+if ($single_file_mode eq '')
+{
+    $cmd_str_merge = sprintf "%s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
                          $pos_iron_filename,
                          $neg_iron_filename,
                          $sample_table_filename,
                          $annotate_pipe_str,
                          $merged_filename;
+}
+elsif ($single_file_mode eq 'pos')
+{
+    $cmd_str_merge = sprintf "%s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
+                         'merge_metabolomics_pos_neg.pl',
+                         $pos_iron_filename,
+                         'NULL',
+                         $sample_table_filename,
+                         $annotate_pipe_str,
+                         $merged_filename;
+}
+elsif ($single_file_mode eq 'neg')
+{
+    $cmd_str_merge = sprintf "%s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
+                         'merge_metabolomics_pos_neg.pl',
+                         'NULL',
+                         $neg_iron_filename,
+                         $sample_table_filename,
+                         $annotate_pipe_str,
+                         $merged_filename;
+}
 $cmd_str_merge     =~ s/ +/ /g;
 
-$cmd_str_qc        = sprintf "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" > \"%s\"",
+if ($single_file_mode eq '')
+{
+    $cmd_str_qc    = sprintf "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" > \"%s\"",
                          'metabolomics_qc.pl',
                          $sample_table_filename,
                          $pos_sf_filename,
@@ -439,27 +498,91 @@ $cmd_str_qc        = sprintf "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" > \"%s\"",
                          $pos_fm_filename,
                          $neg_fm_filename,
                          $sample_qc_filename;
+}
+elsif ($single_file_mode eq 'pos')
+{
+    $cmd_str_qc    = sprintf "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" > \"%s\"",
+                         'metabolomics_qc.pl',
+                         $sample_table_filename,
+                         $pos_sf_filename,
+                         'NULL',
+                         $pos_fm_filename,
+                         'NULL',
+                         $sample_qc_filename;
+}
+elsif ($single_file_mode eq 'neg')
+{
+    $cmd_str_qc    = sprintf "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" > \"%s\"",
+                         'metabolomics_qc.pl',
+                         $sample_table_filename,
+                         'NULL',
+                         $neg_sf_filename,
+                         'NULL',
+                         $neg_fm_filename,
+                         $sample_qc_filename;
+}
 
-$cmd_str_rm        = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
+
+
+if ($single_file_mode eq '')
+{
+    $cmd_str_rm    = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
                          $pos_unidentified_output_name,
                          $pos_spikeins_output_name,
                          $pos_cleaned_filename,
                          $pos_iron_filename,
+                         $pos_sf_filename,
+                         $pos_fm_filename,
                          $neg_unidentified_output_name,
                          $neg_spikeins_output_name,
                          $neg_cleaned_filename,
                          $neg_iron_filename,
-                         $sample_table_filename,
-                         $pos_sf_filename,
                          $neg_sf_filename,
-                         $pos_fm_filename,
                          $neg_fm_filename,
+                         $sample_table_filename;
+}
+elsif ($single_file_mode eq 'pos')
+{
+    $cmd_str_rm    = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
+                         $pos_unidentified_output_name,
+                         $pos_spikeins_output_name,
+                         $pos_cleaned_filename,
+                         $pos_iron_filename,
+                         $pos_sf_filename,
+                         $pos_fm_filename,
+                         $sample_table_filename;
+}
+elsif ($single_file_mode eq 'neg')
+{
+    $cmd_str_rm    = sprintf "rm \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
+                         $neg_unidentified_output_name,
+                         $neg_spikeins_output_name,
+                         $neg_cleaned_filename,
+                         $neg_iron_filename,
+                         $neg_sf_filename,
+                         $neg_fm_filename,
+                         $sample_table_filename;
+}
 
 
-print "$cmd_str_strip_pos\n";
-print "$cmd_str_strip_neg\n";
-print "$cmd_str_iron_pos\n";
-print "$cmd_str_iron_neg\n";
+if ($single_file_mode ne 'neg')
+{
+    print "$cmd_str_strip_pos\n";
+}
+if ($single_file_mode ne 'pos')
+{
+    print "$cmd_str_strip_neg\n";
+}
+
+if ($single_file_mode ne 'neg')
+{
+    print "$cmd_str_iron_pos\n";
+}
+if ($single_file_mode ne 'pos')
+{
+    print "$cmd_str_iron_neg\n";
+}
+
 print "$cmd_str_merge\n";
 print "$cmd_str_qc\n";
 print "$cmd_str_rm\n";
