@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-06-07:  add support for single input file
 # 2022-04-11:  attempt to auto-prepend pos/neg auto-prepended during merging
 # 2022-03-10:  changelog edits
 # 2022-03-09:  re-score after initial scoring to update median sample
@@ -541,12 +542,18 @@ sub read_in_sample_table_file
         $short  = $array[$short_col];
 
         # map pos/neg sample names to merged sample names
-        $global_pos_map_hash{$pos}= $sample;
-        $global_neg_map_hash{$neg}= $sample;
+        if ($single_file_mode ne 'neg')
+        {
+            $global_pos_map_hash{$pos} = $sample;
+            $global_sample_map_hash{$sample}{pos}   = $pos;
+        }
+        if ($single_file_mode ne 'pos')
+        {
+            $global_neg_map_hash{$neg} = $sample;
+            $global_sample_map_hash{$sample}{neg}   = $neg;
+        }
         
         # all sample name mappings, mapped from merged sample name
-        $global_sample_map_hash{$sample}{pos}   = $pos;
-        $global_sample_map_hash{$sample}{neg}   = $neg;
         $global_sample_map_hash{$sample}{short} = $short;
     }
     close INFILE;
@@ -595,12 +602,13 @@ sub score_qc
     foreach $sample (@sample_array)
     {
         $log2scale_pos = $sample_merged_hash{$sample}{pos}{log2scale};
-        $log2scale_neg = $sample_merged_hash{$sample}{neg}{log2scale};
         $present_pos   = $sample_merged_hash{$sample}{pos}{present};
-        $present_neg   = $sample_merged_hash{$sample}{neg}{present};
         $mean_dist_pos = $sample_merged_hash{$sample}{pos}{mean_dist};
-        $mean_dist_neg = $sample_merged_hash{$sample}{neg}{mean_dist};
         $mean_log2_pos = $sample_merged_hash{$sample}{pos}{mean_log2};
+
+        $log2scale_neg = $sample_merged_hash{$sample}{neg}{log2scale};
+        $present_neg   = $sample_merged_hash{$sample}{neg}{present};
+        $mean_dist_neg = $sample_merged_hash{$sample}{neg}{mean_dist};
         $mean_log2_neg = $sample_merged_hash{$sample}{neg}{mean_log2};
 
         # missing pos sample
@@ -612,7 +620,7 @@ sub score_qc
 
             # this isn't going to be scaled correctly...
             # leaving out the missing counts would be too small
-            # assume roughly equal counts between then, so double it
+            # assume roughly equal counts between them, so double it
             $present_merged   = 2 * $present_neg;
         }
         # missing neg sample
@@ -624,7 +632,7 @@ sub score_qc
 
             # this isn't going to be scaled correctly...
             # leaving out the missing counts would be too small
-            # assume roughly equal counts between then, so double it
+            # assume roughly equal counts between them, so double it
             $present_merged   = 2 * $present_pos;
         }
         # assume we have both pos and neg
@@ -751,8 +759,18 @@ sub print_qc
 
     foreach $sample (@sample_array)
     {
-        $sample_pos    = $global_sample_map_hash{$sample}{pos};
-        $sample_neg    = $global_sample_map_hash{$sample}{neg};
+        $sample_pos = 'NULL';
+        $sample_neg = 'NULL';
+        
+        if ($single_file_mode ne 'neg')
+        {
+            $sample_pos    = $global_sample_map_hash{$sample}{pos};
+        }
+        if ($single_file_mode ne 'pos')
+        {
+            $sample_neg    = $global_sample_map_hash{$sample}{neg};
+        }
+
         $sample_short  = $global_sample_map_hash{$sample}{short};
 
         $score         = $sample_merged_hash{$sample}{merged}{score};
@@ -762,12 +780,13 @@ sub print_qc
         $mean_log2_adj = $sample_merged_hash{$sample}{merged}{mean_log2_adj};
 
         $log2scale_pos = $sample_merged_hash{$sample}{pos}{log2scale};
-        $log2scale_neg = $sample_merged_hash{$sample}{neg}{log2scale};
         $mean_dist_pos = $sample_merged_hash{$sample}{pos}{mean_dist};
-        $mean_dist_neg = $sample_merged_hash{$sample}{neg}{mean_dist};
         $present_pos   = $sample_merged_hash{$sample}{pos}{present};
-        $present_neg   = $sample_merged_hash{$sample}{neg}{present};
         $mean_log2_pos = $sample_merged_hash{$sample}{pos}{mean_log2};
+
+        $log2scale_neg = $sample_merged_hash{$sample}{neg}{log2scale};
+        $mean_dist_neg = $sample_merged_hash{$sample}{neg}{mean_dist};
+        $present_neg   = $sample_merged_hash{$sample}{neg}{present};
         $mean_log2_neg = $sample_merged_hash{$sample}{neg}{mean_log2};
 
         # if ($sample_pos eq '')        { $sample_pos    = ''; }
@@ -843,11 +862,43 @@ if (!defined($filename_table) ||
     exit(1);
 }
 
+
+$single_file_mode  = '';
+if (($filename_sf_pos eq 'NULL' && $filename_fm_pos eq 'NULL') ||
+    ($filename_sf_neg eq 'NULL' && $filename_fm_neg eq 'NULL'))
+{
+    if ($filename_sf_pos ne 'NULL')
+    {
+        $single_file_mode = 'pos';
+    }
+    if ($filename_sf_neg ne 'NULL')
+    {
+        $single_file_mode = 'neg';
+    }
+    
+    # ABORT -- they both can't be NULL
+    if ($filename_sf_pos eq $filename_sf_neg)
+    {
+        printf STDERR "ABORT -- at least one input filename must be not \"NULL\"\n";
+        exit(2);
+    }
+}
+
+
 read_in_sample_table_file($filename_table);
-read_in_scaling_factors_file($filename_sf_pos, 'pos');
-read_in_scaling_factors_file($filename_sf_neg, 'neg');
-read_in_findmedian_file($filename_fm_pos, 'pos');
-read_in_findmedian_file($filename_fm_neg, 'neg');
+
+if ($single_file_mode ne 'neg')
+{
+    read_in_scaling_factors_file($filename_sf_pos, 'pos');
+    read_in_findmedian_file($filename_fm_pos, 'pos');
+}
+
+if ($single_file_mode ne 'pos')
+{
+    read_in_scaling_factors_file($filename_sf_neg, 'neg');
+    read_in_findmedian_file($filename_fm_neg, 'neg');
+}
+
 score_qc();
 score_qc();    # score again with updated median sample
 print_qc();
