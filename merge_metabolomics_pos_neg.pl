@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-07:  add support for single input file
 # 2022-04-11:  comment out metabolmoics_qc.pl fix, fixed in metabolomics_qc.pl
 # 2022-04-11:  fix missing pos/neg sample names to work with metabolomics_qc.pl
 # 2022-03-09:  change debug filter mean message to print pos/neg fractional rows
@@ -495,7 +496,8 @@ for ($i = 0; $i < @ARGV; $i++)
     }
 }
 
-if ($syntax_error_flag || $num_files == 0)
+
+if ($syntax_error_flag || $num_files < 2)
 {
     $program_name = basename($0);
 
@@ -509,6 +511,27 @@ if ($syntax_error_flag || $num_files == 0)
 }
 
 
+$single_file_mode = '';
+if ($filename_pos eq 'NULL' || $filename_neg eq 'NULL')
+{
+    if ($filename_pos ne 'NULL')
+    {
+        $single_file_mode = 'pos';
+    }
+    if ($filename_neg ne 'NULL')
+    {
+        $single_file_mode = 'neg';
+    }
+    
+    # ABORT -- they both can't be NULL
+    if ($filename_pos eq $filename_neg)
+    {
+        printf STDERR "ABORT -- at least one input filename must be not \"NULL\"\n";
+        exit(2);
+    }
+}
+
+
 if ($filename_pos =~ /neg/i &&
     !($filename_pos =~ /pos/i))
 {
@@ -519,8 +542,8 @@ if ($filename_neg =~ /pos/i &&
 {
     printf STDERR "WARNING -- pos/neg file names may be swapped\n";
 }
-if (!($filename_pos =~ /pos/i) ||
-    !($filename_neg =~ /neg/i))
+if (($single_file_mode ne 'neg' && !($filename_pos =~ /pos/i)) ||
+    ($single_file_mode ne 'pos' && !($filename_neg =~ /neg/i)))
 {
     printf STDERR "WARNING -- pos/neg file names do not contain pos/neg\n";
 }
@@ -533,9 +556,14 @@ $all_logged_flag = 1;
 $prepended_pos_flag = 0;
 $prepended_neg_flag = 0;
 
-read_in_file($filename_pos, 'pos');
-read_in_file($filename_neg, 'neg');
-
+if ($single_file_mode ne 'neg')
+{
+    read_in_file($filename_pos, 'pos');
+}
+if ($single_file_mode ne 'pos')
+{
+    read_in_file($filename_neg, 'neg');
+}
 
 @global_header_array     = ();
 #@global_metadata_array  = sort keys %global_metadata_hash;
@@ -706,7 +734,9 @@ foreach $header (@actual_sample_lc_array)
 
 
 # only shift pos/neg to be equal means if data is logged and both present
-if ($equal_means_flag)
+$pos_shift = 0;
+$neg_shift = 0;
+if ($equal_means_flag && $single_file_mode eq '')
 {
     foreach $row_id (@global_row_id_array)
     {
@@ -802,7 +832,7 @@ if ($equal_means_flag)
 }
 
 
-# warn on unmatched pairs
+# match sample pairs
 foreach $header (@global_tomerge_array)
 {
     @temp_array = sort keys %{$tomerge_lc_to_origcase_hash{$header}};
@@ -825,20 +855,24 @@ foreach $header (@global_tomerge_array)
         printf STDERR "WARNING -- duplicate tomerges:\t%s\n", $dupe_str;
     }
     
-    foreach $pos_tomerge (@pos_tomerge_matches)
+    # warn on unmatched pairs
+    if ($single_file_mode eq '')
     {
-        if ($count_neg_matches == 0)
+        foreach $pos_tomerge (@pos_tomerge_matches)
         {
-            printf STDERR "WARNING -- unmatched pos/neg tomerge:\t%s\n",
-                $pos_tomerge;
+            if ($count_neg_matches == 0)
+            {
+                printf STDERR "WARNING -- unmatched pos/neg tomerge:\t%s\n",
+                    $pos_tomerge;
+            }
         }
-    }
-    foreach $neg_tomerge (@neg_tomerge_matches)
-    {
-        if ($count_pos_matches == 0)
+        foreach $neg_tomerge (@neg_tomerge_matches)
         {
-            printf STDERR "WARNING -- unmatched pos/neg tomerge:\t%s\n",
-                $neg_tomerge;
+            if ($count_pos_matches == 0)
+            {
+                printf STDERR "WARNING -- unmatched pos/neg tomerge:\t%s\n",
+                    $neg_tomerge;
+            }
         }
     }
 }
@@ -1007,6 +1041,15 @@ foreach $header (@actual_sample_lc_array)
     #{
     #    $neg_tomerge =~ s/^neg_//;
     #}
+    
+    if ($pos_tomerge eq '')
+    {
+        $pos_tomerge = 'NULL';
+    }
+    if ($neg_tomerge eq '')
+    {
+        $neg_tomerge = 'NULL';
+    }
     
     printf OUTFILE "%s\t%s\t%s\t%s\n",
         $tomerge_case, $pos_tomerge, $neg_tomerge, $tomerge_short;
