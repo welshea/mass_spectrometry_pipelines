@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-06-08:  enable 5A/5B fuzzy matching on opposite pos/neg
 # 2022-06-08:  adjust alignment method and scoring cutoff
 # 2022-04-04:  conform [1-7] to [abgdezh], "Acid,*ic" to "*ic acid"
 # 2022-02-15:  include PPM as 3rd field of m/z WARNING messages
@@ -1452,8 +1453,9 @@ while(defined($line=<DATA>))
             }
 
             # 5A/5B: fuzzy,       pos/neg  m/z
-            # currently too prone to mis-mappings, disable it
-            if (0 && $match_flag == 0)
+            # this used to result in too many false matches,
+            # but works well now with the newer, more strict, fuzzy matching
+            if ($match_flag == 0)
             {
                 %candidate_name_hash = ();
                 %temp_row_score_hash = ();
