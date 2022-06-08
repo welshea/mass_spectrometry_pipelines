@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-08:  modify scoring function to be more strict
 # 2022-06-01:  convert to/from UTF8 unicode, to condense/expand single chars
 # 2022-02-07:  implement missing traceback positive match count tie breaking
 # 2021-10-27:  rename gmiddle to elocal, for extended local
@@ -782,8 +783,8 @@ sub score_substring_mismatch
     }
 
     $align_length     = length $seq_align1;
-    $first_match_pos += $align_length;
-    $last_match_pos  += $align_length;
+    $first_match_pos += $align_length;    # originally relative to align end
+    $last_match_pos  += $align_length;    # originally relative to align end
     
     if ($first_match_pos == 9E99 || $last_match_pos == -9E99)
     {
@@ -809,12 +810,20 @@ sub score_substring_mismatch
         $max_padded_len = $len2 + $num_gap2;
     }
     
-    # adjust metrics so as to treat global/overlap more like local
-    $left_overhang   = max($first_match_row, $first_match_col) - 1;
-    $right_overhang  = max($len1 - $last_match_row, $len2 - $last_match_col);
-    $align_length    = $last_match_pos - $first_match_pos + 1;
-    
+    ## adjust metrics so as to treat global/overlap more like local
+    #$left_overhang   = max($first_match_row, $first_match_col) - 1;
+    #$right_overhang  = max($len1 - $last_match_row, $len2 - $last_match_col);
+    #$align_length    = $last_match_pos - $first_match_pos + 1;
 
+    # avoid divide by zero when nothing aligns
+    # this can happen on local and elocal alignments
+    #  example:  cbb hepastyl
+    #
+    if ($align_length < 1)
+    {
+        $align_length = 1;
+    }
+    
     # match score and penalties optimized for use with elocal alignments
     #
     # penalize less-end-anchored overhang        in numerator
@@ -845,15 +854,34 @@ sub score_substring_mismatch
     # I may want to consider zeroing out the score at < 50% coverage here,
     # rather than relying on the user to do so in the calling function?
     #
-    $my_score = ($num_match - min($left_overhang, $right_overhang)) /
-                ($align_length + sqrt($left_overhang + $right_overhang));
+    # problems:  N-BOC-L-tert-Leucine    N-Acetyl-L-Proline
+    #            SUCCINIC ACID-13C4      Fumaric acid (13C4)
+    #
+    #$my_score = ($num_match - min($left_overhang, $right_overhang)) /
+    #            ($align_length + sqrt($left_overhang + $right_overhang));
 
+    # fraction of actual score over maximum possible score
+    $my_score  = $score / ($match_score * $min_len);
+    # further penalize alignments that aren't end-anchored
+    $penalty = ($min_len - min($left_overhang, $right_overhang)) / $min_len;
 
     # scores < 0 aren't good for comparing, since they can behave oddly
     if ($my_score < 0)
     {
         $my_score = 0;
     }
+    
+    # since either can be zero, only multiply after we floor one to zero
+    # otherwise, if both are negative, they'll result in positive,
+    # which is not the behavior we want
+    $my_score *= $penalty;
+
+    # check for negative score after multiplying by the penalty
+    if ($my_score < 0)
+    {
+        $my_score = 0;
+    }
+
     
     # convert sequence alignments back into UTF-8 prior to printing
     utf8::encode($seq_align1);
@@ -880,7 +908,10 @@ sub score_substring_mismatch
         printf STDERR "%s\n",              $seq_align2;
     }
     
-    ${$return_frac_id_ptr} = $num_match / $min_len;
+    if (defined($return_frac_id_ptr))
+    {
+        ${$return_frac_id_ptr} = $num_match / $min_len;
+    }
     
     return $my_score;
 }
