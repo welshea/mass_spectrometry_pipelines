@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-06-08:  adjust alignment method and scoring cutoff
 # 2022-04-04:  conform [1-7] to [abgdezh], "Acid,*ic" to "*ic acid"
 # 2022-02-15:  include PPM as 3rd field of m/z WARNING messages
 # 2021-11-30:  add minimal lipidomics support
@@ -18,8 +19,9 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 use align_text;    # text string alignment module
 
-$mz_tol_ppm = 10;    # 10 ppm
-$rt_tol     = 1.0;   # minutes
+$mz_tol_ppm   = 10;    # 10 ppm
+$rt_tol       = 1.0;   # minutes
+$align_method = 'overlap';
 
 $bad_row_id      = 9E99;
 $lipidomics_flag = 0;
@@ -382,6 +384,7 @@ sub is_heavy_labeled
 #   epsilon         : e
 #   zeta            : z
 #   eta             : h
+#   lambda          : l
 
 # L-aminoacid     : aminoacid        ex. L-Alanine     --> Alanine
 # "anoic"         : "yric"           ex. Butanoic acid --> Butyric acid
@@ -424,6 +427,7 @@ sub preprocess_name
     $name =~ s/\bepsilon\b/e/g;
     $name =~ s/\bzeta\b/z/g;
     $name =~ s/\beta\b/h/g;
+    $name =~ s/\blambda\b/l/g;
     
     # replace single numbers with greek letters
     #    2-aminoethylphosphonate --> b-aminoethylphosphonate
@@ -1371,9 +1375,11 @@ while(defined($line=<DATA>))
                     $frac_id = 0;
                     $score = score_substring_mismatch($name_lc_conformed,
                                                       $name_db_conformed,
-                                                      'elocal',
+                                                      $align_method,
                                                       \$frac_id);
-                    if ($frac_id < 0.5) { $score = 0; }
+                    # if ($frac_id < 0.5) { $score = 0; }
+                    if ($score < 0.5)   { $score = 0; }
+
                     $temp_row_score_hash{$row} = $score;
                     
                     if ($score > $best_score)
@@ -1463,9 +1469,11 @@ while(defined($line=<DATA>))
                     $frac_id = 0;
                     $score = score_substring_mismatch($name_lc_conformed,
                                                       $name_db_conformed,
-                                                      'elocal',
+                                                      $align_method,
                                                       \$frac_id);
-                    if ($frac_id < 0.5) { $score = 0; }
+                    # if ($frac_id < 0.5) { $score = 0; }
+                    if ($score < 0.5)   { $score = 0; }
+
                     $temp_row_score_hash{$row} = $score;
                     
                     if ($score > $best_score)
