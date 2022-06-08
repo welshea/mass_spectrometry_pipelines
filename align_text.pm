@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-08:  adjust overhang calculations for overlap alignments
 # 2022-06-08:  modify scoring function to be more strict
 # 2022-06-01:  convert to/from UTF8 unicode, to condense/expand single chars
 # 2022-02-07:  implement missing traceback positive match count tie breaking
@@ -146,6 +147,11 @@ sub score_substring_mismatch
     my $num_gap2           = 0;
     my $left_overhang      = 0;
     my $right_overhang     = 0;
+    my $overhang_r1        = 0;
+    my $overhang_r2        = 0;
+    my $overhang_l1        = 0;
+    my $overhang_l2        = 0;
+    my $temp               = 0;
     my $align_length       = 0;
     my $my_score           = 0;
     my $min_padded_len     = 0;
@@ -661,7 +667,10 @@ sub score_substring_mismatch
     $seq_align2     = '';
     $score          = $matrix[$row][$col]{score_best};
     $state_best     = $matrix[$row][$col]{state_best};
-    $right_overhang = max($len1 - $row, $len2 - $col);
+    
+    $overhang_r1 = $len1 - $row;
+    $overhang_r2 = $len2 - $col;
+    $right_overhang = max($overhang_r1, $overhang_r2);
 
 
     # trace back through the matrix to assemble the alignment
@@ -792,12 +801,47 @@ sub score_substring_mismatch
         $last_match_pos  = $align_length;
     }
     
-    $left_overhang = max($row, $col);
-    
+    $overhang_l1 = $row;
+    $overhang_l2 = $col;
+    $left_overhang = max($overhang_l1, $overhang_l2);
+
     # alignment was assembled in reverse, so un-reverse the alignment
     $seq_align1 = reverse $seq_align1;
     $seq_align2 = reverse $seq_align2;
-    
+
+    # Overhangs are the amount of sequence off the ends of the alignment.
+    # Adjust the alignment overhangs for leading/trailing gaps, since
+    #  that amount of overhang already factors into $score.
+    if (1)
+    {
+        if ($seq_align1 =~ /(\~+)$/)
+        {
+            $temp         = length $1;
+            $overhang_r1 -= $temp;
+            if ($overhang_r1 < 0) { $overhang_r1 = 0; }
+        }
+        if ($seq_align2 =~ /(\~+)$/)
+        {
+            $temp         = length $1;
+            $overhang_r2 -= $temp;
+            if ($overhang_r2 < 0) { $overhang_r2 = 0; }
+        }
+        if ($seq_align1 =~ /^(\~+)/)
+        {
+            $temp         = length $1;
+            $overhang_l1 -= $temp;
+            if ($overhang_l1 < 0) { $overhang_l1 = 0; }
+        }
+        if ($seq_align2 =~ /^(\~+)/)
+        {
+            $temp         = length $1;
+            $overhang_l2 -= $temp;
+            if ($overhang_l2 < 0) { $overhang_l2 = 0; }
+        }
+    }
+    $right_overhang = max($overhang_r1, $overhang_r2);
+    $left_overhang  = max($overhang_l1, $overhang_l2);
+
     $min_padded_len = $len1 + $num_gap1;
     if ($len2 + $num_gap2 < $min_padded_len)
     {
