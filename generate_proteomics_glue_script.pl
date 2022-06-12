@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-11:  add --iron-auto-ch to auto-pick each ref channel per-plex
 # 2022-04-06:  add --iron-untilt to address rare dynamic range compression
 # 2022-02-03:  bugfix: honor auto-detected species
 # 2022-01-24:  support passing new comp pool exclusions flags
@@ -27,12 +28,13 @@ $num_non_options   = 0;
 $boost_flag        = 0;
 $no_debatch_flag   = 0;
 $no_iron_flag      = 0;
-$comp_pool_flag               = 0;    # use comp pool instead of real pool
-$comp_pool_exclude_flag       = 0;
-$comp_pool_exclude_filename   = '';
-$comp_pool_exclude_dark_flag  = 0;
-$comp_pool_exclude_boost_flag = 0;
-$iron_untilt_flag             = 0;
+$comp_pool_flag                 = 0;    # use comp pool instead of real pool
+$comp_pool_exclude_flag         = 0;
+$comp_pool_exclude_filename     = '';
+$comp_pool_exclude_dark_flag    = 0;
+$comp_pool_exclude_boost_flag   = 0;
+$iron_untilt_flag               = 0;
+$auto_single_variable_pool_flag = 0;    # different auto reference per plex
 
 
 $syntax_error_flag = 0;
@@ -99,6 +101,11 @@ for ($i = 0; $i < @ARGV; $i++)
             $iron_untilt_flag = 1;
             $no_iron_flag     = 0;
         }
+        elsif ($field =~ /^--iron-auto-ch$/)
+        {
+            $auto_single_variable_pool_flag = 1;
+            $no_debatch_flag = 1;
+        }
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -132,6 +139,16 @@ for ($i = 0; $i < @ARGV; $i++)
 }
 
 
+# force --no-debatch if different ref channels are used per-plex
+if ($auto_single_variable_pool_flag)
+{
+    $no_debatch_flag = 1;
+
+    printf STDERR "cross-plex de-batching disabled due to --iron-auto-ch\n";
+}
+
+
+
 if ($input_filename eq '')
 {
     $syntax_error_flag = 1;
@@ -146,6 +163,8 @@ if ($syntax_error_flag)
     print STDERR "    --last-ch       use highest channel for normalization\n";
     print STDERR "\n";
     print STDERR "    --iron          apply IRON normalization (default)\n";
+    print STDERR "    --iron-auto-ch  auto-pick different reference channel per-plex\n";
+    print STDERR "                    *** forces --no-debatch ***\n";
     print STDERR "    --iron-untilt   account for relative dynamic range\n";
     print STDERR "    --no-iron       disable IRON normalization\n";
     print STDERR "\n";
@@ -229,6 +248,13 @@ foreach $line (@autodetect_line_array)
         
         $autodetect_hash{$key} = $value;
     }
+}
+
+
+# set TMT channel to "auto" if --iron-auto-ch was enabled
+if ($auto_single_variable_pool_flag)
+{
+    $autodetect_hash{TMT_Channel} = "auto";
 }
 
 @autodetect_key_array = sort keys %autodetect_hash;
@@ -452,7 +478,8 @@ if (defined($autodetect_hash{TMT}) &&
     # multiple plexes
     if ($autodetect_hash{TMT} eq 'multi' &&
         defined($autodetect_hash{TMT_Channel}) &&
-                $autodetect_hash{TMT_Channel} =~ /TMT/)
+                ($autodetect_hash{TMT_Channel} =~ /TMT/ ||
+                 $autodetect_hash{TMT_Channel} eq 'auto'))
     {
         $pipeline_norm_str = sprintf "%s %s \"%s%s\" %s \\\n  > \"%s%s\"",
             'automate_tmt.pl',
