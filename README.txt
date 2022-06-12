@@ -20,6 +20,10 @@ Brief overview of running the proteomics and metabolomics pipelines:
     be run first, followed by generate_metabolomics_glue_script.pl on the
     resulting separate pos and neg files.
 
+    If the experiment was only assayed in positive or negative ion mode,
+    not both, then replace all occurrences of the missing pos/neg file name(s)
+    with "NULL", to indicate that no data is available for this injection.
+
 
   Species and edited auto-detect parameters file arguments are optional and
   usually not needed.
@@ -242,6 +246,11 @@ generate_metabolomics_glue_script.pl
     prior to merging.  No warning messages are currently issued when most such
     conflicts are detected (I should probably add some).
 
+    If the experiment was only assayed in positive or negative ion mode,
+    not both, then replace all occurrences of the missing pos/neg file name(s)
+    with "NULL", to indicate that no data is available for this injection.
+
+
   Output:
     .sh file to glue the various scripts together.
 
@@ -264,6 +273,8 @@ generate_proteomics_glue_script.pl
     --last-ch       use highest channel for normalization
 
     --iron          apply IRON normalization (default)
+    --iron-auto-ch  auto-pick different reference channel per-plex
+                    *** forces --no-debatch ***
     --iron-untilt   account for relative dynamic range
     --no-iron       disable IRON normalization
 
@@ -373,6 +384,10 @@ merge_metabolomics_pos_neg.pl
     "pipeline_metabolomics_sample_table.txt".  An optional 3rd agument
     overrides the default output sample table file name with the string
     given in the argument.
+
+    If the experiment was only assayed in positive or negative ion mode,
+    not both, then replace all occurrences of the missing pos/neg file name(s)
+    with "NULL", to indicate that no data is available for this injection.
 
 
 
