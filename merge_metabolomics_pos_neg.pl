@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-06-16:  better handling of [] near pos/neg in sample names
+# 2022-06-16:  bugfix: stop attempting to interpret sample names as REGEX
 # 2022-06-07:  add support for single input file
 # 2022-04-11:  comment out metabolmoics_qc.pl fix, fixed in metabolomics_qc.pl
 # 2022-04-11:  fix missing pos/neg sample names to work with metabolomics_qc.pl
@@ -256,14 +258,14 @@ sub read_in_file
 
         # ^pos _pos_ _pos$
         #
-        if (!($tomerge =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i ||
+        if (!($tomerge =~ s/(^|[^\]A-Za-z0-9]+)pos([^\[A-Za-z0-9]+|$)/$2/i ||
               $tomerge =~ s/pos$//i))
         {
             $all_pos_start_flag = 0;
             $count_non_pos++;
         }
 
-        if (!($tomerge =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i ||
+        if (!($tomerge =~ s/(^|[^\]A-Za-z0-9]+)neg([^\[A-Za-z0-9]+|$)/$2/i ||
               $tomerge =~ s/neg$//i))
         {
             $all_neg_start_flag = 0;
@@ -369,7 +371,7 @@ sub read_in_file
             # strip pos/neg from sample name
             if ($all_pos_start_flag)
             {
-                $tomerge =~ s/(^|[^A-Za-z0-9]+)pos([^A-Za-z0-9]+|$)/$2/i;
+                $tomerge =~ s/(^|[^\]A-Za-z0-9]+)pos([^\[A-Za-z0-9]+|$)/$2/i;
                 $tomerge =~ s/pos$//i;
 
                 # clean up underscores, etc.
@@ -381,7 +383,7 @@ sub read_in_file
             }
             elsif ($all_neg_start_flag)
             {
-                $tomerge =~ s/(^|[^A-Za-z0-9]+)neg([^A-Za-z0-9]+|$)/$2/i;
+                $tomerge =~ s/(^|[^\]A-Za-z0-9]+)neg([^\[A-Za-z0-9]+|$)/$2/i;
                 $tomerge =~ s/neg$//i;
 
                 # clean up underscores, etc.
@@ -1020,8 +1022,8 @@ foreach $header (@actual_sample_lc_array)
     $neg_tomerge  = '';
 
     $tomerge_short = $tomerge_case;
-    $tomerge_short =~ s/^$common_prefix_all//i;
-    $tomerge_short =~ s/$common_suffix_all$//i;
+    $tomerge_short =~ s/^\Q$common_prefix_all\E//i;
+    $tomerge_short =~ s/\Q$common_suffix_all\E$//i;
     
     if ($count_pos_matches)
     {
