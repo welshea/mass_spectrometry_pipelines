@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-16:  better handling of () and {} near pos/neg in sample names
 # 2022-06-16:  better handling of [] near pos/neg in sample names
 # 2022-06-16:  bugfix: stop attempting to interpret sample names as REGEX
 # 2022-06-07:  add support for single input file
@@ -258,14 +259,14 @@ sub read_in_file
 
         # ^pos _pos_ _pos$
         #
-        if (!($tomerge =~ s/(^|[^\]A-Za-z0-9]+)pos([^\[A-Za-z0-9]+|$)/$2/i ||
+        if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
               $tomerge =~ s/pos$//i))
         {
             $all_pos_start_flag = 0;
             $count_non_pos++;
         }
 
-        if (!($tomerge =~ s/(^|[^\]A-Za-z0-9]+)neg([^\[A-Za-z0-9]+|$)/$2/i ||
+        if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
               $tomerge =~ s/neg$//i))
         {
             $all_neg_start_flag = 0;
@@ -371,7 +372,7 @@ sub read_in_file
             # strip pos/neg from sample name
             if ($all_pos_start_flag)
             {
-                $tomerge =~ s/(^|[^\]A-Za-z0-9]+)pos([^\[A-Za-z0-9]+|$)/$2/i;
+                $tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i;
                 $tomerge =~ s/pos$//i;
 
                 # clean up underscores, etc.
@@ -383,7 +384,7 @@ sub read_in_file
             }
             elsif ($all_neg_start_flag)
             {
-                $tomerge =~ s/(^|[^\]A-Za-z0-9]+)neg([^\[A-Za-z0-9]+|$)/$2/i;
+                $tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i;
                 $tomerge =~ s/neg$//i;
 
                 # clean up underscores, etc.
