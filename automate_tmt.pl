@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2022-07-08: better handling of 126C default when no pool specified
 # 2022-04-26: add --iron-untilt to usage statement (no longer experimental)
 # 2022-04-19: strip accidental .txt from --comp-pool flags documentation
 # 2022-01-24: add --comp-pool-exclusions-boost; exclude last and last -2
@@ -1747,7 +1748,8 @@ $iron_input_name  = sprintf "temp_iron_input_%s.txt", $process_id;
 $iron_output_name = sprintf "temp_iron_output_%s.txt", $process_id;
 
 # default to using TMT-126C as the normalization channel
-if (!defined(%fixed_pool_hash))
+@fixed_pool_array = sort keys %fixed_pool_hash;
+if (@fixed_pool_array == 0)
 {
     $fixed_pool_hash{'TMT-126C'} = 1;
 }
