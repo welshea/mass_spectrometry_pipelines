@@ -1,6 +1,24 @@
 #!/usr/bin/perl -w
 
 
+# 2022-07-15:  conform by removing likely abbreviations from ends
+# 2022-07-15:  update is_heavy_labeled() function
+# 2022-07-08:  added some formula-based sanity checks
+# 2022-07-08:  rework and renumber the match groups
+# 2022-06-30:  negligible speedup of certain match types
+# 2022-06-30:  sort rows on name, to get more predictable annotation order
+# 2022-06-30:  improved name conforming; DL/+-, sulph->sulf
+# 2022-06-29:  reorder and alter various match types
+# 2022-06-27:  swap 5A/B and 6A/B categories (fuzzy pos/neg is last now)
+# 2022-06-27:  do not warn on mismatched bogus m/z values
+# 2022-06-25:  preliminary synonym matching support
+# 2022-06-25:  limit search to appropriate pos/neg ionization
+# 2022-06-25:  conform various "acids", which should be "acid"
+# 2022-06-24:  handle non-zero formal charges
+# 2022-06-22:  don't include placeholder bad rowid in all-row scan
+# 2022-06-22:  big speedups
+# 2022-06-22:  begin adding HMDB adduct support
+# 2022-06-22:  conform unicode, sulfid/sulfide/sulphid/sulphide
 # 2022-06-08:  enable 5A/5B fuzzy matching on opposite pos/neg
 # 2022-06-08:  adjust alignment method and scoring cutoff
 # 2022-04-04:  conform [1-7] to [abgdezh], "Acid,*ic" to "*ic acid"
@@ -10,6 +28,43 @@
 # 2021-10-21:  rename glocal to gmiddle
 # 2021-08-17:  begin adding auto heavy label matching support
 # 2021-08-17:  add --ppm flag to set m/z PPM tolerance
+
+
+# some problematic ambiguous names, not much way around these:
+#
+#    Sorbate
+#      HMDB0029581  (2E,4E)-2,4-Hexadienoic acid
+#      HMDB0253115  Hexadienic acid
+#      HMDB0256823  Propenylacrylic Acid
+#
+#    Methyl glutarate
+#      HMDB0000752  Methylglutaric acid
+#      HMDB0000858  Monomethyl glutaric acid
+
+# problems with Lactose
+#
+# HMDB0041627  beta-Lactose    C12H22O11  milk lactose
+# HMDB0035312  Hebevinoside I  C44H72O13  toxin from Hebeloma mushroom
+# HMDB0000186  Alpha-Lactose   C12H22O11  milk lactose
+#
+# Unfortunately, HMDB0035312 contains most or all of the usual synoyms
+# for Lactose, and links up the the correct KEGG and other external accessions.
+# HMDB0041627, which is actually Lactose, isn't linked up to the correct
+# external identifiers (linked to a KEGG identifier that isn't in any
+# pathways).  HMDB0000186 links out correctly, but is missing the D-lactose
+# synonym, so we don't map it to D-Lactose.  Maybe I can get HMDB to fix
+# their entry for Hebevinoside I to de-lactoseify it.
+#
+# So, until HMDB fixes HMDB0035312, we need some way to map D-lactose
+# to Alpha-Lactose (HMDB0000186), since that is the most correct.
+# Implementing a formula sanity check filter should force us to map to
+# both alpha- and beta- lactose instead.  Unfortunately, B-D-lactose
+# aligns better to D-lactose than A-lactose does, so beta-lactose is still
+# the chosen HMDB accession instaed of alpha-lactose :-(
+#
+# I'm going to add in KEGG pathway identifiers, to select those over
+# KEGG entries that aren't in pathways, but that still won't help Lactose,
+# due to the synonym alignment scoring issue.
 
 
 # set lib search path to directory the script is run from
@@ -113,6 +168,117 @@ sub cmp_elements
     }
    
     return $a cmp $b;
+}
+
+
+sub cmp_rows
+{
+    my $value_a;
+    my $value_b;
+    
+    $value_a = $annotation_hash{$a}{name};
+    $value_b = $annotation_hash{$b}{name};
+    if ($value_a lt $value_b) { return -1; }
+    if ($value_a gt $value_b) { return  1; }
+
+    $value_a = $annotation_hash{$a}{mz};
+    $value_b = $annotation_hash{$b}{mz};
+    if ($value_a < $value_b) { return -1; }
+    if ($value_a > $value_b) { return  1; }
+    
+    return ($a <=> $b);
+}
+
+
+sub cmp_conformed_rows
+{
+    my $value_a;
+    my $value_b;
+    
+    # has KEGG
+    $value_a = $annotation_hash{$a}{kegg};
+    $value_b = $annotation_hash{$b}{kegg};
+    if (defined($value_a) && $value_a ne '') { $value_a = 1; }
+    else                                     { $value_a = 0; }
+    if (defined($value_b) && $value_b ne '') { $value_b = 1; }
+    else                                     { $value_b = 0; }
+    if ($value_a && $annotation_hash{$a}{kegg_map} ne '') { $value_a = 2; }
+    if ($value_b && $annotation_hash{$b}{kegg_map} ne '') { $value_b = 2; }
+    if ($value_a > $value_b) { return -1; }
+    if ($value_a < $value_b) { return  1; }
+    
+    # by number of interesting columns
+    $value_a = $annotation_hash{$a}{col_count};
+    $value_b = $annotation_hash{$b}{col_count};
+    if ($value_a > $value_b) { return -1; }
+    if ($value_a < $value_b) { return  1; }
+    
+    # by score
+    $value_a = $temp_row_score_hash{$a};
+    $value_b = $temp_row_score_hash{$b};
+    if ($value_a > $value_b) { return -1; }
+    if ($value_a < $value_b) { return  1; }
+    
+
+    # then by the usual alphabetical and m/z sort order
+
+    $value_a = $annotation_hash{$a}{name};
+    $value_b = $annotation_hash{$b}{name};
+    if ($value_a lt $value_b) { return -1; }
+    if ($value_a gt $value_b) { return  1; }
+
+    $value_a = $annotation_hash{$a}{mz};
+    $value_b = $annotation_hash{$b}{mz};
+    if ($value_a < $value_b) { return -1; }
+    if ($value_a > $value_b) { return  1; }
+    
+    return ($a <=> $b);
+}
+
+
+sub cmp_fuzzy_rows
+{
+    my $value_a;
+    my $value_b;
+
+    # by score
+    $value_a = $temp_row_score_hash{$a};
+    $value_b = $temp_row_score_hash{$b};
+    if ($value_a > $value_b) { return -1; }
+    if ($value_a < $value_b) { return  1; }
+    
+    # has KEGG
+    $value_a = $annotation_hash{$a}{kegg};
+    $value_b = $annotation_hash{$b}{kegg};
+    if (defined($value_a) && $value_a ne '') { $value_a = 1; }
+    else                                     { $value_a = 0; }
+    if (defined($value_b) && $value_b ne '') { $value_b = 1; }
+    else                                     { $value_b = 0; }
+    if ($value_a && $annotation_hash{$a}{kegg_map} ne '') { $value_a = 2; }
+    if ($value_b && $annotation_hash{$b}{kegg_map} ne '') { $value_b = 2; }
+    if ($value_a > $value_b) { return -1; }
+    if ($value_a < $value_b) { return  1; }
+    
+    # by number of interesting columns
+    $value_a = $annotation_hash{$a}{col_count};
+    $value_b = $annotation_hash{$b}{col_count};
+    if ($value_a > $value_b) { return -1; }
+    if ($value_a < $value_b) { return  1; }
+
+
+    # then by the usual alphabetical and m/z sort order
+
+    $value_a = $annotation_hash{$a}{name};
+    $value_b = $annotation_hash{$b}{name};
+    if ($value_a lt $value_b) { return -1; }
+    if ($value_a gt $value_b) { return  1; }
+
+    $value_a = $annotation_hash{$a}{mz};
+    $value_b = $annotation_hash{$b}{mz};
+    if ($value_a < $value_b) { return -1; }
+    if ($value_a > $value_b) { return  1; }
+    
+    return ($a <=> $b);
 }
 
 
@@ -368,6 +534,12 @@ sub is_heavy_labeled
     if ($string =~ /\([^()]*\b13C[0-9]*\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\b14N[0-9]*\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\bD[0-9]*\b[^()]*\)/)   { return 1; }
+    if ($string =~ /\([^()]*\bBOC\b[^()]*\)/)       { return 1; }
+
+    if ($string =~ /\b13C[0-9]+\b/) { return 1; }
+    if ($string =~ /\b14N[0-9]+\b/) { return 1; }
+    if ($string =~ /\bD[0-9]+\b/)   { return 1; }
+    if ($string =~ /\bBOC\b/)       { return 1; }
     
     return 0;
 }
@@ -406,7 +578,290 @@ $number_letter_hash{5} = 'e';
 $number_letter_hash{6} = 'z';
 $number_letter_hash{7} = 'h';
 
-sub preprocess_name
+# common Greek and punctuation unicode seen in metabolite names
+# convert them to their nearest ASCII equivalent
+#
+# Greek
+$unicode_to_ascii_hash{"\x{0391}"} = 'A';
+$unicode_to_ascii_hash{"\x{0392}"} = 'B';
+$unicode_to_ascii_hash{"\x{0393}"} = 'G';
+$unicode_to_ascii_hash{"\x{0394}"} = 'D';
+$unicode_to_ascii_hash{"\x{0395}"} = 'E';
+$unicode_to_ascii_hash{"\x{0396}"} = 'Z';
+$unicode_to_ascii_hash{"\x{0397}"} = 'H';
+$unicode_to_ascii_hash{"\x{039B}"} = 'L';
+$unicode_to_ascii_hash{"\x{03A6}"} = 'Phi';
+$unicode_to_ascii_hash{"\x{03A8}"} = 'Psi';
+$unicode_to_ascii_hash{"\x{03A9}"} = 'O';
+$unicode_to_ascii_hash{"\x{03B1}"} = 'a';
+$unicode_to_ascii_hash{"\x{03B2}"} = 'b';
+$unicode_to_ascii_hash{"\x{03B3}"} = 'g';
+$unicode_to_ascii_hash{"\x{03B4}"} = 'd';
+$unicode_to_ascii_hash{"\x{03B5}"} = 'e';
+$unicode_to_ascii_hash{"\x{03B6}"} = 'z';
+$unicode_to_ascii_hash{"\x{03B7}"} = 'h';
+$unicode_to_ascii_hash{"\x{03BB}"} = 'l';
+$unicode_to_ascii_hash{"\x{03C6}"} = 'phi';
+$unicode_to_ascii_hash{"\x{03C8}"} = 'psi';
+$unicode_to_ascii_hash{"\x{03C9}"} = 'o';
+
+
+# Latin-1 supplement letters block
+if (0)
+{
+$unicode_to_ascii_hash{"\x{00C0}"} = 'A';
+$unicode_to_ascii_hash{"\x{00C1}"} = 'A';
+$unicode_to_ascii_hash{"\x{00C2}"} = 'A';
+$unicode_to_ascii_hash{"\x{00C3}"} = 'A';
+$unicode_to_ascii_hash{"\x{00C4}"} = 'A';
+$unicode_to_ascii_hash{"\x{00C5}"} = 'A';
+$unicode_to_ascii_hash{"\x{00C6}"} = 'AE';
+$unicode_to_ascii_hash{"\x{00C7}"} = 'C';
+$unicode_to_ascii_hash{"\x{00C8}"} = 'E';
+$unicode_to_ascii_hash{"\x{00C9}"} = 'E';
+$unicode_to_ascii_hash{"\x{00CA}"} = 'E';
+$unicode_to_ascii_hash{"\x{00CB}"} = 'E';
+$unicode_to_ascii_hash{"\x{00CC}"} = 'I';
+$unicode_to_ascii_hash{"\x{00CD}"} = 'I';
+$unicode_to_ascii_hash{"\x{00CE}"} = 'I';
+$unicode_to_ascii_hash{"\x{00CF}"} = 'I';
+$unicode_to_ascii_hash{"\x{00D0}"} = 'D';
+$unicode_to_ascii_hash{"\x{00D1}"} = 'N';
+$unicode_to_ascii_hash{"\x{00D2}"} = 'O';
+$unicode_to_ascii_hash{"\x{00D3}"} = 'O';
+$unicode_to_ascii_hash{"\x{00D4}"} = 'O';
+$unicode_to_ascii_hash{"\x{00D5}"} = 'O';
+$unicode_to_ascii_hash{"\x{00D6}"} = 'O';
+$unicode_to_ascii_hash{"\x{00D7}"} = 'x';    # multiplication
+$unicode_to_ascii_hash{"\x{00D8}"} = 'O';
+$unicode_to_ascii_hash{"\x{00D9}"} = 'U';
+$unicode_to_ascii_hash{"\x{00DA}"} = 'U';
+$unicode_to_ascii_hash{"\x{00DB}"} = 'U';
+$unicode_to_ascii_hash{"\x{00DC}"} = 'U';
+$unicode_to_ascii_hash{"\x{00DD}"} = 'Y';
+$unicode_to_ascii_hash{"\x{00DE}"} = 'TH';
+$unicode_to_ascii_hash{"\x{00DF}"} = 'ss';
+$unicode_to_ascii_hash{"\x{00E0}"} = 'a';
+$unicode_to_ascii_hash{"\x{00E1}"} = 'a';
+$unicode_to_ascii_hash{"\x{00E2}"} = 'a';
+$unicode_to_ascii_hash{"\x{00E3}"} = 'a';
+$unicode_to_ascii_hash{"\x{00E4}"} = 'a';
+$unicode_to_ascii_hash{"\x{00E5}"} = 'a';
+$unicode_to_ascii_hash{"\x{00E6}"} = 'ae';
+$unicode_to_ascii_hash{"\x{00E7}"} = 'c';
+$unicode_to_ascii_hash{"\x{00E8}"} = 'e';
+$unicode_to_ascii_hash{"\x{00E9}"} = 'e';
+$unicode_to_ascii_hash{"\x{00EA}"} = 'e';
+$unicode_to_ascii_hash{"\x{00EB}"} = 'e';
+$unicode_to_ascii_hash{"\x{00EC}"} = 'i';
+$unicode_to_ascii_hash{"\x{00ED}"} = 'i';
+$unicode_to_ascii_hash{"\x{00EE}"} = 'i';
+$unicode_to_ascii_hash{"\x{00EF}"} = 'i';
+$unicode_to_ascii_hash{"\x{00F0}"} = 'd';
+$unicode_to_ascii_hash{"\x{00F1}"} = 'n';
+$unicode_to_ascii_hash{"\x{00F2}"} = 'o';
+$unicode_to_ascii_hash{"\x{00F3}"} = 'o';
+$unicode_to_ascii_hash{"\x{00F4}"} = 'o';
+$unicode_to_ascii_hash{"\x{00F5}"} = 'o';
+$unicode_to_ascii_hash{"\x{00F6}"} = 'o';
+$unicode_to_ascii_hash{"\x{00F7}"} = '/';    # division
+$unicode_to_ascii_hash{"\x{00F8}"} = 'o';
+$unicode_to_ascii_hash{"\x{00F9}"} = 'u';
+$unicode_to_ascii_hash{"\x{00FA}"} = 'u';
+$unicode_to_ascii_hash{"\x{00FB}"} = 'u';
+$unicode_to_ascii_hash{"\x{00FC}"} = 'u';
+$unicode_to_ascii_hash{"\x{00FD}"} = 'y';
+$unicode_to_ascii_hash{"\x{00FE}"} = 'th';
+$unicode_to_ascii_hash{"\x{00FF}"} = 'y';
+# OE from Latin Extended-A
+$unicode_to_ascii_hash{"\x{0152}"} = 'OE';
+$unicode_to_ascii_hash{"\x{0153}"} = 'oe';
+}
+# only the most common ones, from synonyms field
+# name field can contain junk, which I may want to try to salvage later
+else
+{
+$unicode_to_ascii_hash{"\x{00E4}"} = 'a';
+$unicode_to_ascii_hash{"\x{00E8}"} = 'e';
+$unicode_to_ascii_hash{"\x{00E9}"} = 'e';
+$unicode_to_ascii_hash{"\x{00EF}"} = 'i';
+$unicode_to_ascii_hash{"\x{00F4}"} = 'o';
+$unicode_to_ascii_hash{"\x{00F6}"} = 'o';
+$unicode_to_ascii_hash{"\x{00FC}"} = 'u';
+}
+
+
+# +/-, dashes, and quotes
+$unicode_to_ascii_hash{"\x{00B1}"} = '+-';   # synonyms use (+-), not (+/-)
+$unicode_to_ascii_hash{"\x{2010}"} = '-';    # name only, real (50 of them)
+$unicode_to_ascii_hash{"\x{2011}"} = '-';
+$unicode_to_ascii_hash{"\x{2012}"} = '-';
+$unicode_to_ascii_hash{"\x{2013}"} = '-';
+$unicode_to_ascii_hash{"\x{2014}"} = '-';
+$unicode_to_ascii_hash{"\x{2015}"} = '-';
+$unicode_to_ascii_hash{"\x{2192}"} = '-';
+$unicode_to_ascii_hash{"\x{2212}"} = '-';
+#$unicode_to_ascii_hash{"\x{00A8}"} = '"';    # name only, corrupt text
+$unicode_to_ascii_hash{"\x{02B9}"} = "'";
+$unicode_to_ascii_hash{"\x{02BA}"} = '"';
+$unicode_to_ascii_hash{"\x{2018}"} = "'";
+$unicode_to_ascii_hash{"\x{2019}"} = "'";
+#$unicode_to_ascii_hash{"\x{201A}"} = "'";    # name only, corrupt text
+$unicode_to_ascii_hash{"\x{201B}"} = "'";
+$unicode_to_ascii_hash{"\x{201C}"} = '"';
+$unicode_to_ascii_hash{"\x{201D}"} = '"';
+$unicode_to_ascii_hash{"\x{201E}"} = '"';
+$unicode_to_ascii_hash{"\x{201F}"} = '"';
+$unicode_to_ascii_hash{"\x{2032}"} = "'";
+$unicode_to_ascii_hash{"\x{2033}"} = '"';
+$unicode_to_ascii_hash{"\x{2035}"} = "'";
+$unicode_to_ascii_hash{"\x{2034}"} = "'''";
+$unicode_to_ascii_hash{"\x{2036}"} = '"';
+$unicode_to_ascii_hash{"\x{2037}"} = "'''";   # triple prime
+$unicode_to_ascii_hash{"\x{2057}"} = '""';    # quadruple prime
+$unicode_to_ascii_hash{"\x{301D}"} = '"';
+$unicode_to_ascii_hash{"\x{301E}"} = '"';
+$unicode_to_ascii_hash{"\x{301F}"} = '"';
+
+# other punctuation
+# should be removed, shouldn't be there in the first place
+$unicode_to_ascii_hash{"\x{00AB}"} = '';   # <<;  alpha,<<gamma>>-butadiene
+$unicode_to_ascii_hash{"\x{00BB}"} = '';   # >>;  alpha,<<gamma>>-butadiene
+$unicode_to_ascii_hash{"\x{2020}"} = '';   # dagger;        end of HMDB0240697
+$unicode_to_ascii_hash{"\x{2021}"} = '';   # double dagger; end of HMDB0240697
+
+
+# superscript numbers
+$unicode_to_ascii_hash{"\x{00B2}"} = '2';
+$unicode_to_ascii_hash{"\x{00B3}"} = '3';
+$unicode_to_ascii_hash{"\x{00B9}"} = '1';
+$unicode_to_ascii_hash{"\x{2070}"} = '0';
+$unicode_to_ascii_hash{"\x{2074}"} = '4';
+$unicode_to_ascii_hash{"\x{2075}"} = '5';
+$unicode_to_ascii_hash{"\x{2076}"} = '6';
+$unicode_to_ascii_hash{"\x{2077}"} = '7';
+$unicode_to_ascii_hash{"\x{2078}"} = '8';
+$unicode_to_ascii_hash{"\x{2079}"} = '9';
+# subscript numbers
+$unicode_to_ascii_hash{"\x{2080}"} = '0';
+$unicode_to_ascii_hash{"\x{2081}"} = '1';
+$unicode_to_ascii_hash{"\x{2082}"} = '2';
+$unicode_to_ascii_hash{"\x{2083}"} = '3';
+$unicode_to_ascii_hash{"\x{2084}"} = '4';
+$unicode_to_ascii_hash{"\x{2085}"} = '5';
+$unicode_to_ascii_hash{"\x{2086}"} = '6';
+$unicode_to_ascii_hash{"\x{2087}"} = '7';
+$unicode_to_ascii_hash{"\x{2088}"} = '8';
+$unicode_to_ascii_hash{"\x{2089}"} = '9';
+# zero-width spaces, should be removed
+$unicode_to_ascii_hash{"\x{200B}"} = '';
+$unicode_to_ascii_hash{"\x{FEFF}"} = '';    # name only, Bosutinib
+
+# U+00A0 (non-breaking space)
+#
+# HMDB0062476
+#    GalNAc(3S)-GlcA-Gal-Gal-Xyl??
+# Non-breaking space at the end
+# This occurs several times, likely a copy/paste error
+$unicode_to_ascii_hash{"\x{00A0}"} = '';
+
+# U+00AC (NOT symbol)
+#
+# appears to be inserted junk in front of +/-
+# example: HMDB0303381 (+/-)-Isobornyl acetate
+#          https://foodb.ca/compounds/FDB012445
+# Or part of corrupted multibyte unicode:
+#     HMDB0251069
+#     HMDB0250632
+
+# bogus character, probably supposed to be alpha?
+# it only occurs once in all of the HMDB compound name fields
+# HMDB0242122 ?-D-galactopyranoside, ethyl
+$unicode_to_ascii_hash{"\x{FFFD}"} = 'a';
+
+
+
+sub unicode_to_ascii
+{
+    my $value = $_[0];
+    my $len;
+    my $string_new;
+    
+    if ($value =~ /[\x80-\xFF]/)
+    {
+        # first, decode the unicode string
+        # into single characters, so substr works correctly
+        utf8::decode($value);
+
+        #if ($value =~ /[\x{0370}-\x{03ff}]/)
+        #{
+        #    $temp = $value;
+        #    utf8::encode($temp);
+        #    printf STDERR "$accession\t$temp\n";
+        #}
+
+        ## HACK -- {NOT}+/-
+        $value =~ s/\(\x{00AC}\x{00B1}\)/\(\x{00B1}\)/g;
+        
+        ## HACK -- HMDB0304547
+        ## corrupted omega
+        ## thank you python ftfy package for confirming!
+        $value =~ s/\x{0153}\x{00E2}/\x{03C9}/g;
+        
+        ## HACK -- HMDB0304570 HMDB0304569
+        ## appears to be corrupted '
+        ## thank you python ftfy package!
+        $value =~ s/\x{201A}\x{00C4}\x{2264}/\'/g;
+        
+        ## HMDB0300900    (2E_4Z)???\decadienoyl-CoA
+        ##                http://qpmf.rx.umaryland.edu/PAMDB?MetID=PAMDB001410
+        ##                should probably be (2E_4Z)-decadienoyl-CoA
+        ## remove offending unicode entirely, plus the following backslash
+        $value =~ s/\x{00D4}\x{00F8}\x{03A9}\\//g;
+
+        ## HMDB0251069    2,2???-(Hydroxynitrosohydrazino)bis-ethanamine
+        ##                bloodexposome.org: 2,2'-(Hydroxynitrosohydrazino)...
+        ## remove offending unicode entirely
+        $value =~ s/\x{201A}\x{00C4}\x{00F6}\x{221A}\x{00D1}\x{221A}\x{2202}\?//g;
+        $value =~ s/\x{201A}\x{00C4}\x{00F6}\x{221A}\x{00A2}\x{00AC}\x{00DF}//g;
+        
+        ## HMDB0250632    ... cyclic (3?5)-disulfide
+        ##                bloodexposome.org: ... cyclic (35)-disulfide
+        ## remove offending unicode entirely
+        $value =~ s/\x{00AC}\x{00A8}\x{00AC}\x{00AE}//g;
+        $value =~ s/\x{201A}\x{00E0}\x{00F6}\x{221A}\x{00FA}//g;
+
+
+        $string_new = '';
+        $len        = length $value;
+        for ($j = 0; $j < $len; $j++)
+        {
+            $c_single = substr $value, $j, 1;
+            $c_new = $unicode_to_ascii_hash{$c_single};
+
+            if (defined($c_new))
+            {
+                $string_new .= $c_new;
+            }
+            else
+            {
+                $string_new .= $c_single;
+            }
+        }
+        $value = $string_new;
+        
+        # remove leading/trailing whitespace
+        $value =~ s/^\s+//;
+        $value =~ s/\s+$//;
+
+        # encode it back again, since input is multi-byte chars
+        utf8::encode($value);
+    }
+    
+    return $value;
+}
+
+sub conform_name
 {
     my $name       = $_[0];
     my $name_len;
@@ -419,18 +874,27 @@ sub preprocess_name
     
     # lowercase everything
     $name = lc $name;
-
-    # replace Greek letters at word boundaries
-    $name =~ s/\balpha\b/a/g;
-    $name =~ s/\bbeta\b/b/g;
-    $name =~ s/\bgamma\b/g/g;
-    $name =~ s/\bdelta\b/d/g;
-    $name =~ s/\bepsilon\b/e/g;
-    $name =~ s/\bzeta\b/z/g;
-    $name =~ s/\beta\b/h/g;
-    $name =~ s/\blambda\b/l/g;
     
-    # replace single numbers with greek letters
+    # convert unicode to ASCII
+    $name = unicode_to_ascii($name);
+    
+    # convert _ to space, so \w and \b won't match on them
+    $name =~ s/_/ /g;
+    
+    # remove likely abbreviations or synonyms from end
+    $name =~ s/ +\([^0-9()]+\)$//;
+
+    # replace Greek letters at letter boundaries
+    # example: HMDB0000708 Glycoursodeoxycholic acid
+    $name =~ s/(?<![A-Za-z])alpha(?![A-Za-z])/a/g;
+    $name =~ s/(?<![A-Za-z])beta(?![A-Za-z])/b/g;
+    $name =~ s/(?<![A-Za-z])gamma(?![A-Za-z])/g/g;
+    $name =~ s/(?<![A-Za-z])delta(?![A-Za-z])/d/g;
+    $name =~ s/(?<![A-Za-z])epsilon(?![A-Za-z])/e/g;
+    $name =~ s/(?<![A-Za-z])zeta(?![A-Za-z])/z/g;
+    $name =~ s/(?<![A-Za-z])eta(?![A-Za-z])/h/g;
+    
+    # replace single numbers with romanized greek letters
     #    2-aminoethylphosphonate --> b-aminoethylphosphonate
     @temp_array = split /\b([1-7])\b/, $name;
     for ($i = 1; $i < @temp_array; $i += 2)
@@ -440,10 +904,14 @@ sub preprocess_name
     $name = join '', @temp_array;
 
     # conform acids
-    $name =~ s/acid,(.*)ic$/$1ic acid/;   # reorder weird MeSH, HMDB notation
+    # example of "acids": HMDB0001202
+    #
+    $name =~ s/\bacids\b/acid/g;
+    $name =~ s/acids*,(.*)ic$/$1ic acid/; # reorder weird MeSH, HMDB notation
     $name =~ s/anoic/yric/g;              # Butanoic acid --> Butyric acid
     $name =~ s/anoate\b/yrate/g;          # Butanoate     --> Butyrate
-    $name =~ s/ic acid\b/ate/g;           # Glutamic acid --> Glutamate
+    $name =~ s/ic acids*\b/ate/g;         # Glutamic acid --> Glutamate
+    $name =~ s/ates\b/ate/g;              # Benzoates     --> Benzoate
     
     # strip the L- from L-aminoacids
     # only on word boundary, so we don't strip DL-aminoacid
@@ -454,7 +922,7 @@ sub preprocess_name
     $name =~ s/\bl-(cysteine)/$1/g;
     $name =~ s/\bl-(glutamine)/$1/g;
     $name =~ s/\bl-(glutamic acid)/$1/g;
-    # $name =~ s/\bl-(glycine)/$1/g;           # L- is never used !!
+    $name =~ s/\bl-(glycine)/$1/g;    # L-Glycine is used, but not by itself
     $name =~ s/\bl-(histidine)/$1/g;
     $name =~ s/\bl-(isoleucine)/$1/g;
     $name =~ s/\bl-(leucine)/$1/g;
@@ -467,6 +935,16 @@ sub preprocess_name
     $name =~ s/\bl-(tryptophan)/$1/g;          # also Tryptophanamide
     $name =~ s/\bl-(tyrosine)/$1/g;
     $name =~ s/\bl-(valine)/$1/g;
+
+    # sulfid/sulfide/sulphid/sulphide
+    # HMDB0042033 Thiodiglycol is the only entry with sulfid/sulphid
+    # so, replace sulfid/sulphid with sulfide, since sulfid/sulphid is odd
+    # sulfide is kept over sulphide due to fewer characters
+    #
+    $name =~ s/sulph/sulf/g;
+    $name =~ s/sulfid\b/sulfide/g;
+    #$name =~ s/sulphid\b/sulfide/g;
+    #$name =~ s/sulphide\b/sulfide/g;
 
     # "ic acid" / "ate"
     $name =~ s/\bl-(aspartate)\b/$1/g;
@@ -487,14 +965,37 @@ sub preprocess_name
                                       # 2-Aminoethylphosphonate
 
     # mono is redundant and often left out in synonyms
+    #
+    # WARNING:  conform to the same string, but methyl in different places
+    #   HMDB0000752  Methylglutaric acid
+    #   HMDB0000858  Monomethyl glutaric acid
+    #
     $name =~ s/mono(\S)/$1/g;
     
-    # condense everything that isn't a letter, number, comma, or plus/minus
-    # except when between two numbers
+    # replace (+/-) with (+-)
+    $name =~ s/\(\+\/\-\)/\(\+\-\)/g;
+
+    # keep only D,L,DL when together with (+),(-),(+-)
     #
-    # protect -) as in (+/-) or (-) using capital letters
-    $name =~ s/\(-|-\)/MINUS/g;       # protect minus signs
-    $name =~ s/[^A-Za-z0-9,+]/-/g;    # convert to hyphens
+    # examples: D-(-)-Arabinose
+    #           D-(+)-Galactosamine
+    #           D-(+)-Galacturonic acid
+    #           D-(+)-Glucosamine
+    #
+    #swap them around if +/- comes before D/L
+    #$name =~ s/(?<!\w)(d|l|dl)(?!\w)(.*?)(?<!\w)\((\+|\-|\+\-)\)(?!\w)/$1$2/g;
+    #$name =~ s/(?<!\w)\((\+|\-|\+\-)\)(?!\w)(.*?)(?<!\w)(d|l|dl)(?!\w)/$3$2/g;
+    $name =~ s/(?<!\w)(d|l|dl)-*\((\+|\-|\+\-)\)(?!\w)/$1/g;
+    $name =~ s/(?<!\w)\((\+|\-|\+\-)\)-*(d|l|dl)(?!\w)/$2/g;
+
+    ## protect -) as in (+/-) or (-) using capital letters    
+    $name =~ s/[\(\[\{]-|-[\)\]\}]/MINUS/g;       # protect minus signs
+    
+    
+    ## condense everything that isn't a letter, number, comma, or plus/minus
+    ## except when between two numbers
+    ##
+    $name =~ s/[^,+\w]/-/g;           # convert to hyphens
     $name =~ s/-+/-/g;                # condense multiple hyphens in a row
     $name =~ s/(^-|-$)//g;            # strip leading/trailing hyphens
     $name =~ s/([,+])-/$1/g;          # strip hyphens next to comma or plus
@@ -504,11 +1005,11 @@ sub preprocess_name
     $name =~ s/,+/,/g;                # condense multiple commas in a row
     $name =~ s/\++/\+/g;              # condense multiple pluses in a row
     
-    # de-protect and condense minus signs
-    #
-    # hypothetical example: 1-(-)-galacturonate   -->   1-galacturonate
-    #                       1-(+)-galacturonate   -->   1+galacturonate
-    #                       1-galacturonate       -->   1galacturonate
+    ## de-protect and condense minus signs
+    ##
+    ## hypothetical example: 1-(-)-galacturonate   -->   1-galacturonate
+    ##                       1-(+)-galacturonate   -->   1+galacturonate
+    ##                       1-galacturonate       -->   1galacturonate
     $name =~ s/MINUS/-/g;
     $name =~ s/-+/-/g;
 
@@ -642,8 +1143,8 @@ for ($i = 0; $i < @array; $i++)
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
 
-    # $field = $array[$i];
-    # $annotation_header_col_hash{$field} = $i;
+    $field = $array[$i];
+    $annotation_header_col_hash{$field} = $i;
     # $annotation_header_col_array[$i] = $field;
 }
 
@@ -673,18 +1174,33 @@ for ($i = 0; $i < @array; $i++)
     {
         $annotation_name_col = $i;
     }
+    elsif (!defined($annotation_synonym_col) &&
+           $header =~ /synonym$/i)
+    {
+        $annotation_synonym_col = $i;
+    }
+    elsif (!defined($annotation_traditional_col) &&
+           $header =~ /traditional_iupac$/i)
+    {
+        $annotation_traditional_col = $i;
+    }
+    elsif (!defined($annotation_kegg_map_col) &&
+           $header =~ /\bkegg_map/i)
+    {
+        $annotation_kegg_map_col = $i;
+    }
     elsif (!defined($annotation_kegg_col) &&
-           $header =~ /^kegg/i)
+           $header =~ /\bkegg/i)
     {
         $annotation_kegg_col = $i;
     }
     elsif (!defined($annotation_hmdb_col) &&
-           $header =~ /^hmdb/i)
+           $header =~ /\bhmdb/i)
     {
         $annotation_hmdb_col = $i;
     }
     elsif (!defined($annotation_pubchem_col) &&
-           $header =~ /^pubchem/i)
+           $header =~ /\bpubchem/i)
     {
         $annotation_pubchem_col = $i;
     }
@@ -699,6 +1215,34 @@ for ($i = 0; $i < @array; $i++)
         $annotation_rt_col = $i;
     }
 }
+
+# use name column, if present, instead of any other column for name
+if (defined($annotation_header_col_hash{'name'}))
+{
+    $annotation_name_col = $annotation_header_col_hash{'name'};
+}
+
+$annotation_adduct_flag   = 0;
+$annotation_mz_pos_col    = $annotation_header_col_hash{'m/z_pos'};
+$annotation_mz_neg_col    = $annotation_header_col_hash{'m/z_neg'};
+$annotation_mono_mass_col = $annotation_header_col_hash{'mono_mass'};
+$annotation_acc_col       = $annotation_header_col_hash{'accession'};
+
+if ((defined($annotation_mz_pos_col) ||
+     defined($annotation_mz_neg_col)) &&
+    defined($annotation_mono_mass_col) &&
+    defined($annotation_acc_col))
+{
+    $annotation_adduct_flag = 1;
+}
+
+# replace HMDB column with accession column,
+# since these only come from HMDB at the moment
+if ($annotation_adduct_flag)
+{
+    $annotation_hmdb_col = $annotation_acc_col;
+}
+
 
 if (!defined($annotation_mz_col))
 {
@@ -718,28 +1262,84 @@ if (!defined($annotation_name_col))
                  $annotation_filename;
     exit(1);
 }
-if (!defined($annotation_kegg_col))
-{
-    printf STDERR "ABORT -- KEGG ID column not found in annotation file %s\n",
-                 $annotation_filename;
-    exit(1);
-}
-if (!defined($annotation_hmdb_col))
-{
-    printf STDERR "ABORT -- HMDB column not found in annotation file %s\n",
-                 $annotation_filename;
-    exit(1);
-}
-if (!defined($annotation_pubchem_col))
-{
-    printf STDERR "ABORT -- PubChem column not found in annotation file %s\n",
-                 $annotation_filename;
-    exit(1);
-}
+#if (!defined($annotation_kegg_col))
+#{
+#    printf STDERR "ABORT -- KEGG ID column not found in annotation file %s\n",
+#                 $annotation_filename;
+#    exit(1);
+#}
+#if (!defined($annotation_hmdb_col))
+#{
+#    printf STDERR "ABORT -- HMDB column not found in annotation file %s\n",
+#                 $annotation_filename;
+#    exit(1);
+#}
+#if (!defined($annotation_pubchem_col))
+#{
+#    printf STDERR "ABORT -- PubChem column not found in annotation file %s\n",
+#                 $annotation_filename;
+#    exit(1);
+#}
 
+
+# columns to exclude from count of interesting columns
+%annotation_no_count_col_hash = ();
+if (defined($annotation_mz_col))
+{
+    $annotation_no_count_col_hash{$annotation_mz_col} = 1;
+}
+if (defined($annotation_formula_col))
+{
+    $annotation_no_count_col_hash{$annotation_formula_col} = 1;
+}
+if (defined($annotation_name_col))
+{
+    $annotation_no_count_col_hash{$annotation_name_col} = 1;
+}
+if (defined($annotation_synonym_col))
+{
+    $annotation_no_count_col_hash{$annotation_synonym_col} = 1;
+}
+if (defined($annotation_traditional_col))
+{
+    $annotation_no_count_col_hash{$annotation_traditional_col} = 1;
+}
+if (defined($annotation_pos_neg_col))
+{
+    $annotation_no_count_col_hash{$annotation_pos_neg_col} = 1;
+}
+if (defined($annotation_rt_col))
+{
+    $annotation_no_count_col_hash{$annotation_rt_col} = 1;
+}
+if (defined($annotation_name_col))
+{
+    $annotation_no_count_col_hash{$annotation_name_col} = 1;
+}
+if (defined($annotation_mz_pos_col))
+{
+    $annotation_no_count_col_hash{$annotation_mz_pos_col} = 1;
+}
+if (defined($annotation_mz_neg_col))
+{
+    $annotation_no_count_col_hash{$annotation_mz_neg_col} = 1;
+}
+if (defined($annotation_mono_mass_col))
+{
+    $annotation_no_count_col_hash{$annotation_mono_mass_col} = 1;
+}
+if (defined($annotation_acc_col))
+{
+    $annotation_no_count_col_hash{$annotation_acc_col} = 1;
+}
+if (defined($annotation_kegg_map_col))
+{
+    $annotation_no_count_col_hash{$annotation_kegg_map_col} = 1;
+}
 
 
 # read in the annotation
+@conformed_name_hash = ();
 $row = 0;
 while(defined($line=<ANNOTATION>))
 {
@@ -758,12 +1358,41 @@ while(defined($line=<ANNOTATION>))
 #        $array[$col] = reformat_sci($array[$col]);
     }
 
-    $mz      = $array[$annotation_mz_col];
-    $formula = $array[$annotation_formula_col];
-    $name    = $array[$annotation_name_col];
-    $kegg    = $array[$annotation_kegg_col];
-    $hmdb    = $array[$annotation_hmdb_col];
-    $pubchem = $array[$annotation_pubchem_col];
+    $mz          = $array[$annotation_mz_col];
+    $formula     = $array[$annotation_formula_col];
+    $name        = $array[$annotation_name_col];
+
+    $kegg        = '';
+    $kegg_map    = '';
+    $hmdb        = '';
+    $pubchem     = '';
+    $synonym_str = '';
+    $traditional_str = '';
+    
+    if (defined($annotation_synonym_col))
+    {
+        $synonym_str = $array[$annotation_synonym_col];
+    }
+    if (defined($annotation_traditional_col))
+    {
+        $traditional_str = $array[$annotation_traditional_col];
+    }
+    if (defined($annotation_kegg_col))
+    {
+        $kegg     = $array[$annotation_kegg_col];
+    }
+    if (defined($annotation_kegg_map_col))
+    {
+        $kegg_map = $array[$annotation_kegg_map_col];
+    }
+    if (defined($annotation_hmdb_col))
+    {
+        $hmdb     = $array[$annotation_hmdb_col];
+    }
+    if (defined($annotation_pubchem_col))
+    {
+        $pubchem  = $array[$annotation_pubchem_col];
+    }
     
     # retention time sanity checks, if available
     if (defined($annotation_rt_col))
@@ -775,130 +1404,276 @@ while(defined($line=<ANNOTATION>))
         $rt  = '';
     }
     
-    if (!defined($mz))      { $mz      = ''; }
-    if (!defined($formula)) { $formula = ''; }
-    if (!defined($name))    { $name    = ''; }
-    if (!defined($kegg))    { $kegg    = ''; }
-    if (!defined($hmdb))    { $hmdb    = ''; }
-    if (!defined($pubchem)) { $pubchem = ''; }
-    if (!defined($pubchem)) { $rt      = ''; }
-    
+    if (!defined($mz))       { $mz       = ''; }
+    if (!defined($formula))  { $formula  = ''; }
+    if (!defined($name))     { $name     = ''; }
+    if (!defined($kegg))     { $kegg     = ''; }
+    if (!defined($kegg_map)) { $kegg_map = ''; }
+    if (!defined($hmdb))     { $hmdb     = ''; }
+    if (!defined($pubchem))  { $pubchem  = ''; }
+    if (!defined($pubchem))  { $rt       = ''; }
+
     # skip bad rows
-    if (!is_number($mz))  { next; }
-    if (!($name =~ /\S/)) { next; }
-    
-    # keep one row per combination of identifiers, ignoring pos/neg, rt, etc.
-    #
-    # no longer necessary, since hits are now de-duped during printing
-    if (0)
+    if (!($name =~ /\S/))    { next; }
+
+
+    # count interesting columns
+    $count = 0;
+    for ($col = 0; $col < @array; $col++)
     {
-        # unique identifier for mapping
-        $unique_id  =       $mz;
-        $unique_id .= '~' . $formula;
-        $unique_id .= '~' . $name;
-        $unique_id .= '~' . $kegg;
-        $unique_id .= '~' . $hmdb;
-        $unique_id .= '~' . $pubchem;
-        
-        # only keep one copy of each mapping
-        # "duplicates" can happen due to peaks at multiple retention times
-        if (defined($unique_id_hash{$unique_id}))
+        if (!defined($annotation_no_count_col_hash{$col}) &&
+            $array[$col] =~ /\S/)
         {
-            next;
+            $count++;
         }
-        $unique_id_hash{$unique_id} = 1;
     }
 
-    $annotation_hash{$row}{mz}      = $mz;
-    $annotation_hash{$row}{formula} = $formula;
-    $annotation_hash{$row}{name}    = $name;
-    $annotation_hash{$row}{kegg}    = $kegg;
-    $annotation_hash{$row}{hmdb}    = $hmdb;
-    $annotation_hash{$row}{pubchem} = $pubchem;
-    $annotation_hash{$row}{rt}      = $rt;
-    
-    # bin m/z for rapid scanning later
-    # largest m/z we see is 900
-    # +/-1 is ~1000 ppm, which is *way* over our 10 ppm tolerance
-    # bins are too large, but are very simple to code up
-    #
-    # also factor in +/- 2.014552 (pos - neg) difference
-    #
-    $mz_floor = floor($mz);
-    $mz_minus3 = $mz_floor - 3;
-    $mz_minus2 = $mz_floor - 2;
-    $mz_minus1 = $mz_floor - 1;
-    $mz_plus1  = $mz_floor + 1;
-    $mz_plus2  = $mz_floor + 2;
-    $mz_plus3  = $mz_floor + 3;
-
-    $mz_row_bins_hash{$mz_minus1}{$row} = 1;
-    $mz_row_bins_hash{$mz_floor}{$row}  = 1;
-    $mz_row_bins_hash{$mz_plus1}{$row}  = 1;
-
-    if (defined($annotation_pos_neg_col))
+    # sanity check formula, stripped of H's
+    $fsanity = '';
+    if ($formula =~ /[A-Za-z0-9]/)
     {
-        $pos_neg = $array[$annotation_pos_neg_col];
+        $fsanity = conform_formula($formula);
         
+        # remove H's, since protonation state is questionable
+        $fsanity =~ s/(D|H)[0-9]*//g;
+    }
+    
+    $conformed_name_hash{$name} = conform_name($name);
+
+    # concatenate synonym and traditional iupac fields
+    if ($traditional_str ne '')
+    {
+        if ($synonym_str ne '')
+        {
+            $synonym_str .= '|' . $traditional_str;
+        }
+        else
+        {
+            $synonym_str = $traditional_str;
+        }
+    }
+    
+    @synonym_array = split /\|/, $synonym_str;
+    %synonym_hash  = ();
+    for ($i = 0; $i < @synonym_array; $i++)
+    {
+        $synonym = conform_name($synonym_array[$i]);
+        $synonym_hash{$synonym} = 1;
+    }
+    @synonym_array = sort keys %synonym_hash;
+
+    $mz = bless_delimiter_bar_metabolomics($mz);
+    @mz_array = split /\|/, $mz;
+    foreach $mz (@mz_array)
+    {
+        # skip bad m/z
+        if (!($mz =~ /[0-9]/)) { next; }
+
+          $annotation_hash{$row}{formula}   = $formula;
+          $annotation_hash{$row}{name}      = $name;
+        @{$annotation_hash{$row}{syn_arr}}  = @synonym_array;
+          $annotation_hash{$row}{kegg}      = $kegg;
+          $annotation_hash{$row}{kegg_map}  = $kegg_map;
+          $annotation_hash{$row}{hmdb}      = $hmdb;
+          $annotation_hash{$row}{pubchem}   = $pubchem;
+          $annotation_hash{$row}{rt}        = $rt;
+          $annotation_hash{$row}{mz}        = $mz;
+          $annotation_hash{$row}{col_count} = $count;
+          $annotation_hash{$row}{fsanity}   = $fsanity;
+        
+        # bin m/z for rapid scanning later
+        # largest m/z we see is 900
+        # +/-1 is ~1000 ppm, which is *way* over our 10 ppm tolerance
+        # bins are too large, but are very simple to code up
+        #
+        # also factor in +/- 2.014552 (pos - neg) difference
+        #
+        $ppm_offset = $mz_tol_ppm * $mz / 1000000;
+        $mz_floor   = floor($mz);
+        $mz_minus1  = floor($mz - $ppm_offset);
+        $mz_plus1   = floor($mz + $ppm_offset);
+        
+        $mz_row_bins_hash{$mz_minus1}{$row} = 1;
+        $mz_row_bins_hash{$mz_floor}{$row}  = 1;
+        $mz_row_bins_hash{$mz_plus1}{$row}  = 1;
+
+        # determine pos/neg ionization mode
         $pos_flag = 0;
         $neg_flag = 0;
-        
-        if ($pos_neg =~ /pos/i) { $pos_flag = 1; }
-        if ($pos_neg =~ /neg/i) { $neg_flag = 1; }
-        
-        # include -2.014552 if pos
-        if ($pos_flag)
+        if (defined($annotation_pos_neg_col))
         {
-            $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-            $mz_row_bins_hash{$mz_minus2}{$row} = 1;
+            $pos_neg = $array[$annotation_pos_neg_col];
+
+            if ($pos_neg =~ /pos/i) { $pos_flag = 1; }
+            if ($pos_neg =~ /neg/i) { $neg_flag = 1; }
         }
-        # include +2.014552 if neg
-        if ($neg_flag)
+
+        if ($annotation_adduct_flag)
         {
-            $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-            $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+            $pos_flag = 0;
+            $neg_flag = 0;
+
+            if ($annotation_mz_col == $annotation_mz_pos_col)
+            {
+                $pos_flag = 1;
+            }
+            if ($annotation_mz_col == $annotation_mz_neg_col)
+            {
+                $neg_flag = 1;
+            }
         }
         
-        # if neither, include both
-        if ($pos_flag == 0 && $neg_flag == 0)
+        if ($pos_flag == 1 && $neg_flag == 0)
         {
-            $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-            $mz_row_bins_hash{$mz_minus2}{$row} = 1;
-            $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-            $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+            $annotation_hash{$row}{pos_neg} = 'pos';
         }
+        if ($pos_flag == 0 && $neg_flag == 1)
+        {
+            $annotation_hash{$row}{pos_neg} = 'neg';
+        }
+
+        if (1 || $annotation_adduct_flag == 0)
+        {
+            $mz_minus3 = floor($mz - 2.014552 - $ppm_offset);
+            $mz_minus2 = floor($mz - 2.014552 + $ppm_offset);
+            $mz_plus2  = floor($mz + 2.014552 - $ppm_offset);
+            $mz_plus3  = floor($mz + 2.014552 + $ppm_offset);
+
+            # include -2.014552 if pos
+            if ($pos_flag)
+            {
+                $mz_row_bins_hash{$mz_minus3}{$row} = 1;
+                $mz_row_bins_hash{$mz_minus2}{$row} = 1;
+            }
+            # include +2.014552 if neg
+            if ($neg_flag)
+            {
+                $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
+                $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+            }
+
+            # if neither, include both
+            if ($pos_flag == 0 && $neg_flag == 0)
+            {
+                $mz_row_bins_hash{$mz_minus3}{$row} = 1;
+                $mz_row_bins_hash{$mz_minus2}{$row} = 1;
+                $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
+                $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+            }
+        }
+
+        $row++;
     }
-    # include all +/- 2.014552, without knowing which are pos/neg
-    else
+
+    # assume one of the pos/neg mz cols was already stored
+    # store the other one
+    if ($annotation_adduct_flag)
     {
-        $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-        $mz_row_bins_hash{$mz_minus2}{$row} = 1;
-        $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-        $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+        $temp_mz_col = $annotation_mz_pos_col;
+        $pos_flag    = 1;
+        $neg_flag    = 0;
+        if ($annotation_mz_col == $annotation_mz_pos_col)
+        {
+            $temp_mz_col = $annotation_mz_neg_col;
+            $pos_flag    = 0;
+            $neg_flag    = 1;
+        }
+        $mz = $array[$annotation_mz_neg_col];
+    
+        $mz = bless_delimiter_bar_metabolomics($mz);
+        @mz_array = split /\|/, $mz;
+        foreach $mz (@mz_array)
+        {
+            # skip bad m/z
+            if (!($mz =~ /[0-9]/)) { next; }
+
+              $annotation_hash{$row}{formula}   = $formula;
+              $annotation_hash{$row}{name}      = $name;
+            @{$annotation_hash{$row}{syn_arr}}  = @synonym_array;
+              $annotation_hash{$row}{kegg}      = $kegg;
+              $annotation_hash{$row}{kegg_map}  = $kegg_map;
+              $annotation_hash{$row}{hmdb}      = $hmdb;
+              $annotation_hash{$row}{pubchem}   = $pubchem;
+              $annotation_hash{$row}{rt}        = $rt;
+              $annotation_hash{$row}{mz}        = $mz;
+              $annotation_hash{$row}{col_count} = $count;
+              $annotation_hash{$row}{fsanity}   = $fsanity;
+
+            if ($pos_flag == 1 && $neg_flag == 0)
+            {
+                $annotation_hash{$row}{pos_neg} = 'pos';
+            }
+            if ($pos_flag == 0 && $neg_flag == 1)
+            {
+                $annotation_hash{$row}{pos_neg} = 'neg';
+            }
+            
+            # bin m/z for rapid scanning later
+            # largest m/z we see is 900
+            # +/-1 is ~1000 ppm, which is *way* over our 10 ppm tolerance
+            # bins are too large, but are very simple to code up
+            #
+            # also factor in +/- 2.014552 (pos - neg) difference
+            #
+            $ppm_offset = $mz_tol_ppm * $mz / 1000000;
+            $mz_floor   = floor($mz);
+            $mz_minus1  = floor($mz - $ppm_offset);
+            $mz_plus1   = floor($mz + $ppm_offset);
+            
+            $mz_row_bins_hash{$mz_minus1}{$row} = 1;
+            $mz_row_bins_hash{$mz_floor}{$row}  = 1;
+            $mz_row_bins_hash{$mz_plus1}{$row}  = 1;
+
+            if (1 || $annotation_adduct_flag == 0)
+            {
+                $mz_minus3 = floor($mz - 2.014552 - $ppm_offset);
+                $mz_minus2 = floor($mz - 2.014552 + $ppm_offset);
+                $mz_plus2  = floor($mz + 2.014552 - $ppm_offset);
+                $mz_plus3  = floor($mz + 2.014552 + $ppm_offset);
+
+                # include -2.014552 if pos
+                if ($pos_flag)
+                {
+                    $mz_row_bins_hash{$mz_minus3}{$row} = 1;
+                    $mz_row_bins_hash{$mz_minus2}{$row} = 1;
+                }
+                # include +2.014552 if neg
+                if ($neg_flag)
+                {
+                    $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
+                    $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+                }
+
+                # if neither, include both
+                if ($pos_flag == 0 && $neg_flag == 0)
+                {
+                    $mz_row_bins_hash{$mz_minus3}{$row} = 1;
+                    $mz_row_bins_hash{$mz_minus2}{$row} = 1;
+                    $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
+                    $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+                }
+            }
+
+            $row++;
+        }
     }
-
-    $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-    $mz_row_bins_hash{$mz_minus2}{$row} = 1;
-    $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-    $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
-
-    $row++;
 }
 #$row_count = $row;
 
 
-# bogus row for unmapped hits
-$annotation_hash{$bad_row_id}{mz}      = '';
-$annotation_hash{$bad_row_id}{formula} = '';
-$annotation_hash{$bad_row_id}{name}    = '';
-$annotation_hash{$bad_row_id}{kegg}    = '';
-$annotation_hash{$bad_row_id}{hmdb}    = '';
-$annotation_hash{$bad_row_id}{pubchem} = '';
-$annotation_hash{$bad_row_id}{rt}      = '';
-
-
 # all rows, to be used when looking for matches regardless of m/z
-@row_all_array = sort {$a <=> $b} keys %annotation_hash;
+@row_all_array = sort cmp_rows keys %annotation_hash;
+
+
+# bogus row for unmapped hits
+$annotation_hash{$bad_row_id}{mz}       = '';
+$annotation_hash{$bad_row_id}{formula}  = '';
+$annotation_hash{$bad_row_id}{name}     = '';
+$annotation_hash{$bad_row_id}{kegg}     = '';
+$annotation_hash{$bad_row_id}{kegg_map} = '';
+$annotation_hash{$bad_row_id}{hmdb}     = '';
+$annotation_hash{$bad_row_id}{pubchem}  = '';
+$annotation_hash{$bad_row_id}{rt}       = '';
 
 
 # read in data file
@@ -990,6 +1765,16 @@ for ($i = 0; $i < @array; $i++)
     {
         $data_heavy_col = $i;
     }
+    elsif (!defined($data_pos_neg_col) &&
+           $header =~ /pos.*neg/i)
+    {
+        $data_pos_neg_col = $i;
+    }
+    elsif (!defined($data_formula_col) &&
+           $header =~ /formula/i)
+    {
+        $data_formula_col = $i;
+    }
 }
 
 # use parent m/z if it is El-MAVEN isotope data
@@ -1012,6 +1797,7 @@ if (!defined($data_name_col))
         $lipidomics_flag = 1;
     }
 }
+
 
 if (!defined($data_mz_col))
 {
@@ -1087,6 +1873,45 @@ while(defined($line=<DATA>))
     {
         $rt_data = $array[$data_rt_col];
     }
+    
+    # formula, for sanity checks, if available
+    $fsanity = '';
+    if (defined($data_formula_col))
+    {
+        $formula = $array[$data_formula_col];
+
+        if ($formula =~ /[A-Za-z0-9]/)
+        {
+            $fsanity = conform_formula($formula);
+        
+            # remove H's, since protonation state is questionable
+            $fsanity =~ s/(D|H)[0-9]*//g;
+        }
+    }
+    
+    $pos_neg = '';
+    if (defined($data_pos_neg_col))
+    {
+        $pos_flag = 0;
+        $neg_flag = 0;
+        if ($array[$data_pos_neg_col] =~ /pos/i)
+        {
+            $pos_flag = 1;
+        }
+        if ($array[$data_pos_neg_col] =~ /neg/i)
+        {
+            $neg_flag = 1;
+        }
+        
+        if ($pos_flag == 1 && $neg_flag == 0)
+        {
+            $pos_neg = 'pos';
+        }
+        elsif ($pos_flag == 0 && $neg_flag == 1)
+        {
+            $pos_neg = 'neg';
+        }
+    }
 
 
     # matched (mapped) rows
@@ -1107,8 +1932,11 @@ while(defined($line=<DATA>))
     if (is_number($mz) && $name =~ /\S/ &&
         !is_heavy_labeled($name))
     {
-        %candidate_row_mz_hash      = ();
-        %candidate_row_pos_neg_hash = ();
+        %candidate_row_mz_hash         = ();
+        %candidate_row_pos_neg_hash    = ();
+        
+        # combine the two, for synonym matching
+        %candidate_row_mz_pos_neg_hash = ();
 
         $mz_floor = floor($mz);
         
@@ -1116,34 +1944,73 @@ while(defined($line=<DATA>))
         #
         # also include +/- 2.014552 (pos - neg difference)
         #  already pre-binned earlier during +/- 3 binning
-        @row_array = sort {$a<=>$b} keys %{$mz_row_bins_hash{$mz_floor}};
+        @row_array = sort cmp_rows keys %{$mz_row_bins_hash{$mz_floor}};
         foreach $row (@row_array)
         {
-            $mz_db = $annotation_hash{$row}{mz};
-            
+            # sanity check the formulas
+            # skip rows that have wrong numbers of non-hydrogens
+            #
+            $fsanity_db = $annotation_hash{$row}{fsanity};
+            if ($fsanity ne '' && $fsanity_db ne '' &&
+                $fsanity ne $fsanity_db)
+            {
+                next;
+            }
+        
+            $pos_neg_db = $annotation_hash{$row}{pos_neg};
+            if (!defined($pos_neg_db))
+            {
+                $pos_neg_db = '';
+            }
+
+            $mz_db  = $annotation_hash{$row}{mz};
             $ppm    = 1000000 * abs(( $mz_db             - $mz) / $mz_db);
-            $ppm_m2 = 1000000 * abs((($mz_db - 2.014552) - $mz) /
-                                    ( $mz_db - 2.014552));
-            $ppm_p2 = 1000000 * abs((($mz_db + 2.014552) - $mz) /
-                                    ( $mz_db + 2.014552));
 
             # check only given m/z
-            if ($ppm <= $mz_tol_ppm)
+            # don't check any rows for the wrong ionization mode
+            if ($ppm <= $mz_tol_ppm &&
+                !($pos_neg_db ne '' &&
+                  $pos_neg ne '' &&
+                  $pos_neg ne $pos_neg_db))
             {
-                $candidate_row_mz_hash{$row}      = 1;
-                $candidate_row_pos_neg_hash{$row} = 1;
+                $candidate_row_mz_hash{$row}         = 1;
+                $candidate_row_mz_pos_neg_hash{$row} = 1;
             }
             
             # also check +/- 2.014552, in case we only have one of pos/neg
-            if ($ppm_m2 <= $mz_tol_ppm || $ppm_p2 <= $mz_tol_ppm)
+            if (1 || $annotation_adduct_flag == 0)
             {
-                $candidate_row_pos_neg_hash{$row} = 1;
+                $ppm_m2 = 1000000 * abs((($mz_db - 2.014552) - $mz) /
+                                        ( $mz_db - 2.014552));
+                $ppm_p2 = 1000000 * abs((($mz_db + 2.014552) - $mz) /
+                                        ( $mz_db + 2.014552));
+
+                if ($ppm_m2 <= $mz_tol_ppm)
+                {
+                    if ($pos_neg ne 'pos' && $pos_neg_db ne 'neg')
+                    {
+                        $candidate_row_pos_neg_hash{$row}    = 1;
+                        $candidate_row_mz_pos_neg_hash{$row} = 1;
+                    }
+                }
+                if ($ppm_p2 <= $mz_tol_ppm)
+                {
+                    if ($pos_neg ne 'neg' && $pos_neg_db ne 'pos')
+                    {
+                        $candidate_row_pos_neg_hash{$row}    = 1;
+                        $candidate_row_mz_pos_neg_hash{$row} = 1;
+                    }
+                }
             }
         }
         
-        # original and +/- ~2 m/z row arrays
-        @row_mz_array      = sort {$a<=>$b} keys %candidate_row_mz_hash;
-        @row_pos_neg_array = sort {$a<=>$b} keys %candidate_row_pos_neg_hash;
+        ## original and +/- ~2 m/z row arrays
+        #@row_mz_array         =
+        #    sort cmp_rows keys %candidate_row_mz_hash;
+        #@row_pos_neg_array    =
+        #    sort cmp_rows keys %candidate_row_pos_neg_hash;
+        @row_mz_pos_neg_array =
+            sort cmp_rows keys %candidate_row_mz_pos_neg_hash;
         
         # support multiple ;-delimited names per data row
         $name_delim = $name;
@@ -1152,62 +2019,113 @@ while(defined($line=<DATA>))
 
         # checks in less confident order:
         #
-        #   1A: exact match, original m/z
-        #   1B: conformed,   original m/z
-        #   2A: exact match, pos/neg  m/z
-        #   2B: conformed,   pos/neg  m/z
-        #   3A: exact_match, all rows, regardless of m/z
-        #   3B: conformed,   all rows, regardless of m/z
-        #   4A: fuzzy,       original m/z, one candidate
-        #   4B: fuzzy,       original m/z, >= 2 candidates
-        #   5A: fuzzy,       pos/neg  m/z, one candidate
-        #   5B: fuzzy,       pos/neg  m/z, >= 2 candidates
+        #   1:  conformed name,     original + pos/neg m/z
+        #   2:  conformed synonyms, original + pos/neg m/z
+        #   3:  conformed name,     all rows
+        #   4:  conformed synonyms, all rows
+        #   5:  fuzzy,              original + pos/neg m/z
         #   9X: unmatched
-        
+
         foreach $name_oc (@name_array)
         {
-            $name_lc    = lc $name_oc;
-        
             $match_flag = 0;
-            $match_type = '9x';    # 9: unmatched
+            $match_type = '9X';    # 9: unmatched
+
+            $name_lc           = lc $name_oc;
+            $name_lc_conformed = conform_name($name_lc);
         
-            # 1A: exact match, original m/z
-            foreach $row (@row_mz_array)
+            # 1A/1B: conformed name, original + pos/neg m/z
+            if ($match_flag == 0)
             {
-                $name_db_lc = lc $annotation_hash{$row}{name};
-            
-                if ($name_lc eq $name_db_lc)
+                %candidate_name_hash = ();
+                %temp_row_score_hash = ();
+                @candidate_row_array = ();
+
+                # score each row
+                foreach $row (@row_mz_pos_neg_array)
                 {
-                    $match_flag = 1;
+                    $name_db           = $annotation_hash{$row}{name};
+                    $name_db_lc        = lc $name_db;
+                    $name_db_conformed = $conformed_name_hash{$name_db};
+
+                    if ($name_lc_conformed eq $name_db_conformed)
+                    {
+                        $frac_id = 0;
+                        $score =
+                            score_substring_mismatch($name_lc,
+                                                     $name_db_lc,
+                                                     $align_method,
+                                                     \$frac_id);
+
+                        $candidate_name_hash{$name_db_lc} = 1;
+
+                        $temp_row_score_hash{$row} = $score;
+                    }
+                }
+                
+                @candidate_row_array =
+                    sort cmp_conformed_rows keys %temp_row_score_hash;
+                @temp_name_array     = keys %candidate_name_hash;
+
+                # only 1 good candidate in database, should be right?
+                if (@temp_name_array == 1)
+                {
                     $match_type = '1A';
-                
-                    # store each row only once per row
-                    if (!defined($matched_row_hash{$row}))
-                    {
-                        $matched_row_array[$num_matches]  = $row;
-                        $matched_type_array[$num_matches] = $match_type;
-                        $num_matches++;
-                    }
-                    $matched_row_hash{$row} = 1;
-                    $matched_row_type_hash{$row}{$match_type} = 1;
                 }
-            }
-
-            # 1B: conformed,   original m/z
-            if ($match_flag == 0)
-            {
-                $name_lc_conformed = preprocess_name($name_lc);
-            
-                foreach $row (@row_mz_array)
+                # less certain, since there are multiple candidates
+                else
                 {
-                    $name_db_conformed =
-                      preprocess_name($annotation_hash{$row}{name});
-                
-                    if ($name_lc_conformed eq $name_db_conformed)
+                    $match_type = '1B';
+                }
+
+                # keep highest score (and ties) as matches
+                if (@candidate_row_array)
+                {
+                    $best_row      = $candidate_row_array[0];
+                    $best_score    = $temp_row_score_hash{$best_row};
+                    $best_count    = $annotation_hash{$best_row}{col_count};
+                    $best_has_kegg = $annotation_hash{$best_row}{kegg};
+                    if (defined($best_has_kegg) && $best_has_kegg ne '')
                     {
-                        $match_flag = 1;
-                        $match_type = '1B';
+                        $best_has_kegg = 1;
+                    }
+                    else
+                    {
+                        $best_has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($best_has_kegg &&
+                        $annotation_hash{$best_row}{kegg_map} ne '')
+                    {
+                        $best_has_kegg = 2;
+                    }
+                }
+                foreach $row (@candidate_row_array)
+                {
+                    $score    = $temp_row_score_hash{$row};
+                    $count    = $annotation_hash{$row}{col_count};
+                    $has_kegg = $annotation_hash{$row}{kegg};
+                    if (defined($has_kegg) && $has_kegg ne '')
+                    {
+                        $has_kegg = 1;
+                    }
+                    else
+                    {
+                        $has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($has_kegg &&
+                        $annotation_hash{$row}{kegg_map} ne '')
+                    {
+                        $has_kegg = 2;
+                    }
                     
+                    if ($has_kegg == $best_has_kegg &&
+                        $count    == $best_count &&
+                        $score    == $best_score)
+                    {
+                        $match_flag = 1;
+                        
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
                         {
@@ -1218,49 +2136,126 @@ while(defined($line=<DATA>))
                         $matched_row_hash{$row} = 1;
                         $matched_row_type_hash{$row}{$match_type} = 1;
                     }
-                }
-            }
-
-            # 2A: exact match, pos/neg  m/z
-            if ($match_flag == 0)
-            {
-                foreach $row (@row_pos_neg_array)
-                {
-                    $name_db_lc = lc $annotation_hash{$row}{name};
-            
-                    if ($name_lc eq $name_db_lc)
+                    # no longer tied
+                    else
                     {
-                        $match_flag = 1;
-                        $match_type = '2A';
-                
-                        # store each row only once per row
-                        if (!defined($matched_row_hash{$row}))
-                        {
-                            $matched_row_array[$num_matches]  = $row;
-                            $matched_type_array[$num_matches] = $match_type;
-                            $num_matches++;
-                        }
-                        $matched_row_hash{$row} = 1;
-                        $matched_row_type_hash{$row}{$match_type} = 1;
+                        last;
                     }
                 }
             }
 
-            # 2B: conformed,   pos/neg  m/z
+            # 2A/2B: conformed,   original + pos/neg m/z, synonyms
+            #
+            # we need to limit m/z, otherwise weird synonyms can match:
+            #
+            # example:  D-lactose  C12H22O11
+            #   HMDB0035312  Hebevinoside I  C44H72O13
+            #
+            # example:  Vitamin k2  C31H40O2
+            #   HMDB0030017  Menatetrenone  C31H40O2
+            #   HMDB0030020  Withanolide    C28H38O5
+            #   HMDB0001892  Menadione      C11H8O2
+            #
+            # However, we now miss Glycochenodeoxycholate
+            #   HMDB0000637  Chenodeoxycholic acid glycine conjugate
+            #
             if ($match_flag == 0)
             {
-                $name_lc_conformed = preprocess_name($name_lc);
-            
-                foreach $row (@row_pos_neg_array)
+                %candidate_name_hash = ();
+                %temp_row_score_hash = ();
+                @candidate_row_array = ();
+
+                # score each row
+                foreach $row (@row_mz_pos_neg_array)
                 {
-                    $name_db_conformed =
-                      preprocess_name($annotation_hash{$row}{name});
+                    @synonym_array     = @{$annotation_hash{$row}{syn_arr}};
+                    $name_db           = $annotation_hash{$row}{name};
+                    $name_db_lc        = lc $name_db;
+                    $name_db_conformed = $conformed_name_hash{$name_db};
                 
-                    if ($name_lc_conformed eq $name_db_conformed)
+                    foreach $synonym_db_conformed (@synonym_array)
                     {
-                        $match_flag = 1;
-                        $match_type = '2B';
+                        if ($name_lc_conformed eq $synonym_db_conformed)
+                        {
+                            $frac_id = 0;
+                            $score =
+                                score_substring_mismatch($name_lc_conformed,
+                                                         $name_db_conformed,
+                                                         $align_method,
+                                                         \$frac_id);
+
+                            $candidate_name_hash{$name_db_lc} = 1;
+
+                            $temp_row_score_hash{$row} = $score;
+                            
+                            last;
+                        }
+                    }
+                }
+                
+                @candidate_row_array =
+                    sort cmp_conformed_rows keys %temp_row_score_hash;
+                @temp_name_array     = keys %candidate_name_hash;
+
+                # only 1 good candidate in database, should be right?
+                if (@temp_name_array == 1)
+                {
+                    $match_type = '2A';
+                }
+                # less certain, since there are multiple candidates
+                else
+                {
+                    $match_type = '2B';
+                }
+
+                # keep highest score (and ties) as matches
+                if (@candidate_row_array)
+                {
+                    $best_row      = $candidate_row_array[0];
+                    $best_score    = $temp_row_score_hash{$best_row};
+                    $best_count    = $annotation_hash{$best_row}{col_count};
+                    $best_has_kegg = $annotation_hash{$best_row}{kegg};
+                    if (defined($best_has_kegg) && $best_has_kegg ne '')
+                    {
+                        $best_has_kegg = 1;
+                    }
+                    else
+                    {
+                        $best_has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($best_has_kegg &&
+                        $annotation_hash{$best_row}{kegg_map} ne '')
+                    {
+                        $best_has_kegg = 2;
+                    }
+                }
+                foreach $row (@candidate_row_array)
+                {
+                    $score    = $temp_row_score_hash{$row};
+                    $count    = $annotation_hash{$row}{col_count};
+                    $has_kegg = $annotation_hash{$row}{kegg};
+                    if (defined($has_kegg) && $has_kegg ne '')
+                    {
+                        $has_kegg = 1;
+                    }
+                    else
+                    {
+                        $has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($has_kegg &&
+                        $annotation_hash{$row}{kegg_map} ne '')
+                    {
+                        $has_kegg = 2;
+                    }
                     
+                    if ($has_kegg == $best_has_kegg &&
+                        $count    == $best_count &&
+                        $score    == $best_score)
+                    {
+                        $match_flag = 1;
+                        
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
                         {
@@ -1271,25 +2266,116 @@ while(defined($line=<DATA>))
                         $matched_row_hash{$row} = 1;
                         $matched_row_type_hash{$row}{$match_type} = 1;
                     }
+                    # no longer tied
+                    else
+                    {
+                        last;
+                    }
                 }
             }
 
-            # 3A: exact_match, all rows, regardless of m/z
+            # 3A/3B: conformed name, all rows
             if ($match_flag == 0)
             {
+                %candidate_name_hash = ();
+                %temp_row_score_hash = ();
+                @candidate_row_array = ();
+
+                # score each row
                 foreach $row (@row_all_array)
                 {
-                    $name_db_lc = lc $annotation_hash{$row}{name};
-            
-                    if ($name_lc eq $name_db_lc)
+                    # sanity check the formulas
+                    # skip rows that have wrong numbers of non-hydrogens
+                    #
+                    $fsanity_db = $annotation_hash{$row}{fsanity};
+                    if ($fsanity ne '' && $fsanity_db ne '' &&
+                        $fsanity ne $fsanity_db)
+                    {
+                        next;
+                    }
+
+                    $name_db           = $annotation_hash{$row}{name};
+                    $name_db_lc        = lc $name_db;
+                    $name_db_conformed = $conformed_name_hash{$name_db};
+                
+                    if ($name_lc_conformed eq $name_db_conformed)
+                    {
+                        $frac_id = 0;
+                        $score =
+                            score_substring_mismatch($name_lc,
+                                                     $name_db_lc,
+                                                     $align_method,
+                                                     \$frac_id);
+
+                        $candidate_name_hash{$name_db_lc} = 1;
+
+                        $temp_row_score_hash{$row} = $score;
+                    }
+                }
+                
+                @candidate_row_array =
+                    sort cmp_conformed_rows keys %temp_row_score_hash;
+                @temp_name_array     = keys %candidate_name_hash;
+
+                # only 1 good candidate in database, should be right?
+                if (@temp_name_array == 1)
+                {
+                    $match_type = '3A';
+                }
+                # less certain, since there are multiple candidates
+                else
+                {
+                    $match_type = '3B';
+                }
+
+                # keep highest score (and ties) as matches
+                if (@candidate_row_array)
+                {
+                    $best_row      = $candidate_row_array[0];
+                    $best_score    = $temp_row_score_hash{$best_row};
+                    $best_count    = $annotation_hash{$best_row}{col_count};
+                    $best_has_kegg = $annotation_hash{$best_row}{kegg};
+                    if (defined($best_has_kegg) && $best_has_kegg ne '')
+                    {
+                        $best_has_kegg = 1;
+                    }
+                    else
+                    {
+                        $best_has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($best_has_kegg &&
+                        $annotation_hash{$best_row}{kegg_map} ne '')
+                    {
+                        $best_has_kegg = 2;
+                    }
+                }
+                foreach $row (@candidate_row_array)
+                {
+                    $score    = $temp_row_score_hash{$row};
+                    $count    = $annotation_hash{$row}{col_count};
+                    $has_kegg = $annotation_hash{$row}{kegg};
+                    if (defined($has_kegg) && $has_kegg ne '')
+                    {
+                        $has_kegg = 1;
+                    }
+                    else
+                    {
+                        $has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($has_kegg &&
+                        $annotation_hash{$row}{kegg_map} ne '')
+                    {
+                        $has_kegg = 2;
+                    }
+                    
+                    if ($has_kegg == $best_has_kegg &&
+                        $count    == $best_count &&
+                        $score    == $best_score)
                     {
                         $match_flag = 1;
-                        $match_type = '3A';
                         
-                        $bad_mz_name_hash{$name_oc} = $row;
-                        $bad_mz_row_hash{$row}      = $name_oc;
-                        $has_bad_mz_flag            = 1;
-                
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
                         {
@@ -1301,39 +2387,136 @@ while(defined($line=<DATA>))
                                    abs(($annotation_hash{$row}{mz} - $mz)
                                         / $annotation_hash{$row}{mz});
 
-                            printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
-                                $first_field,
-                                $mz,
-                                $annotation_hash{$row}{mz},
-                                $ppm,
-                                $name_delim,
-                                $annotation_hash{$row}{name},
+                            if ($annotation_hash{$row}{mz} < 99999)
+                            {
+                                printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
+                                    $first_field,
+                                    $mz,
+                                    $annotation_hash{$row}{mz},
+                                    $ppm,
+                                    $name_delim,
+                                    $annotation_hash{$row}{name},
+                            }
                         }
                         $matched_row_hash{$row} = 1;
                         $matched_row_type_hash{$row}{$match_type} = 1;
                     }
+                    # no longer tied
+                    else
+                    {
+                        last;
+                    }
                 }
             }
 
-            # 3B: conformed,   all rows, regardless of m/z
+            # 4A/4B: conformed, all rows, synonyms
             if ($match_flag == 0)
             {
-                $name_lc_conformed = preprocess_name($name_lc);
-            
+                %candidate_name_hash = ();
+                %temp_row_score_hash = ();
+                @candidate_row_array = ();
+
+                # score each row
                 foreach $row (@row_all_array)
                 {
-                    $name_db_conformed =
-                      preprocess_name($annotation_hash{$row}{name});
+                    # sanity check the formulas
+                    # skip rows that have wrong numbers of non-hydrogens
+                    #
+                    $fsanity_db = $annotation_hash{$row}{fsanity};
+                    if ($fsanity ne '' && $fsanity_db ne '' &&
+                        $fsanity ne $fsanity_db)
+                    {
+                        next;
+                    }
+
+                    @synonym_array     = @{$annotation_hash{$row}{syn_arr}};
+                    $name_db           = $annotation_hash{$row}{name};
+                    $name_db_lc        = lc $name_db;
+                    $name_db_conformed = $conformed_name_hash{$name_db};
                 
-                    if ($name_lc_conformed eq $name_db_conformed)
+                    foreach $synonym_db_conformed (@synonym_array)
+                    {
+                        if ($name_lc_conformed eq $synonym_db_conformed)
+                        {
+                            $frac_id = 0;
+                            $score =
+                                score_substring_mismatch($name_lc_conformed,
+                                                         $name_db_conformed,
+                                                         $align_method,
+                                                         \$frac_id);
+
+                            $candidate_name_hash{$name_db_lc} = 1;
+
+                            $temp_row_score_hash{$row} = $score;
+                            
+                            last;
+                        }
+                    }
+                }
+                
+                @candidate_row_array =
+                    sort cmp_conformed_rows keys %temp_row_score_hash;
+                @temp_name_array     = keys %candidate_name_hash;
+
+                # only 1 good candidate in database, should be right?
+                if (@temp_name_array == 1)
+                {
+                    $match_type = '4A';
+                }
+                # less certain, since there are multiple candidates
+                else
+                {
+                    $match_type = '4B';
+                }
+
+                # keep highest score (and ties) as matches
+                if (@candidate_row_array)
+                {
+                    $best_row      = $candidate_row_array[0];
+                    $best_score    = $temp_row_score_hash{$best_row};
+                    $best_count    = $annotation_hash{$best_row}{col_count};
+                    $best_has_kegg = $annotation_hash{$best_row}{kegg};
+                    if (defined($best_has_kegg) && $best_has_kegg ne '')
+                    {
+                        $best_has_kegg = 1;
+                    }
+                    else
+                    {
+                        $best_has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($best_has_kegg &&
+                        $annotation_hash{$best_row}{kegg_map} ne '')
+                    {
+                        $best_has_kegg = 2;
+                    }
+                }
+                foreach $row (@candidate_row_array)
+                {
+                    $score    = $temp_row_score_hash{$row};
+                    $count    = $annotation_hash{$row}{col_count};
+                    $has_kegg = $annotation_hash{$row}{kegg};
+                    if (defined($has_kegg) && $has_kegg ne '')
+                    {
+                        $has_kegg = 1;
+                    }
+                    else
+                    {
+                        $has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($has_kegg &&
+                        $annotation_hash{$row}{kegg_map} ne '')
+                    {
+                        $has_kegg = 2;
+                    }
+                    
+                    if ($has_kegg == $best_has_kegg &&
+                        $count    == $best_count &&
+                        $score    == $best_score)
                     {
                         $match_flag = 1;
-                        $match_type = '3B';
-
-                        $bad_mz_name_hash{$name_oc} = $row;
-                        $bad_mz_row_hash{$row}      = $name_oc;
-                        $has_bad_mz_flag            = 1;
-                    
+                        
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
                         {
@@ -1345,85 +2528,170 @@ while(defined($line=<DATA>))
                                    abs(($annotation_hash{$row}{mz} - $mz)
                                         / $annotation_hash{$row}{mz});
 
-                            printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
-                                $first_field,
-                                $mz,
-                                $annotation_hash{$row}{mz},
-                                $ppm,
-                                $name_delim,
-                                $annotation_hash{$row}{name},
+                            if ($annotation_hash{$row}{mz} < 99999)
+                            {
+                                printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
+                                    $first_field,
+                                    $mz,
+                                    $annotation_hash{$row}{mz},
+                                    $ppm,
+                                    $name_delim,
+                                    $annotation_hash{$row}{name},
+                            }
                         }
                         $matched_row_hash{$row} = 1;
                         $matched_row_type_hash{$row}{$match_type} = 1;
                     }
+                    # no longer tied
+                    else
+                    {
+                        last;
+                    }
                 }
             }
 
-            # 4A/4B: fuzzy,       original m/z
+
+            # 5A/5B: fuzzy, original m/z + pos/neg, name + synonyms
             if ($match_flag == 0)
             {
                 %candidate_name_hash = ();
                 %temp_row_score_hash = ();
                 $best_score          = 0;
-                $name_lc_conformed   = preprocess_name($name_lc);
+                #$name_lc_conformed   = conform_name($name_lc);
 
                 # score each row
-                foreach $row (@row_mz_array)
+                foreach $row (@row_mz_pos_neg_array)
                 {
-                    $name_db_conformed =
-                        preprocess_name($annotation_hash{$row}{name});
+                    $name_db           = $annotation_hash{$row}{name};
+                    $name_db_lc        = lc $name_db;
+                    $name_db_conformed = $conformed_name_hash{$name_db};
 
                     $frac_id = 0;
                     $score = score_substring_mismatch($name_lc_conformed,
                                                       $name_db_conformed,
                                                       $align_method,
                                                       \$frac_id);
-                    # if ($frac_id < 0.5) { $score = 0; }
-                    if ($score < 0.5)   { $score = 0; }
+                    #if ($frac_id < 0.5) { $score = 0; }
+                    #if ($score < 0.5)   { $score = 0; }
 
-                    $temp_row_score_hash{$row} = $score;
-                    
-                    if ($score > $best_score)
-                    {
-                        $best_score = $score;
-                    }
-                }
-
-                # build list of non- zero-scoring candidate names
-                foreach $row (@row_mz_array)
-                {
-                    $score = $temp_row_score_hash{$row};
-                    
                     if ($score > 0)
                     {
-                        $name_db_conformed =
-                            preprocess_name($annotation_hash{$row}{name});
+                        $candidate_name_hash{$name_db_lc} = 1;
 
-                        $candidate_name_hash{$name_db_conformed} = 1;
+                        if ($score >= $best_score)
+                        {
+                            $temp_row_score_hash{$row} = $score;
+                            $best_score = $score;
+
+                            if (0 && $name_lc =~ /lactose/ && $name_db_lc =~ /lactose/)
+                            {
+                                printf STDERR "LACTOSE  %s  %f  %s  %s  %s\n",
+                                              $name_lc, $score,
+                                              $name_lc_conformed,
+                                              $name_db_conformed,
+                                              $name_db_conformed;
+                            }
+                        }
+                    }
+
+                    if (1)
+                    {
+                      @synonym_array = @{$annotation_hash{$row}{syn_arr}};
+                      foreach $synonym_db_conformed (@synonym_array)
+                      {
+                        $frac_id = 0;
+                        $score =
+                            score_substring_mismatch($name_lc_conformed,
+                                                     $synonym_db_conformed,
+                                                     $align_method,
+                                                     \$frac_id);
+
+                        if ($score > 0)
+                        {
+                            $candidate_name_hash{$name_db_lc} = 1;
+
+                            if ($score >= $best_score)
+                            {
+                                $temp_row_score_hash{$row} = $score;
+                                $best_score = $score;
+
+                                if (0 && $name_lc =~ /lactose/ && $name_db_lc =~ /lactose/)
+                                {
+                                    printf STDERR "LACTOSE  %s  %f  %s  %s  %s\n",
+                                                  $name_lc, $score,
+                                                  $name_lc_conformed,
+                                                  $name_db_conformed,
+                                                  $synonym_db_conformed;
+                                }
+                            }
+                        }
+                      }
                     }
                 }
-                @temp_name_array = keys %candidate_name_hash;
+
+                @candidate_row_array =
+                    sort cmp_fuzzy_rows keys %temp_row_score_hash;
+                @temp_name_array     = keys %candidate_name_hash;
+
+                # only 1 good candidate in database, should be right?
+                if (@temp_name_array == 1)
+                {
+                    $match_type = '5A';
+                }
+                # less certain, since there are multiple candidates
+                else
+                {
+                    $match_type = '5B';
+                }
 
                 # keep highest score (and ties) as matches
-                foreach $row (@row_mz_array)
+                if (@candidate_row_array)
                 {
-                    $score = $temp_row_score_hash{$row};
+                    $best_row      = $candidate_row_array[0];
+                    $best_score    = $temp_row_score_hash{$best_row};
+                    $best_count    = $annotation_hash{$best_row}{col_count};
+                    $best_has_kegg = $annotation_hash{$best_row}{kegg};
+                    if (defined($best_has_kegg) && $best_has_kegg ne '')
+                    {
+                        $best_has_kegg = 1;
+                    }
+                    else
+                    {
+                        $best_has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($best_has_kegg &&
+                        $annotation_hash{$best_row}{kegg_map} ne '')
+                    {
+                        $best_has_kegg = 2;
+                    }
+                }
+                foreach $row (@candidate_row_array)
+                {
+                    $score    = $temp_row_score_hash{$row};
+                    $count    = $annotation_hash{$row}{col_count};
+                    $has_kegg = $annotation_hash{$row}{kegg};
+                    if (defined($has_kegg) && $has_kegg ne '')
+                    {
+                        $has_kegg = 1;
+                    }
+                    else
+                    {
+                        $has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($has_kegg &&
+                        $annotation_hash{$row}{kegg_map} ne '')
+                    {
+                        $has_kegg = 2;
+                    }
                     
-                    if ($score > 0 && $score == $best_score)
+                    if ($has_kegg == $best_has_kegg &&
+                        $count    == $best_count &&
+                        $score    == $best_score)
                     {
                         $match_flag = 1;
                         
-                        # only 1 good candidate in database, should be right?
-                        if (@temp_name_array == 1)
-                        {
-                            $match_type = '4A';
-                        }
-                        # less certain, since there are multiple candidates
-                        else
-                        {
-                            $match_type = '4B';
-                        }
-                    
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
                         {
@@ -1433,116 +2701,11 @@ while(defined($line=<DATA>))
                         }
                         $matched_row_hash{$row} = 1;
                         $matched_row_type_hash{$row}{$match_type} = 1;
-
-                        if (0)
-                        {
-                            $mz_db = $annotation_hash{$row}{mz};
-                            $name_db_conformed =
-                                preprocess_name($annotation_hash{$row}{name});
-
-                            printf STDERR "%s   %s   %s   %s   %s   %0.4f   %s|%s\n",
-                                $first_field,
-                                $row_data,
-                                $match_type,
-                                $mz, $mz_db,
-                                $score,
-                                $name_lc_conformed, $name_db_conformed;
-                        }
                     }
-                }
-            }
-
-            # 5A/5B: fuzzy,       pos/neg  m/z
-            # this used to result in too many false matches,
-            # but works well now with the newer, more strict, fuzzy matching
-            if ($match_flag == 0)
-            {
-                %candidate_name_hash = ();
-                %temp_row_score_hash = ();
-                $best_score          = 0;
-                $name_lc_conformed   = preprocess_name($name_lc);
-
-                # score each row
-                foreach $row (@row_pos_neg_array)
-                {
-                    $name_db_conformed =
-                        preprocess_name($annotation_hash{$row}{name});
-
-                    $frac_id = 0;
-                    $score = score_substring_mismatch($name_lc_conformed,
-                                                      $name_db_conformed,
-                                                      $align_method,
-                                                      \$frac_id);
-                    # if ($frac_id < 0.5) { $score = 0; }
-                    if ($score < 0.5)   { $score = 0; }
-
-                    $temp_row_score_hash{$row} = $score;
-                    
-                    if ($score > $best_score)
+                    # no longer tied
+                    else
                     {
-                        $best_score = $score;
-                    }
-                }
-
-                # build list of non- zero-scoring candidate names
-                foreach $row (@row_pos_neg_array)
-                {
-                    $score = $temp_row_score_hash{$row};
-                    
-                    if ($score > 0)
-                    {
-                        $name_db_conformed =
-                            preprocess_name($annotation_hash{$row}{name});
-
-                        $candidate_name_hash{$name_db_conformed} = 1;
-                    }
-                }
-                @temp_name_array = keys %candidate_name_hash;
-
-                # keep highest score (and ties) as matches
-                foreach $row (@row_pos_neg_array)
-                {
-                    $score = $temp_row_score_hash{$row};
-                    
-                    if ($score > 0 && $score == $best_score)
-                    {
-                        $match_flag = 1;
-                        
-                        # only 1 good candidate in database, should be right?
-                        if (@temp_name_array == 1)
-                        {
-                            $match_type = '5A';
-                        }
-                        # less certain, since there are multiple candidates
-                        else
-                        {
-                            $match_type = '5B';
-                        }
-                    
-                        # store each row only once per row
-                        if (!defined($matched_row_hash{$row}))
-                        {
-                            $matched_row_array[$num_matches]  = $row;
-                            $matched_type_array[$num_matches] = $match_type;
-                            $num_matches++;
-                        }
-                        $matched_row_hash{$row} = 1;
-                        $matched_row_type_hash{$row}{$match_type} = 1;
-
-                        if (0)
-                        {
-                            $mz_db = $annotation_hash{$row}{mz};
-                            $name_db_conformed =
-                                preprocess_name($annotation_hash{$row}{name});
-
-                            printf STDERR "%s   %s   %s   %s   %s   %0.4f   %s|%s\n",
-                                $first_field,
-                                $row_data,
-                                $match_type,
-                                $mz, $mz_db,
-                                $score,
-                                $name_lc_conformed, $name_db_conformed;
-                        }
+                        last;
                     }
                 }
             }
@@ -1556,8 +2719,8 @@ while(defined($line=<DATA>))
                 # so, for now, don't output any warnings
                 if ($lipidomics_flag == 0)
                 {
-                    printf STDERR "UNMATCHED   %s   %s   %s   %s\n",
-                                  $first_field, $mz, $name, $name_oc;
+#                    printf STDERR "UNMATCHED   %s   %s   %s   %s\n",
+#                                  $first_field, $mz, $name, $name_oc;
                 }
 
                 $matched_row_array[$num_matches]  = $bad_row_id;
@@ -1623,10 +2786,12 @@ while(defined($line=<DATA>))
             
 
             # at least one good m/z match
-            if ($num_matches && !($match_type =~ /3/))
+            if ($num_matches && !($match_type =~ /[34]/))
             {
                 $has_good_mz_flag = 1;
             }
+            
+            # printf STDERR "%s  %s\n", $name, @matched_type_array;
         }
     }
     
@@ -1825,12 +2990,12 @@ while(defined($line=<DATA>))
             }
             
             # blank multiple match fields without any mappings
-            if ($name_db_str    eq '|') { $name_db_str    = ''; }
-            if ($match_type_str eq '|') { $match_type_str = ''; }
-            if ($formula_str    eq '|') { $formula_str    = ''; }
-            if ($kegg_str       eq '|') { $kegg_str       = ''; }
-            if ($hmdb_str       eq '|') { $hmdb_str       = ''; }
-            if ($pubchem_str    eq '|') { $pubchem_str    = ''; }
+            if (!($name_db_str    =~ /[^|]/)) { $name_db_str    = ''; }
+            if (!($match_type_str =~ /[^|]/)) { $match_type_str = ''; }
+            if (!($formula_str    =~ /[^|]/)) { $formula_str    = ''; }
+            if (!($kegg_str       =~ /[^|]/)) { $kegg_str       = ''; }
+            if (!($hmdb_str       =~ /[^|]/)) { $hmdb_str       = ''; }
+            if (!($pubchem_str    =~ /[^|]/)) { $pubchem_str    = ''; }
 
 
             # no matches found for this row
