@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2022-06-23:  penalize final returned score by min_len/max_len
+# 2022-06-22:  return empty alignment if either string is blank
+# 2022-06-09:  calculate all overhangs using first+last identities
 # 2022-06-08:  adjust overhang calculations for overlap alignments
 # 2022-06-08:  modify scoring function to be more strict
 # 2022-06-01:  convert to/from UTF8 unicode, to condense/expand single chars
@@ -126,6 +129,7 @@ sub score_substring_mismatch
     my $col;
     my $pointer;
     my $score;
+    my $score_adj;    # adjusted score, removing poorly aligned ends
     my $score_best;
     my $score_diag;
     my $score_up;
@@ -164,10 +168,23 @@ sub score_substring_mismatch
     my $last_match_row     = 0;
     my $last_match_col     = 0;
     my $pos;
+    my $pos_rev;   # position when going backwards
+    
+    my $tb_length;
+    my $tb_scores_array;    # fill as we traceback, use reversed later
+    my $aln_subscore_array; # individual m/mm/gap/etc. scores, unreversed
     
     # decode UTF-8 unicode character into single internal characters
     utf8::decode($string1);
     utf8::decode($string2);
+
+    # return no alignment if either string is empty
+    if ($len1 == 0 || $len2 == 0)
+    {
+        ${$return_frac_id_ptr} = 0;
+
+        return 0.0;
+    }
 
     # HACK -- enable debug output by appending _debug to type
     $type = $type_orig;
@@ -674,7 +691,8 @@ sub score_substring_mismatch
 
 
     # trace back through the matrix to assemble the alignment
-    $pos = 0;
+    $pos       = 0;
+    $tb_length = 0;	# increment as we walk backwards through the matrix
     while ($row || $col)
     {
         # local traceback ends once alignment score is zero
@@ -775,6 +793,7 @@ sub score_substring_mismatch
         }
         $pos--;
 
+        $tb_scores_array[$tb_length++] = $matrix[$row][$col]{score_best};
 
         if ($type_orig =~ /_debug$/)
         {
@@ -854,10 +873,40 @@ sub score_substring_mismatch
         $max_padded_len = $len2 + $num_gap2;
     }
     
+    # derive individual position contributions from traceback scores
+    if ($tb_length)
+    {
+        $aln_subscore_array[0] = $tb_scores_array[$tb_length - 1];
+    }
+    for ($pos = 1, $pos_rev = $tb_length - 2;
+         $pos < $tb_length; $pos++, $pos_rev--)
+    {
+        $aln_subscore_array[$pos] = $tb_scores_array[$pos_rev] -
+                                    $tb_scores_array[$pos_rev + 1];
+    }
+    
+    # remove score contributions from poorly aligned ends
+    # so that overlap/global are more directly comparable to local/elocal
+    #
+    # first/last match pos are 1-based, not zero-based
+    #
+    $score_adj = $score;
+    if (0)
+    {
+        for ($pos = 0; $pos < $first_match_pos - 1; $pos++)
+        {
+            $score_adj -= $aln_subscore_array[$pos];
+        }
+        for ($pos = $last_match_pos; $pos < $tb_length ; $pos++)
+        {
+            $score_adj -= $aln_subscore_array[$pos];
+        }
+    }
+    
     ## adjust metrics so as to treat global/overlap more like local
-    #$left_overhang   = max($first_match_row, $first_match_col) - 1;
-    #$right_overhang  = max($len1 - $last_match_row, $len2 - $last_match_col);
-    #$align_length    = $last_match_pos - $first_match_pos + 1;
+    $left_overhang   = max($first_match_row, $first_match_col) - 1;
+    $right_overhang  = max($len1 - $last_match_row, $len2 - $last_match_col);
+    $align_length    = $last_match_pos - $first_match_pos + 1;
 
     # avoid divide by zero when nothing aligns
     # this can happen on local and elocal alignments
@@ -905,7 +954,7 @@ sub score_substring_mismatch
     #            ($align_length + sqrt($left_overhang + $right_overhang));
 
     # fraction of actual score over maximum possible score
-    $my_score  = $score / ($match_score * $min_len);
+    $my_score  = $score_adj / ($match_score * $min_len);
     # further penalize alignments that aren't end-anchored
     $penalty = ($min_len - min($left_overhang, $right_overhang)) / $min_len;
 
@@ -925,6 +974,16 @@ sub score_substring_mismatch
     {
         $my_score = 0;
     }
+    
+    ## set any scores poor enough to zero
+    if ($my_score < 0.5)
+    {
+        $my_score = 0;
+    }
+
+    # prefer alignments to longer sequences over shorter sequences
+    # prefer alignments between sequences of similar length
+    $my_score *= $min_len / $max_len;
 
     
     # convert sequence alignments back into UTF-8 prior to printing
@@ -947,6 +1006,7 @@ sub score_substring_mismatch
         printf STDERR "LeftOH:\t%d\n",     $left_overhang;
         printf STDERR "RightOH:\t%d\n",    $right_overhang;
         printf STDERR "Score:\t%s\n",      $score;
+        printf STDERR "ScoreAdj:\t%s\n",   $score_adj;
         printf STDERR "MyScore:\t%s\n",    $my_score;
         printf STDERR "%s\n",              $seq_align1;
         printf STDERR "%s\n",              $seq_align2;
