@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-08-03:  rename SuperClass to Class
 # 2022-03-10:  annotate lipid class with more descriptive categories
 # 2022-03-10:  edit usage statement to use current program name
 # 2022-03-10:  surround adduct column in [] to keep Excel happy
@@ -295,8 +296,14 @@ sub read_in_lipid_class_annotation
     }
     
     $abbrev_col   = $header_col_hash{Abbreviation};
-    $supclass_col = $header_col_hash{SuperClass};
+    $supclass_col = $header_col_hash{Class};
     $subclass_col = $header_col_hash{SubClass};
+    
+    # backwards compatability with older SuperClass terminology
+    if (!defined($supclass_col))
+    {
+        $supclass_col = $header_col_hash{SuperClass};
+    }
     
     if (!defined($abbrev_col))
     {
@@ -305,7 +312,7 @@ sub read_in_lipid_class_annotation
     }
     if (!defined($supclass_col))
     {
-        printf "ABORT -- SuperClass column not found in %s\n", $full_path;
+        printf "ABORT -- Class column not found in %s\n", $full_path;
         exit(2);
     }
     if (!defined($subclass_col))
@@ -1094,7 +1101,7 @@ for ($col = 0; $col < $first_rt_col; $col++)
 
 # insert our new columns
 printf "\t%s", 'Lipid';
-printf "\t%s", 'SuperClass';
+printf "\t%s", 'Class';
 printf "\t%s", 'SubClass';
 printf "\t%s", 'Adduct';
 printf "\t%s", 'IsomerBBSR';
