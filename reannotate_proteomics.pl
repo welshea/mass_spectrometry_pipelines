@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-08-03  Has_Contaminant_Flag, All_Reverse_Flag now [0,1] instead of [0-3]
 # 2021-08-30  move amino acid column, insert new position column
 # 2021-08-30  generate new ModificationID from new sorted accession order
 # 2021-08-30  remove columns-to-remove code; all in another script now
@@ -1723,6 +1724,10 @@ sub print_probeid_annotation
         $line_old = join "\t", @array_new;
     }
 
+    # floor flags to 1
+    # the extra level of detail from 1-3 just adds confusion
+    if ($has_contam  > 1) { $has_contaim = 1; }
+    if ($all_reverse > 1) { $all_reverse = 1; }
 
     $line_new  = "$has_contam";
     $line_new .= "\t$all_reverse";
