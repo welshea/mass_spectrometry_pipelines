@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-08-03  add additional known adduct charges
 # 2022-03-01  infer unknown adduct charge from known adducts
 # 2022-02-28  major changes to support LipidSearch mergeResult.txt
 # 2021-11-30  initial release
@@ -13,8 +14,16 @@ use POSIX;
 $known_ion_charge_hash{'+H'}     = 'pos';
 $known_ion_charge_hash{'+NH4'}   = 'pos';
 $known_ion_charge_hash{'+Na'}    = 'pos';
+$known_ion_charge_hash{'+K'}     = 'pos';
+$known_ion_charge_hash{'+H+ACN'} = 'pos';
 $known_ion_charge_hash{'+H-H2O'} = 'pos';
+$known_ion_charge_hash{'+H-NH3'} = 'pos';
+
 $known_ion_charge_hash{'-H'}     = 'neg';
+$known_ion_charge_hash{'-CH3'}   = 'neg';
+$known_ion_charge_hash{'+Cl'}    = 'neg';
+$known_ion_charge_hash{'-H-NH3'} = 'neg';
+$known_ion_charge_hash{'-H-CO2'} = 'neg';
 $known_ion_charge_hash{'+HCOO'}  = 'neg';
 
 $keep_header_hash{'Rej.'} = 1;
