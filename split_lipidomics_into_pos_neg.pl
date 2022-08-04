@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-08-04  default to removing unobservable adducts
+# 2022-08-04  change most ion related variable names to adduct related
 # 2022-08-03  add additional known adduct charges
 # 2022-03-01  infer unknown adduct charge from known adducts
 # 2022-02-28  major changes to support LipidSearch mergeResult.txt
@@ -10,21 +12,34 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 
 
-# known ion charges
-$known_ion_charge_hash{'+H'}     = 'pos';
-$known_ion_charge_hash{'+NH4'}   = 'pos';
-$known_ion_charge_hash{'+Na'}    = 'pos';
-$known_ion_charge_hash{'+K'}     = 'pos';
-$known_ion_charge_hash{'+H+ACN'} = 'pos';
-$known_ion_charge_hash{'+H-H2O'} = 'pos';
-$known_ion_charge_hash{'+H-NH3'} = 'pos';
+# known adduct charges
+$known_adduct_charge_hash{'+H'}     = 'pos';
+$known_adduct_charge_hash{'+NH4'}   = 'pos';
+$known_adduct_charge_hash{'+Na'}    = 'pos';
+$known_adduct_charge_hash{'+K'}     = 'pos';
+$known_adduct_charge_hash{'+H+ACN'} = 'pos';
+$known_adduct_charge_hash{'+H-H2O'} = 'pos';
+$known_adduct_charge_hash{'+H-NH3'} = 'pos';
 
-$known_ion_charge_hash{'-H'}     = 'neg';
-$known_ion_charge_hash{'-CH3'}   = 'neg';
-$known_ion_charge_hash{'+Cl'}    = 'neg';
-$known_ion_charge_hash{'-H-NH3'} = 'neg';
-$known_ion_charge_hash{'-H-CO2'} = 'neg';
-$known_ion_charge_hash{'+HCOO'}  = 'neg';
+$known_adduct_charge_hash{'-H'}     = 'neg';
+$known_adduct_charge_hash{'-2H'}    = 'neg';
+$known_adduct_charge_hash{'-CH3'}   = 'neg';
+$known_adduct_charge_hash{'+Cl'}    = 'neg';
+$known_adduct_charge_hash{'-H-NH3'} = 'neg';
+$known_adduct_charge_hash{'-H-CO2'} = 'neg';
+$known_adduct_charge_hash{'+HCOO'}  = 'neg';
+
+
+# keep only these adducts, filter out the rest
+# any others usually indicate forgetting to deselect them in LipidSearch
+$adduct_observable_hash{'+H'}     = 'pos';
+$adduct_observable_hash{'+NH4'}   = 'pos';
+$adduct_observable_hash{'+Na'}    = 'pos';
+$adduct_observable_hash{'+H-H2O'} = 'pos';
+$adduct_observable_hash{'-H'}     = 'neg';
+$adduct_observable_hash{'+HCOO'}  = 'neg';
+$adduct_observable_hash{'-2H'}    = 'neg';
+
 
 $keep_header_hash{'Rej.'} = 1;
 $keep_header_hash{'LipidIon'} = 1;
@@ -149,14 +164,24 @@ $num_files     = 0;
 $filename_pos  = 'lipidomics_split_pos.txt';
 $filename_neg  = 'lipidomics_split_neg.txt';
 
+
+$all_adducts_flag = 0;    # default to removing adducts we don't want
+
 for ($i = 0; $i < @ARGV; $i++)
 {
     $field = $ARGV[$i];
 
     if ($field =~ /^--/)
     {
-        printf STDERR "ABORT -- unknown option %s\n", $field;
-        $syntax_error_flag = 1;
+        if ($field eq '--all-adducts')
+        {
+            $all_adducts_flag = 1;
+        }
+        else
+        {
+            printf STDERR "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
     }
     else
     {
@@ -181,7 +206,10 @@ for ($i = 0; $i < @ARGV; $i++)
 
 if (!defined($filename) || $syntax_error_flag)
 {
-    printf STDERR "Usage: split_lipidomics_into_pos_neg.pl tab_delimited.txt [outfile_pos outfile_neg]\n";
+    printf STDERR "Usage: split_lipidomics_into_pos_neg.pl [options] tab_delimited.txt [outfile_pos outfile_neg]\n";
+    printf STDERR "\n";
+    printf STDERR "  Options:\n";
+    printf STDERR "    --all-adducts     keep all adducts, including unobservable\n";
     exit(1);
 }
 
@@ -585,23 +613,31 @@ for ($row = 0; $row < $num_rows; $row++)
 {
     $lipid_ion = $row_data_array[$row][$name_col];
 
-    $pos_neg = '';
-    $ion_str = '';
+    $pos_neg    = '';
+    $adduct_str = '';
 
     if ($lipid_ion =~ /(\+[A-Za-z0-9-]+)$/)
     {
-        $ion_str = $1;
+        $adduct_str = $1;
     }
     elsif ($lipid_ion =~ /(\-[A-Za-z0-9-]+)$/)
     {
-        $ion_str = $1;
+        $adduct_str = $1;
     }
 
+    # skip adducts that shouldn't be observed
+    if ($all_adducts_flag == 0 &&
+        !defined($adduct_observable_hash{$adduct_str}))
+    {
+        $filtered_adduct_hash{$adduct_str} = 1;
+
+        next;
+    }
 
     # look up known ion charges
-    if (defined($known_ion_charge_hash{$ion_str}))
+    if (defined($known_adduct_charge_hash{$adduct_str}))
     {
-        $pos_neg = $known_ion_charge_hash{$ion_str};
+        $pos_neg = $known_adduct_charge_hash{$adduct_str};
         $pos_neg_row_hash{$row} = $pos_neg;
     }
     
@@ -621,7 +657,7 @@ for ($row = 0; $row < $num_rows; $row++)
     }
     else
     {
-        $unknown_row_charge_hash{$row} = $ion_str;
+        $unknown_row_charge_hash{$row} = $adduct_str;
     }
 }
 
@@ -646,15 +682,15 @@ foreach $col (@sample_col_array)
 
 # count pos/neg samples for all unknown adduct charges
 @unknown_row_charge_array = sort {$a<=>$b} keys %unknown_row_charge_hash;
-%unknown_ion_hash = ();
+%unknown_adduct_hash = ();
 foreach $row (@unknown_row_charge_array)
 {
-    $ion_str = $unknown_row_charge_hash{$row};
+    $adduct_str = $unknown_row_charge_hash{$row};
     
-    if (!defined($unknown_ion_hash{$ion_str}))
+    if (!defined($unknown_adduct_hash{$adduct_str}))
     {
-        $unknown_ion_hash{$ion_str}{pos} = 0;
-        $unknown_ion_hash{$ion_str}{neg} = 0;
+        $unknown_adduct_hash{$adduct_str}{pos} = 0;
+        $unknown_adduct_hash{$adduct_str}{neg} = 0;
     }
 
     foreach $col (@sample_col_array)
@@ -665,49 +701,49 @@ foreach $row (@unknown_row_charge_array)
         {
             if (defined($pos_col_hash{$col}))
             {
-                $unknown_ion_hash{$ion_str}{pos} += 1;
+                $unknown_adduct_hash{$adduct_str}{pos} += 1;
             }
             elsif (defined($neg_col_hash{$col}))
             {
-                $unknown_ion_hash{$ion_str}{neg} += 1;
+                $unknown_adduct_hash{$adduct_str}{neg} += 1;
             }
         }
     }
 }
 
 # infer unknown adduct charges from pos/neg sample patterns
-foreach $ion_str (sort keys %unknown_ion_hash)
+foreach $adduct_str (sort keys %unknown_adduct_hash)
 {
-    $count_pos = $unknown_ion_hash{$ion_str}{pos};
-    $count_neg = $unknown_ion_hash{$ion_str}{neg};
+    $count_pos = $unknown_adduct_hash{$adduct_str}{pos};
+    $count_neg = $unknown_adduct_hash{$adduct_str}{neg};
     
     if ($count_pos && $count_neg == 0)
     {
-        $known_ion_charge_hash{$ion_str} = 'pos';
+        $known_adduct_charge_hash{$adduct_str} = 'pos';
 
         printf STDERR "Inferring unknown adduct charge:\t%s\t%s\n",
-            $ion_str, 'pos';
+            $adduct_str, 'pos';
     }
     elsif ($count_neg && $count_pos == 0)
     {
-        $known_ion_charge_hash{$ion_str} = 'neg';
+        $known_adduct_charge_hash{$adduct_str} = 'neg';
 
         printf STDERR "Inferring unknown adduct charge:\t%s\t%s\n",
-            $ion_str, 'neg';
+            $adduct_str, 'neg';
     }
     else
     {
         printf STDERR "WARNING -- skipping misbehaving unknown adduct:\t%s\n",
-            $ion_str;
+            $adduct_str;
     }
 }
 
 # assign the newly inferred charges to remaining rows
 foreach $row (@unknown_row_charge_array)
 {
-    $ion_str = $unknown_row_charge_hash{$row};
+    $adduct_str = $unknown_row_charge_hash{$row};
     
-    $pos_neg = $known_ion_charge_hash{$ion_str};
+    $pos_neg = $known_adduct_charge_hash{$adduct_str};
     
     if (defined($pos_neg))
     {
@@ -865,6 +901,29 @@ for ($row = 0; $row < $num_rows; $row++)
             $line_neg .= $field;
         }
     }
+    
+
+    $lipid_ion  = $row_data_array[$row][$name_col];
+    $adduct_str = '';
+
+    if ($lipid_ion =~ /(\+[A-Za-z0-9-]+)$/)
+    {
+        $adduct_str = $1;
+    }
+    elsif ($lipid_ion =~ /(\-[A-Za-z0-9-]+)$/)
+    {
+        $adduct_str = $1;
+    }
+
+
+    # skip adducts that shouldn't be observed
+    if ($all_adducts_flag == 0 &&
+        !defined($adduct_observable_hash{$adduct_str}))
+    {
+        $filtered_adduct_hash{$adduct_str} = 1;
+
+        next;
+    }
 
     
     # output positive ions to positive file
@@ -886,13 +945,17 @@ for ($row = 0; $row < $num_rows; $row++)
     }
     else
     {
-        $ion_str = $row_data_array[$row][$name_col];
-
-        printf STDERR "WARNING -- skipping unknown adduct row:\t%s\n", $ion_str;
+        printf STDERR "WARNING -- skipping unknown adduct row:\t%s\n", $lipid_ion;
     }
 }
 
-
-
 close OUTFILE_POS;
 close OUTFILE_NEG;
+
+
+@filtered_adduct_array = sort keys %filtered_adduct_hash;
+foreach $adduct (@filtered_adduct_array)
+{
+    printf STDERR "WARNING -- removed %s adducts, not in observeable adduct list\n",
+        $adduct;
+}
