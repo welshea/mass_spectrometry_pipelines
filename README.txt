@@ -467,11 +467,15 @@ split_lipidomics_into_pos_neg.pl
 
     Split single tab-delimited lipidomics file into separate pos/neg files.
 
-    Usage: split_lipidomics_into_pos_neg.pl tab_delimited.txt
+    Usage: split_lipidomics_into_pos_neg.pl [options] tab_delimited.txt
              [outfile_pos outfile_neg]
 
-    outfile_pos and outfile_neg default to lipidomics_split_pos.txt and
-    lipidomics_split_neg.txt if no output filenames are specified.
+      Options:
+        --all-adducts     keep all adducts, including unobservable
+
+    Output:
+      outfile_pos and outfile_neg default to lipidomics_split_pos.txt and
+      lipidomics_split_neg.txt if no output filenames are specified.
 
 
 
