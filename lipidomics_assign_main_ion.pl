@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-08-05:  denote non-canonical main ions
 # 2022-08-03:  rename SuperClass to Class
 # 2022-03-10:  annotate lipid class with more descriptive categories
 # 2022-03-10:  edit usage statement to use current program name
@@ -1043,12 +1044,12 @@ foreach $fattyacid_base (@fattyacid_base_array)
         #    $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'secondary';
         #}
 
-        if (@group_row_array == 1)
-        {
-            $row_main = $group_row_array[0];
-            $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'main';
-            ##$fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'singleton';
-        }
+        #if (@group_row_array == 1)
+        #{
+        #    $row_main = $group_row_array[0];
+        #    $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'main';
+        #    ##$fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'singleton';
+        #}
     }
 }
 
@@ -1072,12 +1073,17 @@ foreach $fattyacid_base (sort keys %fattyacid_hash)
             # only check lipids we have prior knowledge for
             if (defined($optimal_main_hash{$lipid_class}))
             {
+                # main ion is not one generally observed to be highest
                 if (!defined($optimal_main_hash{$lipid_class}{$adduct}))
                 {
+                    # overwrite with non-canonical
+                    $fattyacid_hash{$fattyacid_base}{$row}{main} =
+                        'main, non-canonical';
+                
                     $fattyacid_ion = $row_fattyacid_ion_array[$row];
                 
                     printf STDERR
-                        "WARNING -- suboptimal main ion:  %s\t%s\t%s\t%s\n",
+                        "WARNING -- non-canonical main ion:  %s\t%s\t%s\t%s\n",
                         $fattyacid_ion, $lipid_class, $adduct, $main_str;
                 }
             }
