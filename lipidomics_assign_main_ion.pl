@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-08-05:  flag main ions from LipidSearch summary file
 # 2022-08-05:  denote non-canonical main ions
 # 2022-08-03:  rename SuperClass to Class
 # 2022-03-10:  annotate lipid class with more descriptive categories
@@ -138,7 +139,7 @@ sub cmp_row_main
     my $count_a    = $row_data_count_array[$a];
     my $count_b    = $row_data_count_array[$b];
 
-    # rank by summed abundance next
+    # rank by summed abundance
     # takes both mean abundance and #present into account
     if ($data_sum_a > $data_sum_b) { return -1; }
     if ($data_sum_a < $data_sum_b) { return  1; }
@@ -272,6 +273,9 @@ sub read_in_lipid_class_annotation
 {
     $annotation_filename = 'lipid_class_annotation.txt';
     $full_path = $script_path . '/' . $annotation_filename;
+
+    %header_col_hash  = ();
+    @header_col_array = ();
     
     open ANNOTATION, "$full_path" or die "ABORT -- can't open $full_path\n";
     
@@ -352,9 +356,108 @@ sub read_in_lipid_class_annotation
 }
 
 
+sub read_in_lipidsearch_summary_file
+{
+    my $summary_filename = $_[0];
+
+    %header_col_hash  = ();
+    @header_col_array = ();
+    
+    open SUMMARY, "$summary_filename" or die "ABORT -- can't open $summary_filename\n";
+    
+    # continue reading until we get to the real header line
+    $line = <SUMMARY>;
+    while (!($line =~ /MainIon/ && $line =~ /BaseRt/))
+    {
+        $line = <SUMMARY>;
+    }
+
+    $line =~ s/[\r\n]+$//;
+    
+    @array = split /\t/, $line;
+    for ($i = 0; $i < @array; $i++)
+    {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        
+        $changed_flag = 1;
+        while ($changed_flag)
+        {
+            $changed_flag = ($array[$i] =~ s/^\"(.*)\"$/$1/);
+        }
+        
+        if ($array[$i] =~ /\S/)
+        {
+            $header_col_array[$i] = $array[$i];
+            $header_col_hash{$array[$i]} = $i;
+        }
+    }
+    
+    $lipid_molec_col = $header_col_hash{'LipidMolec'};
+    $base_rt_col     = $header_col_hash{'BaseRt'};
+    $main_ion_col    = $header_col_hash{'MainIon'};
+    
+    if (!defined($lipid_molec_col))
+    {
+        printf STDERR "ABORT -- LipidMolec column not found in summary file %s\n",
+            $summary_filename;
+        die(2);
+    }
+    if (!defined($base_rt_col))
+    {
+        printf STDERR "ABORT -- BaseRt column not found in summary file %s\n",
+            $summary_filename;
+        die(2);
+    }
+    if (!defined($main_ion_col))
+    {
+        printf STDERR "ABORT -- MainIon column not found in summary file %s\n",
+            $summary_filename;
+        die(2);
+    }
+    
+    while(defined($line=<SUMMARY>))
+    {
+        $line =~ s/[\r\n]+$//;
+        @array = split /\t/, $line;
+        for ($i = 0; $i < @array; $i++)
+        {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+        
+            $changed_flag = 1;
+            while ($changed_flag)
+            {
+                $changed_flag = ($array[$i] =~ s/^\"(.*)\"$/$1/);
+            }
+        }
+        
+        $lipid_molec = $array[$lipid_molec_col];
+        $base_rt     = $array[$base_rt_col];
+        $main_ion    = $array[$main_ion_col];
+        
+        if ($lipid_molec =~ /[A-Za-z0-9]/ &&
+            $main_ion    =~ /[A-Za-z]/ &&
+            is_number($base_rt))
+        {
+            $main_id = $base_rt . $main_ion;
+        
+            $lipidsearch_summary_hash{$lipid_molec}{$main_id}{adduct} =
+                $main_ion;
+            $lipidsearch_summary_hash{$lipid_molec}{$main_id}{rt} =
+                $base_rt;
+            
+            # read in a valid LipidSearch summary main ion data row
+            $valid_summary_flag = 1;
+        }
+    }
+    close SUMMARY;
+}
 
 
-$num_files     = 0;
+
+$num_files          = 0;
+$valid_summary_flag = 0;
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -372,6 +475,11 @@ for ($i = 0; $i < @ARGV; $i++)
             $filename = $field;
             $num_files++;
         }
+        elsif ($num_files == 1)
+        {
+            $summary_filename = $field;
+            $num_files++;
+        }
     }
 }
 
@@ -380,7 +488,7 @@ if (!defined($filename) || $syntax_error_flag)
 {
     $program_name = basename($0);
 
-    printf STDERR "Usage: $program_name iron_log2_merged.txt\n";
+    printf STDERR "Usage: $program_name iron_log2_merged.txt [lipidsearch_summary.txt]\n";
     exit(1);
 }
 
@@ -388,8 +496,17 @@ if (!defined($filename) || $syntax_error_flag)
 # read in the lipid class annotation file, hardcoded file name
 read_in_lipid_class_annotation();
 
+# read in LipidSearch summary file
+if (defined($summary_filename))
+{
+    read_in_lipidsearch_summary_file($summary_filename);
+}
+
 open INFILE,      "$filename"      or die "ABORT -- can't open $filename\n";
 
+
+%header_col_hash  = ();
+@header_col_array = ();
 
 # skip down to first line that has anything on it
 # lipidomics data has this issues sometimes
@@ -1051,6 +1168,43 @@ foreach $fattyacid_base (@fattyacid_base_array)
         #    ##$fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'singleton';
         #}
     }
+    
+    # identify the main ions from LipidSearch
+    if (defined($lipidsearch_summary_hash{$fattyacid_base}))
+    {
+        @main_id_array = sort keys %{$lipidsearch_summary_hash{$fattyacid_base}};
+        
+        foreach $main_id (@main_id_array)
+        {
+            $adduct_ls = $lipidsearch_summary_hash{$fattyacid_base}{$main_id}{adduct};
+            $rt_ls     = $lipidsearch_summary_hash{$fattyacid_base}{$main_id}{rt};
+            
+            $best_row     = '';
+            $best_rt_diff = 9E99;
+            for ($i = 0; $i < $num_adducts; $i++)
+            {
+                $row      = $adduct_row_array[$i];
+                $adduct   = $fattyacid_hash{$fattyacid_base}{$row}{adduct};
+                $rt_avg   = $row_rt_avg_array[$row];
+                
+                if ($adduct eq $adduct_ls)
+                {
+                    $diff = abs($rt_avg - $rt_ls);
+                    if ($diff < $best_rt_diff)
+                    {
+                        $best_row     = $row;
+                        $best_rt_diff = $diff;
+                    }
+                }
+            }
+            
+            # flag row as identified as main ion by LipidSearch
+            if ($best_row ne '')
+            {
+                $fattyacid_hash{$fattyacid_base}{$best_row}{main_ls} = 'main';
+            }
+        }
+    }
 }
 
 
@@ -1112,6 +1266,10 @@ printf "\t%s", 'SubClass';
 printf "\t%s", 'Adduct';
 printf "\t%s", 'IsomerBBSR';
 printf "\t%s", 'MainIonBBSR';
+if ($valid_summary_flag)
+{
+    printf "\t%s", 'MainIonLipidSearch';
+}
 printf "\t%s", 'MeanRt';
 printf "\t%s", 'MeanAbundance';
 printf "\t%s", 'SumAbundance';
@@ -1152,7 +1310,7 @@ foreach $fattyacid_base (@fattyacid_base_array)
         $rt_sd    = $row_rt_sd_array[$row];
         $data_avg = $row_data_avg_array[$row];
         $data_sum = $row_data_sum_array[$row];
-
+        
         $rt_min = $rt_avg - $num_sd * $rt_sd;
         $rt_max = $rt_avg + $num_sd * $rt_sd;
         
@@ -1162,6 +1320,12 @@ foreach $fattyacid_base (@fattyacid_base_array)
         if (!defined($main))
         {
             $main = '';
+        }
+
+        $main_ls = $fattyacid_hash{$fattyacid_base}{$row}{main_ls};
+        if (!defined($main_ls))
+        {
+            $main_ls = '';
         }
 
         $lipid_class = $fattyacid_base;
@@ -1208,6 +1372,10 @@ foreach $fattyacid_base (@fattyacid_base_array)
         printf "\t\[%s\]", $adduct;
         printf "\t%s",     $group;
         printf "\t%s",     $main;
+        if ($valid_summary_flag)
+        {
+            printf "\t%s", $main_ls;
+        }
         printf "\t%s",     $rt_avg;
         printf "\t%s",     $data_avg;
         printf "\t%s",     $data_sum;
