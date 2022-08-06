@@ -216,7 +216,8 @@ generate_metabolomics_glue_script.pl
   Generate glue script to launch other scripts involved in the metabolomics
   pipeline.
 
-  Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix
+  Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv
+           [output_prefix [lipidsearch_summary.txt]]
 
   Options:
       --heavy-spikein            heavy rows are spikeins, leave unscaled (default)
@@ -230,6 +231,12 @@ generate_metabolomics_glue_script.pl
     options which use the MZmine "row number of detected peaks" column:
       --discard-single-pregap    discard pre gap-filled single-hit rows (default)
       --keep-single-pregap       keep pre gap-filled single-hit rows
+
+    Specifying a LipidSearch summary file will use the summary file to add an
+    additional pipeline output column to flag rows identified as main ions by
+    LipidSearch.  This is in addition to the BBSR method of lipidomics main ion
+    assignment, which uses summed normalized log2 abundances instead of unlogged
+    unnormalized abundances.
 
     MZmine output files for positive and negative ion mode acquisitions must
     contain only pos or neg mode data.  The file names themselves must also
@@ -332,10 +339,12 @@ iron_normalize_mass_spec.pl
 lipidomics_assign_main_ion.pl
 
   Assign lipid isomer groups based on retention times, flag the most abundant
-  ion within each lipid isomer gorup as the main ion.
+  ion within each lipid isomer gorup as the main ion.  If an optional
+  LipidSearch summary file is provided, an additional column of LipidSearch
+  main ion assignments will be added.
 
   Usage:
-    lipidomics_assign_main_ion.pl iron_log2_merged.txt > output.txt
+    lipidomics_assign_main_ion.pl iron_log2_merged.txt [lipidsearch_summary.txt]
 
 
 
