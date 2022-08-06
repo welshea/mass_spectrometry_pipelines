@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-08-06:  support main ion flagging from LipidSearch summary file
 # 2022-06-07:  add support for single input file
 # 2022-03-10:  annotate lipidomics with main ions
 # 2022-03-09:  disable external identifier annotation for lipidomics
@@ -177,6 +178,11 @@ for ($i = 0; $i < @ARGV; $i++)
             $output_root_name = $field;
             $num_files++;
         }
+        elsif ($num_files == 3)
+        {
+            $ls_summary_filename = $field;
+            $num_files++;
+        }
     }
 }
 
@@ -184,7 +190,7 @@ for ($i = 0; $i < @ARGV; $i++)
 if ($syntax_error_flag ||
     !defined($pos_csv_filename) || !defined($neg_csv_filename))
 {
-    printf STDERR "Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv output_prefix\n";
+    printf STDERR "Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv [output_prefix [lipidsearch_summary.txt]]\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
     printf STDERR "    --heavy-spikein            heavy rows are spikeins, leave unscaled (default)\n";
@@ -198,7 +204,12 @@ if ($syntax_error_flag ||
     printf STDERR "  options which use the MZmine \"row number of detected peaks\" column:\n";
     printf STDERR "    --discard-single-pregap    discard pre gap-filled single-hit rows (default)\n";
     printf STDERR "    --keep-single-pregap       keep pre gap-filled single-hit rows\n";
-
+    printf STDERR "\n";
+    printf STDERR "  Specifying a LipidSearch summary file will use the summary file to add an\n";
+    printf STDERR "  additional pipeline output column to flag rows identified as main ions by\n";
+    printf STDERR "  LipidSearch.  This is in addition to the BBSR method of lipidomics main ion\n";
+    printf STDERR "  assignment, which uses summed normalized log2 abundances instead of unlogged\n";
+    printf STDERR "  unnormalized abundances.\n";
 
     exit(1);
 }
@@ -443,8 +454,17 @@ $annotate_pipe_str = '';
 if ($lipidomics_flag)
 {
     # annotate with main ion assignments
-    $annotate_pipe_str = sprintf " | %s - ",
-                             'lipidomics_assign_main_ion.pl';
+    if (defined($ls_summary_filename))
+    {
+        $annotate_pipe_str = sprintf " | %s - \"%s\"",
+                                 'lipidomics_assign_main_ion.pl',
+                                 $ls_summary_filename;
+    }
+    else
+    {
+        $annotate_pipe_str = sprintf " | %s - ",
+                                 'lipidomics_assign_main_ion.pl';
+    }
 }
 # regular metabolomics
 else
