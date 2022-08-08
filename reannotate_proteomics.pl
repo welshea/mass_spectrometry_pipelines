@@ -1726,7 +1726,7 @@ sub print_probeid_annotation
 
     # floor flags to 1
     # the extra level of detail from 1-3 just adds confusion
-    if ($has_contam  > 1) { $has_contaim = 1; }
+    if ($has_contam  > 1) { $has_contam  = 1; }
     if ($all_reverse > 1) { $all_reverse = 1; }
 
     $line_new  = "$has_contam";
