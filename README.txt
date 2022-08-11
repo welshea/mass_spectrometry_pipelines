@@ -94,18 +94,16 @@ annotate_metabolomics.pl
   ocasionally occur in older datasets (this is intended behavior).
 
   Mapping Type field legend:
-    1A: exact match, original m/z
-    1B: conformed,   original m/z
-    2A: exact match, pos/neg  m/z
-    2B: conformed,   pos/neg  m/z
-    3A: exact_match, all rows, regardless of m/z
-    3B: conformed,   all rows, regardless of m/z
-    4A: fuzzy,       original m/z, one candidate
-    4B: fuzzy,       original m/z, >= 2 candidates
-    5A: fuzzy,       pos/neg  m/z, one candidate
-    5B: fuzzy,       pos/neg  m/z, >= 2 candidates
-    9X: identified row not matched to search database
-        (usually a bad identification)
+    1A/B:  conformed name,     original + pos/neg m/z
+    2A/B:  conformed synonyms, original + pos/neg m/z
+    3A/B:  conformed name,     all rows
+    4A/B:  conformed synonyms, all rows
+    5A/B:  fuzzy,              original + pos/neg m/z
+    9X:    identified row not matched to search database
+           (either a bad identification, or metabolite not in database)
+
+    A/B indicate whether there was only a single "reasonable" candidate
+    (A) within the m/z range, or multiple "reasonable" candidates (B).
 
 
 
