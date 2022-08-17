@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2022-08-17: support TMT-18
 # 2022-04-21: begin adding Proteome Discoverer support
 # 2022-01-19: default 100% injection replicates to "auto" reference channel
 # 2021-08-12: change deprecated "if (defined(%plex_hash))" to "if (%plex_hash)"
@@ -68,6 +69,25 @@ $channel_map_table[16][12] = '132C';
 $channel_map_table[16][13] = '133N';
 $channel_map_table[16][14] = '133C';
 $channel_map_table[16][15] = '134N';	# 134N
+
+$channel_map_table[18][0]  = '126C';	# 126C
+$channel_map_table[18][1]  = '127N';
+$channel_map_table[18][2]  = '127C';
+$channel_map_table[18][3]  = '128N';
+$channel_map_table[18][4]  = '128C';
+$channel_map_table[18][5]  = '129N';
+$channel_map_table[18][6]  = '129C';
+$channel_map_table[18][7]  = '130N';
+$channel_map_table[18][8]  = '130C';
+$channel_map_table[18][9]  = '131N';
+$channel_map_table[18][10] = '131C';
+$channel_map_table[18][11] = '132N';
+$channel_map_table[18][12] = '132C';
+$channel_map_table[18][13] = '133N';
+$channel_map_table[18][14] = '133C';
+$channel_map_table[18][15] = '134N';
+$channel_map_table[18][16] = '134C';
+$channel_map_table[18][17] = '135N';	# 135N
 
 $intensity_flag  = 0;
 $ibaq_flag       = 0;
