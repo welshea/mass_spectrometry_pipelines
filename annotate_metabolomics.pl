@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-09-08:  don't split m/z on forward slash
 # 2022-07-15:  conform by removing likely abbreviations from ends
 # 2022-07-15:  update is_heavy_labeled() function
 # 2022-07-08:  added some formula-based sanity checks
@@ -60,7 +61,7 @@
 # Implementing a formula sanity check filter should force us to map to
 # both alpha- and beta- lactose instead.  Unfortunately, B-D-lactose
 # aligns better to D-lactose than A-lactose does, so beta-lactose is still
-# the chosen HMDB accession instaed of alpha-lactose :-(
+# the chosen HMDB accession instead of alpha-lactose :-(
 #
 # I'm going to add in KEGG pathway identifiers, to select those over
 # KEGG entries that aren't in pathways, but that still won't help Lactose,
@@ -447,7 +448,10 @@ sub bless_delimiter_bar_metabolomics
         $temp_array[$i] =~ tr/\;/\|/;
 
         # / can also be a delimiter in some much older metabolomics data
+        # protect m/z
+        $temp_array[$i] =~ s/\bm\/z\b/M_OvEr_Z/g;
         $temp_array[$i] =~ tr/\//\|/;
+        $temp_array[$i] =~ s/M_OvEr_Z/m\/z/g;
     }
     $text = join '', @temp_array;
 
