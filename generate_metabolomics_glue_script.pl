@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2022-09-15:  add --no-log2 flag
+# 2022-09-07:  fix typo in blank-based background code
+# 2022-08-11:  add blank-based background flagging; disable for now
 # 2022-08-06:  support main ion flagging from LipidSearch summary file
 # 2022-06-07:  add support for single input file
 # 2022-03-10:  annotate lipidomics with main ions
@@ -34,6 +37,7 @@ $discard_heavy_flag        = 0;
 $scale_heavy_flag          = 0;    # control normalization of heavy rows
 $mz_tol_ppm                = '';   # '' means no --ppm argument specified
 $norm_none_flag            = 0;    # disable normalization
+$no_log2_flag              = 0;    # do not log2 transform the data
 
 $syntax_error_flag         = 0;
 $num_files                 = 0;
@@ -126,6 +130,10 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $norm_none_flag = 1;
         }
+        elsif ($field =~ /^--no-log2$/)
+        {
+            $no_log2_flag = 1;
+        }
         # override default PPM tolerance
         elsif ($field eq '--ppm' ||
                $field =~ /^--ppm\=/)
@@ -195,6 +203,7 @@ if ($syntax_error_flag ||
     printf STDERR "Options:\n";
     printf STDERR "    --heavy-spikein            heavy rows are spikeins, leave unscaled (default)\n";
     printf STDERR "    --heavy-tracer             heavy rows are biological, normalize them\n";
+    printf STDERR "    --no-log2                  disable log2 transform of output data\n";
     printf STDERR "    --norm-none                disable normalization; use on targeted panels\n";
     printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
     printf STDERR "\n";
@@ -277,6 +286,8 @@ $sample_table_filename        = sprintf "%s_sample_table.txt",
                                    $output_root_name;
 $sample_qc_filename           = sprintf "%s_sample_qc_table.txt",
                                    $output_root_name;
+$blank_bg_filename            = sprintf "%s_iron_log2_merged_blank-bg.txt",
+                                   $output_root_name;
 
 
 # options to pass to strip_metabolomics_columns.pl
@@ -325,6 +336,32 @@ if ($result_str =~ /LipidIon/ ||
     $result_str =~ /FattyAcid/)
 {
     $lipidomics_flag = 1;
+}
+
+
+# detect if samples may contain blanks or not
+$blank_flag     = 0;
+$cmd_str_neg    = "head -1 \"$neg_csv_filename\" | transpose | grep -v AboveBlankBG | transpose";
+$result_str_neg = `$cmd_str_neg`;
+$cmd_str_pos    = "head -1 \"$pos_csv_filename\" | transpose | grep -v AboveBlankBG | transpose";
+$result_str_pos = `$cmd_str_pos`;
+if ($result_str_neg =~ /Blank(\b|[A-Z_])/    ||
+    $result_str_neg =~ /(\b|_)blank(\b|_)/i)
+{
+    $blank_flag = 1;
+}
+if ($result_str_pos =~ /Blank(\b|[A-Z_])/    ||
+    $result_str_pos =~ /(\b|_)blank(\b|_)/i)
+{
+    $blank_flag = 1;
+}
+
+# disable blank background for now, until we finish optimizing it
+$blank_flag = 0;
+
+if ($blank_flag)
+{
+    print STDERR "Enabling blank sample background detection\n";
 }
 
 
@@ -403,6 +440,16 @@ if ($norm_none_flag)
 {
     # disable normalization
     $norm_extra_options_str = '--norm-none';
+}
+if ($no_log2_flag)
+{
+    if ($norm_extra_options_str ne '')
+    {
+        $norm_extra_options_str .= ' ';
+    }
+
+    # disable log2 transform
+    $norm_extra_options_str .= '--no-log2';
 }
 
 # do not treat heavy labeled rows as spike-ins, normalize them
@@ -605,4 +652,21 @@ if ($single_file_mode ne 'pos')
 
 print "$cmd_str_merge\n";
 print "$cmd_str_qc\n";
+
+
+$blank_bg_filename = sprintf "%s_iron_log2_merged_blank-bg.txt",
+                              $output_root_name;
+if ($blank_flag)
+{
+    $cmd_str_blank_bg =
+        sprintf "metabolomics_flag_blank_bg.pl \"%s\" \"%s\" > \"%s\"",
+                $sample_qc_filename, $merged_filename,
+                $blank_bg_filename;
+    
+    print "$cmd_str_blank_bg\n";
+    
+    # overwrite merged output with blank-bg output
+    print "mv \"$blank_bg_filename\" \"$merged_filename\"\n";
+}
+
 print "$cmd_str_rm\n";
