@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2022-09-15:  add ParentFormula column for LipidSearch adducts
+# 2022-09-14:  conform formulas containing spaces (LipidSearch)
+# 2022-08-11:  improve sample blank detection
 # 2022-06-07:  less stringent heavy label string matching
 # 2022-05-09:  added BOC to heavy labeled detection
 # 2022-02-23:  extend sample renaming to non- height/area columns
@@ -172,6 +175,275 @@ sub is_heavy_labeled
     if ($string =~ /\bBOC\b/)       { return 1; }
     
     return 0;
+}
+
+
+# handle heavy elements as well
+sub cmp_elements
+{
+    my $ele_a;
+    my $ele_b;
+    my $heavy_a;
+    my $heavy_b;
+
+    $heavy_a = '';
+    $heavy_b = '';
+
+    if ($a =~ /^\[([0-9]+)\]/)
+    {
+        $heavy_a = $1;
+    }
+    if ($b =~ /^\[([0-9]+)\]/)
+    {
+        $heavy_b = $1;
+    }
+    
+    $a     =~ /([A-Za-z]+)/;
+    $ele_a = $1;
+    
+    $b     =~ /([A-Za-z]+)/;
+    $ele_b = $1;
+
+    # first by element
+    if ($ele_a ne $ele_b)
+    {
+        return $ele_a cmp $ele_b;
+    }
+
+    # then put heavy labeled atoms first
+    if ($heavy_a ne '' && $heavy_b eq '') { return -1; }
+    if ($heavy_b ne '' && $heavy_a eq '') { return  1; }
+
+    # then sort by number of heavy
+    if ($heavy_a != $heavy_b)
+    {
+        return $heavy_a <=> $heavy_b;
+    }
+   
+    return $a cmp $b;
+}
+
+
+# The Hill system specifies C#H#D#, not C#D#H#
+#   list all elements in alphabetical order,
+#   unless it contains a carbon, then list carbon then hydrogen first
+#
+# I check for 3-letter elements (all the Uuu's have real symbols by now),
+# and elements listed multiple times, and exit early with the original
+# formula if such errors are detected.
+#
+# I don't currently check to see if the given 1- or 2- letter elements are
+# valid known elements or not.  I could, but that would require a good bit
+# more work than I have time for at the moment.  I'm not *quite* that paranoid
+# about the formulas just yet, although part of me still worries about it...
+#
+sub conform_formula
+{
+    my $formula_orig = $_[0];
+    my $adduct       = $_[1];
+    my $formula;
+    my $formula_new = '';
+    my @match_array;
+    my @element_array;
+    my @ion_array;    # each +/- group of elements in the adduct
+    my $ion;
+    my $match;
+    my $heavy;
+    my $element;
+    my $heavy_plus_element;
+    my $count;
+    my %count_hash = ();
+    my %count_adduct_hash = ();
+    my $has_carbon_flag = 0;
+    my $i;
+    
+    $formula         = $formula_orig;
+    $has_carbon_flag = 0;
+    
+    # element with number
+    @match_array = $formula =~ m/(?:\[[0-9]+\])*[A-Z][a-z]*(?:[0-9]+)*/g;
+    foreach $match (@match_array)
+    {
+        $match =~ /((?:\[[0-9]+\])*)([A-Za-z]+)([0-9]+)*/;
+
+        $heavy   = $1;
+        $element = $2;
+        $count   = $3;
+
+        if (!defined($heavy))
+        {
+            $heavy = '';
+        }
+        if (!defined($count))
+        {
+            $count = 1;
+        }
+
+        if ($element eq 'C')
+        {
+            $has_carbon_flag = 1;
+        }
+
+        $heavy_plus_element = $heavy . $element;
+
+        if (length $element > 2 || defined($count_hash{$heavy_plus_element}))
+        {
+            printf STDERR "WARNING -- error in formula %s\n", $formula_orig;
+            return $formula_orig;
+        }
+        
+        $count_hash{$heavy_plus_element} = $count;
+    }
+    
+    
+    # deal with adduct
+    if (defined($adduct))
+    {
+        @ion_array = split /([+-])/, $adduct;
+        
+        for ($i = 1; $i < @ion_array - 1; $i += 2)
+        {
+            $add_sub = $ion_array[$i];
+            $ion     = $ion_array[$i+1];
+
+            @match_array = $ion =~ m/(?:\[[0-9]+\])*[A-Z][a-z]*(?:[0-9]+)*/g;
+            foreach $match (@match_array)
+            {
+                $match =~ /((?:\[[0-9]+\])*)([A-Za-z]+)([0-9]+)*/;
+
+                $heavy   = $1;
+                $element = $2;
+                $count   = $3;
+
+                if (!defined($heavy))
+                {
+                    $heavy = '';
+                }
+                if (!defined($count))
+                {
+                    $count = 1;
+                }
+
+                # (-) adduct loses a C, so add back into to parent
+                if ($add_sub eq '-' && $element eq 'C')
+                {
+                    $has_carbon_flag = 1;
+                }
+
+                $heavy_plus_element = $heavy . $element;
+
+                if (length $element > 2)
+                {
+                    printf STDERR "WARNING -- error in adduct %s %s\n",
+                        $adduct, $ion;
+
+                    return $formula_orig;
+                }
+                
+                if ($add_sub eq '-')
+                {
+                    $count_hash{$heavy_plus_element} += $count;
+                }
+                elsif ($add_sub eq '+')
+                {
+                    $count_hash{$heavy_plus_element} -= $count;
+                }
+            }
+        }
+    }
+    
+    
+    @element_array = sort cmp_elements keys %count_hash;
+    
+    # order all carbons first, followed by hydrogens
+    if ($has_carbon_flag)
+    {
+        # print all carbons first
+        foreach $heavy_plus_element (@element_array)
+        {
+            $heavy_plus_element =~ /([A-Za-z]+)/;
+            $element = $1;
+            
+            if ($element eq 'C')
+            {
+                $count = $count_hash{$heavy_plus_element};
+                
+                # skip elements we've subtracted away with the adduct
+                if ($count <= 0)
+                {
+                    next;
+                }
+
+                # replace 1 count with blank
+                if ($count == 1)
+                {
+                    $count = '';
+                }
+
+                $formula_new .= $heavy_plus_element . $count;
+            }
+        }
+        
+        # then all hydrogens that aren't D's
+        foreach $heavy_plus_element (@element_array)
+        {
+            $heavy_plus_element =~ /([A-Za-z]+)/;
+            $element = $1;
+            
+            if ($element eq 'H')
+            {
+                $count = $count_hash{$heavy_plus_element};
+
+                # skip elements we've subtracted away with the adduct
+                if ($count <= 0)
+                {
+                    next;
+                }
+
+                # replace 1 count with blank
+                if ($count == 1)
+                {
+                    $count = '';
+                }
+
+                $formula_new .= $heavy_plus_element . $count;
+            }
+        }
+    }
+
+    # order the remaining elements alphabetically, including deuterium
+    foreach $heavy_plus_element (@element_array)
+    {
+        # skip C's and H's we've already placed first
+        if ($has_carbon_flag)
+        {
+            $heavy_plus_element =~ /([A-Za-z]+)/;
+            $element = $1;
+            
+            if ($element eq 'C' || $element eq 'H')
+            {
+                next;
+            }
+        }
+    
+        $count = $count_hash{$heavy_plus_element};
+
+        # skip elements we've subtracted away with the adduct
+        if ($count <= 0)
+        {
+            next;
+        }
+        
+        # replace 1 count with blank
+        if ($count == 1)
+        {
+            $count = '';
+        }
+        
+        $formula_new .= $heavy_plus_element . $count;
+    }
+    
+    return $formula_new;
 }
 
 
@@ -575,28 +847,46 @@ if (!defined($name_col))
 }
 
 # lipidomics
-$lipidomics_flag = 0;
+$lipidsearch_flag = 0;
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidIon'};
-    $lipidomics_flag = 1;
+    $lipidsearch_flag = 1;
+}
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'LipidGroup'};
+    $lipidsearch_flag = 1;
 }
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'IonFormula'};
-    $lipidomics_flag = 1;
+    $lipidsearch_flag = 1;
 }
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidMolec'};
-    $lipidomics_flag = 1;
+    $lipidsearch_flag = 1;
 }
 
 
 # sometimes use formula for heavy label scanning instead of name
-if ($lipidomics_flag)
+if ($lipidsearch_flag)
 {
     $formula_col = $header_col_hash{IonFormula};
+}
+# scan for formula col
+if (!defined($formula_col))
+{
+    for ($i = 0; $i < @header_col_array; $i++)
+    {
+        $header = $header_col_array[$i];
+
+        if (!defined($formula_col) && $header =~ /formula/i)
+        {
+            $formula_col = $i;
+        }
+    }
 }
 
 
@@ -695,6 +985,38 @@ if ($first_abundance_col == 9E99)
   }
 }
 
+# uh oh, column headers don't have anything obviously abundance-looking
+# use the known-last metadata column to denote where samples start
+if ($first_abundance_col == 9E99)
+{
+    $col = $header_col_hash{'Non-heavy identified flag'};
+    if (defined($col))
+    {
+        printf STDERR "WARNING -- using pipeline known-last metadata column to locate data columns\n";
+        $first_abundance_col = $col + 1;
+
+        for ($col = 0; $col < $first_abundance_col; $col++)
+        {
+            $field = $header_col_array[$col];
+
+            #if ($field =~ /\S/)
+            #{
+            #    $metadata_col_hash{$col} = 1;
+            #}
+        }
+        for ($col = $first_abundance_col; $col < $num_header_cols; $col++)
+        {
+            $field = $header_col_array[$col];
+
+            if ($field =~ /\S/)
+            {
+                $sample_col_hash{$col} = 1;
+            }
+        }
+    }
+}
+
+
 printf STDERR "First abundance col: %s\n", $first_abundance_col;
 
 
@@ -784,6 +1106,13 @@ for ($col = 0; $col < @header_col_array; $col++)
     }
 
     print $header_col_array[$col];
+
+    # insert new ParentFormula column
+    if ($lipidsearch_flag && defined($formula_col) &&
+        $col == $formula_col)
+    {
+        print "\tParentFormula";
+    }
 }
 
 
@@ -877,7 +1206,25 @@ while(defined($line=<INFILE>))
     }
 
 
-    $name = $array[$name_col];
+    $name    = $array[$name_col];
+    $formula = '';
+    
+    if (defined($formula_col))
+    {
+        $formula = $array[$formula_col];
+        $formula = conform_formula($formula);
+
+        $array[$formula_col] = $formula;
+    }
+    
+    # remove adduct from formula to yield parent formula
+    $formula_parent = '';
+    if (defined($formula_col) && $name =~ /([+-][A-Za-z0-9+-]+)$/)
+    {
+        $adduct = $1;
+
+        $formula_parent = conform_formula($formula, $adduct);
+    }
 
 
     # flag heavy labeled rows (including spike-ins)
@@ -888,10 +1235,8 @@ while(defined($line=<INFILE>))
     $heavy_flag = 0;
     
     # use formula column on lipidomics data
-    if ($lipidomics_flag && defined($formula_col))
+    if ($lipidsearch_flag && defined($formula_col))
     {
-        $formula = $array[$formula_col];
-
         if (is_heavy_labeled($formula))
         {
             $heavy_flag = 1;
@@ -1071,6 +1416,13 @@ while(defined($line=<INFILE>))
         }
         
         print $field;
+
+        # insert new ParentFormula column
+        if ($lipidsearch_flag && defined($formula_col) &&
+            $col == $formula_col)
+        {
+            print "\t$formula_parent";
+        }
     }
 
 
@@ -1119,11 +1471,14 @@ while(defined($line=<INFILE>))
         {
             $field = '0';
         
-            $sample_lc  = lc $header_col_array[$col];
+            $sample = $header_col_array[$col];
 
             # don't warn about blank samples
-            if ($sample_lc =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
-                $sample_lc =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
+
+            # if ($sample =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
+            #     $sample =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
+            if ($sample =~ /Bla?n?k(\b|[A-Z_])/ ||
+                $sample =~ /(\b|_)bla?n?k(\b|_)/i)
             {
                 $too_low_blank_count++;
             }
