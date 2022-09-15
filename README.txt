@@ -220,6 +220,7 @@ generate_metabolomics_glue_script.pl
   Options:
       --heavy-spikein            heavy rows are spikeins, leave unscaled (default)
       --heavy-tracer             heavy rows are biological, normalize them
+      --no-log2                  disable log2 transform of output data
       --norm-none                disable normalization; use on targeted panels
       --ppm N                    override default m/z PPM tolerance
 
