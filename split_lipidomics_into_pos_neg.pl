@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-09-15  handle more mixed +/- adducts
 # 2022-08-04  default to removing unobservable adducts
 # 2022-08-04  change most ion related variable names to adduct related
 # 2022-08-03  add additional known adduct charges
@@ -616,11 +617,7 @@ for ($row = 0; $row < $num_rows; $row++)
     $pos_neg    = '';
     $adduct_str = '';
 
-    if ($lipid_ion =~ /(\+[A-Za-z0-9-]+)$/)
-    {
-        $adduct_str = $1;
-    }
-    elsif ($lipid_ion =~ /(\-[A-Za-z0-9-]+)$/)
+    if ($lipid_ion =~ /([+-][A-Za-z0-9+-]+)$/)
     {
         $adduct_str = $1;
     }
