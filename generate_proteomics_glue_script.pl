@@ -173,9 +173,9 @@ if ($syntax_error_flag)
     print STDERR "\n";
     print STDERR "    --comp-pool     average all plex channels for cross-plex de-batching\n";
     print STDERR "    --no-comp-pool  use reference channel for de-batching (default)\n";
-    print STDERR "    --comp-pool-exclusions-dark.txt\n";
+    print STDERR "    --comp-pool-exclusions-dark\n";
     print STDERR "                       auto-excludes dark samples from computational pool\n";
-    print STDERR "    --comp-pool-exclusions-boost.txt\n";
+    print STDERR "    --comp-pool-exclusions-boost\n";
     print STDERR "                       excludes boosting channels (N, N-2) from comp pool\n";
     print STDERR "    --comp-pool-exclusions=filename.txt\n";
     print STDERR "                       load comp pool sample exclusions from tab-delimited file\n";
