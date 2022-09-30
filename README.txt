@@ -289,9 +289,9 @@ generate_proteomics_glue_script.pl
 
     --comp-pool     average all plex channels for cross-plex de-batching
     --no-comp-pool  use reference channel for de-batching (default)
-    --comp-pool-exclusions-dark.txt
+    --comp-pool-exclusions-dark
                        auto-excludes dark samples from computational pool
-    --comp-pool-exclusions-boost.txt
+    --comp-pool-exclusions-boost
                        excludes boosting channels (N, N-2) from comp pool
     --comp-pool-exclusions=filename.txt
                        load comp pool sample exclusions from tab-delimited file
