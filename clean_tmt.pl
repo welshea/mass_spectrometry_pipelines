@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2022-11-22: zero-pad Plex numbers in large experiments
+# 2022-11-22: sort samples into plex + label order
+# 2022-11-21: add support for multiple Proteome Discoverer plexes
 # 2022-08-17: support TMT-18
 # 2022-05-06: fixed sample channel detection bug introduced on 2022-04-21
 # 2022-04-21: make sure split doesn't remove empty trailing fields
@@ -8,7 +11,10 @@
 # 2021-11-02: preserve and reformat run# in single-plex injection replicates
 # 2020-08-03: finish support for TMT16, improve unsupported #channels error
 # 2020-07-09: add support for TMT16, add letters to the ends of ALL channels
-# 2020-02-28: replace | with ~ in RowIdentifier
+# 2020-02-28: replace | with ~ in RowIdentifier, otherwise Evince is upset
+
+
+use POSIX;
 
 sub bless_delimiter_space
 {
@@ -76,6 +82,61 @@ sub compare_accession
     return ($value_a cmp $value_b);
 }
 
+
+sub cmp_renamed_header_cols
+{
+    my $header_a    = $header_array_orig_order[$a];
+    my $header_b    = $header_array_orig_order[$b];
+    my $plex_a      = '';
+    my $plex_b      = '';
+    my $ch_a        = '';
+    my $ch_b        = '';
+    my $ch_a_digits = '';
+    my $ch_b_digits = '';
+
+    # may contain a _run1 or _run2 after the plex
+    if ($header_a =~ /^Plex([0-9]+).*_TMT-([0-9CN]+)$/)
+    {
+        $plex_a = $1;
+        $ch_a   = $2;
+
+        $ch_a_digits = $ch_a;
+        $ch_a_digits =~ s/[^0-9]//g;
+    }
+    if ($header_b =~ /^Plex([0-9]+).*_TMT-([0-9CN]+)$/)
+    {
+        $plex_b = $1;
+        $ch_b   = $2;
+
+        $ch_b_digits = $ch_b;
+        $ch_b_digits =~ s/[^0-9]//g;
+    }
+
+    # sort non-samples by original order
+    if ($plex_a eq '' && $plex_b eq '')
+    {
+        return ($a <=> $b);
+    }
+    
+    # put samples last
+    if ($plex_a ne '' && $plex_b eq '') { return  1; }
+    if ($plex_a eq '' && $plex_b ne '') { return -1; }
+    
+    # sort samples by plex
+    if ($plex_a < $plex_b) { return -1; }
+    if ($plex_a > $plex_b) { return  1; }
+
+    # sort samples by channel
+    if ($ch_a_digits < $ch_b_digits) { return -1; }
+    if ($ch_a_digits > $ch_b_digits) { return  1; }
+    
+    # N comes before C or empty
+    if (  $ch_a =~ /N$/i  && !($ch_b =~ /N$/i)) { return -1; }
+    if (!($ch_a =~ /N$/i) &&   $ch_b =~ /N$/i)  { return  1; }
+
+    # shouldn't ever trigger, but if it does, leave them in place
+    return ($a <=> $b);
+}
 
 
 # rename MaxQuant sample column headers to conform to the TMT pipeline
@@ -145,6 +206,12 @@ $channel_map_table[18][15] = '134N';
 $channel_map_table[18][16] = '134C';
 $channel_map_table[18][17] = '135N';	# 135N
 
+$plex_size_last_ch_hash{6}  = '131C';   # 6 and 11 both have 131C last
+$plex_size_last_ch_hash{10} = '131N';
+$plex_size_last_ch_hash{11} = '131C';   # 6 and 11 both have 131C last
+$plex_size_last_ch_hash{16} = '134N';
+$plex_size_last_ch_hash{18} = '135N';
+
 
 $pep_cutoff  = 0.05;
 #$pep_cutoff_site = 0.20;	# 0.20 resulted in bad PCA
@@ -186,12 +253,12 @@ open INFILE, "$infile" or die "can't open $infile\n";
 # read in header line
 $line = <INFILE>;
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//g;
 
 @array = split /\t/, $line;
 
 for ($i = 0; $i < @array; $i++)
 {
+    $array[$i] =~ s/^\s*\"(.*)\"$/$1/;
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
@@ -349,10 +416,15 @@ for ($i = 0; $i < @array; $i++)
 # if there is just one plex, maxquant DOES NOT print the individual
 # plex columns, and instead only prints the summary columns
 # so, we have to detect the format change and dynamically adjust
+%channel_order_hash  = ();
+@channel_order_array = ();
+$temp_plex_str_hash  = ();
 $multi_plex_flag = 0;
 $max_channel = -9E99;		# figure out how many channels we have
 $min_channel =  9E99;		# figure out how many channels we have
-foreach $header (keys %header_to_col_hash)
+$pd_grouped_flag = 0;
+$num_seen_channels = 0;         # currently only used for Proteome Discoverer
+foreach $header (@header_array)
 {
     if ($header =~ /^Reporter intensity (\d+) .*?$/i)
     {
@@ -383,6 +455,122 @@ foreach $header (keys %header_to_col_hash)
             $min_channel = $channel;
         }
     }
+    
+    # Proteome Discoverer
+    if ($header =~ /^Abundances \(Grouped\):\s*([0-9A-Za-z]+)/)
+    {
+        $ch_str   = $1;
+
+        $plex_num = 1;
+        if ($header =~ /^Abundances \(Grouped\):\s*([0-9A-Za-z]+),\s*([0-9]+)/)
+        {
+            $plex_num = $2;
+        }
+
+        # add missing C labels
+        # 126 always leaves it off, is probably missing for all 6-plex ch as well
+        if (!($ch_str =~ /[A-Za-z]$/i))
+        {
+            $ch_str .= 'C';
+        }
+        
+
+        ## DEBUG -- skip a channel for testing purposes
+        ## don't forget to comment this out after debugging
+        #if ($ch_str eq '128N') { next; }
+        #if ($ch_str eq '134N') { next; }
+
+
+        if (!defined($channel_order_hash{$ch_str}))
+        {
+            $channel_order_hash{$ch_str} = $num_seen_channels;
+            $channel_order_array[$num_seen_channels] = $ch_str;
+            $num_seen_channels++;
+        }
+
+        $temp_plex_str_hash{$plex_num} = 1;
+        
+        $pd_grouped_flag = 1;
+    }
+}
+
+
+# Proteome Discoverer, determine number of channels, whether multiple plexes
+if ($pd_grouped_flag)
+{
+    @temp_array = keys %temp_plex_str_hash;
+    if (@temp_array > 1)
+    {
+        $multi_plex_flag = 1;
+    }
+    
+    
+    # sanity check for missing channels at the end
+    $last_label = $channel_order_array[$num_seen_channels - 1];
+    
+    # scan labels for N to differentiate TMT-6 from TMT-11
+    $n_flag = 0;
+    foreach $ch_str (@channel_order_array)
+    {
+        if ($ch_str =~ /N$/i)
+        {
+            $n_flag = 1;
+        }
+    }
+    
+    # scan plex sizes for channel in reverse order
+    $smallest_size   = 0;
+    @plex_size_array = sort {$b<=>$a} keys %plex_size_last_ch_hash;
+    foreach $plex_size (@plex_size_array)
+    {
+        # early exit, all remaining plexs are too small
+        if ($plex_size < $num_seen_channels)
+        {
+            last;
+        }
+    
+        # skip 6-plex, since there are no N-labels
+        if ($n_flag && $plex_size == 6)
+        {
+            next;
+        }
+
+        # scan each plex size to see if contains the last channel
+        # scan all channels, in case the true last channel is missing
+        for ($ch = $plex_size - 1; $ch >= 0; --$ch)
+        {
+            $ch_lookup = $channel_map_table[$plex_size][$ch];
+            
+            #printf STDERR "DEBUG\t%s\t%s\t%s\n",
+            #    $plex_size, $last_label, $ch_lookup;
+            
+            if ($last_label eq $ch_lookup)
+            {
+                $smallest_size = $plex_size;
+                
+                last;
+            }
+        }
+    }
+    
+    if ($smallest_size)
+    {
+        $max_channel = $smallest_size - 1;
+        $min_channel = 0;
+        
+        # re-fill channel order, with missing channels inserted
+        %channel_order_hash  = ();
+        @channel_order_array = ();
+        for ($i = 0; $i < $smallest_size; $i++)
+        {
+            $ch_str = $channel_map_table[$smallest_size][$i];
+            $channel_order_hash{$ch_str} = $i;
+            $channel_order_array[$i]     = $ch_str;
+        }
+    }
+    
+    #printf STDERR "DEBUG\t%s\t%s\t%g\n",
+    #    $max_channel+1, $num_seen_channels, $smallest_size;
 }
 
 
@@ -393,37 +581,6 @@ foreach $header (keys %header_to_col_hash)
 #  current code should still handle it, though
 $max_channel -= $min_channel;
 
-
-# Uh oh, this isn't a MaxQuant formatted TMT file
-%channel_order_hash = ();
-$num_seen_channels = 0;
-if ($min_channel == 9E99)
-{
-    $max_channel = -9E99;
-
-    # Proteome Discoverer
-    for ($i = 0; $i < @array; $i++)
-    {
-        $header = $array[$i];
-    
-        if ($header =~ /^Abundances \(Grouped\):\s*([0-9NC]+)/)
-        {
-            $channel = $1;
-
-            if (!defined($channel_order_hash{$channel}))
-            {
-                $channel_order_hash{$channel} = $num_seen_channels;
-                $num_seen_channels++;
-            }
-        }
-    }
-    $max_channel = $num_seen_channels - 1;
-
-    if ($max_channel >= 0)
-    {
-        $min_channel = 0;
-    }
-}
 
 
 # fill channel string map for appropriate plex size
@@ -575,7 +732,7 @@ foreach $header (keys %header_to_col_hash)
 
 
 @intensities_col_hash = ();
-foreach $header (keys %header_to_col_hash)
+foreach $header (sort keys %header_to_col_hash)
 {
     # Damn it Maxquant! Stop changing the case of your column headers!!
     
@@ -653,16 +810,27 @@ foreach $header (keys %header_to_col_hash)
     }
     
     # Proteome Discoverer
-    #
-    # I only have single-plex data so far
-    # I don't know what multiple plex data looks like yet
-    #
     if ($header =~ /^Abundances \(Grouped\):\s*([0-9NC]+)/)
     {
-        $channel_orig   = $1;
+        $channel_orig = $1;
+
+        # add missing C labels
+        # 126 always leaves it off, is probably missing for all 6-plex ch as well
+        if (!($channel_orig =~ /[A-Za-z]$/i))
+        {
+            $channel_orig .= 'C';
+        }
+
         $channel_number = $channel_order_hash{$channel_orig};
 
-        $plex           = 'Plex1';
+
+        $plex_num = 1;
+        if ($header =~ /^Abundances \(Grouped\):\s*([0-9A-Za-z]+),\s*([0-9]+)/)
+        {
+            $plex_num = $2;
+        }
+
+        $plex           = 'Plex' . $plex_num;
         $channel        = $channel_map[$channel_number];
 
         $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
@@ -672,7 +840,116 @@ foreach $header (keys %header_to_col_hash)
         $intensities_col_hash{$header_to_col_hash{$header}} = $sample_name;
     }
 }
-@intensities_col_array = sort keys %intensities_col_hash;
+@intensities_col_array = sort {$a<=>$b} keys %intensities_col_hash;
+
+
+# Scan for missing channels
+#
+# It turns out there weren't any missing channels after all,
+# so all this new missing channel code is going to waste.
+# Oh well, it's good to be extra paranoid when the samples aren't arranged
+# in the correct order within the output file...
+#
+# I haven't written any code to insert blank columns at the end yet,
+# I'll only implement that if I ever see any missing channel warnings.
+#
+%seen_sample_hash     = ();
+%seen_plex_hash       = ();
+%missing_sample_hash  = ();
+@missing_sample_array = ();
+$num_missing_samples  = 0;
+if ($pd_grouped_flag)
+{
+    foreach $col (@intensities_col_array)
+    {
+        $header = $array[$col];
+
+        if ($header =~ /Plex([0-9]+)_TMT-([0-9CN]+)/)
+        {
+            $plex   = $1;
+            $ch_str = $2;
+
+            $sample_name = sprintf "Plex%s_TMT-%s", $plex, $ch_str;
+
+            $seen_sample_hash{$sample_name} = 1;
+            $seen_plex_hash{$plex} = 1;
+        }
+    }
+
+    @seen_plex_array = sort {$a<=>$b} keys %seen_plex_hash;
+    foreach $plex (@seen_plex_array)
+    {
+        for ($i = 0; $i <= $max_channel; $i++)
+        {
+            $ch_str      = $channel_map_table[$max_channel+1][$i];
+            $sample_name = sprintf "Plex%s_TMT-%s", $plex, $ch_str;
+
+            if (!defined($seen_sample_hash{$sample_name}))
+            {
+                $missing_sample_hash{$sample_name} = 1;
+                
+                $missing_sample_array[$num_missing_samples++] =
+                    $sample_name;
+            }
+        }
+    }
+    
+    foreach $sample_name (@missing_sample_array)
+    {
+        printf "Missing sample:\t%s\n", $sample_name;
+    }
+}
+
+
+# determine maximum width to zero-pad Plex numbers in large experiments
+$max_plex = 1;
+for ($i = 0; $i < @array; $i++)
+{
+    $header = $array[$i];
+
+    if ($header =~ /^Plex([0-9]+)(.*_TMT-[0-9CN]+)$/)
+    {
+        $plex    = $1;
+        $end_str = $2;
+        
+        if ($plex > $max_plex)
+        {
+            $max_plex = $plex;
+        }
+    }
+}
+$max_plex_digits = floor(log10($max_plex)) + 1;
+
+# zero-pad Plex numbers in large experiments
+if ($max_plex_digits > 1)
+{
+    for ($i = 0; $i < @array; $i++)
+    {
+        $header = $array[$i];
+
+        if ($header =~ /^Plex([0-9]+)(.*_TMT-[0-9CN]+)$/)
+        {
+            $plex_num = $1;
+            $end_str  = $2;
+            
+            $plex_new = sprintf "Plex%0*d", $max_plex_digits, $plex_num;
+            
+            $array[$i] =~ s/^Plex$plex_num/$plex_new/;
+        }
+    }
+}
+
+
+# get ready to reorder the headers
+@header_array_orig_order     = @array;
+@header_col_new_order_array  = ();
+for ($i = 0; $i < @header_array_orig_order; $i++)
+{
+    @header_col_new_order_array[$i] = $i;
+}
+
+@header_col_new_order_array =
+    sort cmp_renamed_header_cols @header_col_new_order_array;
 
 
 # insert new row identifier column
@@ -680,22 +957,27 @@ printf "%s\t", 'RowIdentifier';
 printf "%s\t", 'OrigIdentifier';
 
 # print header, minus channel summary columns
-$i = 0;
-while (defined($strip_col_flags{$i}))
+$i   = 0;
+$col = $header_col_new_order_array[$i];
+while (defined($strip_col_flags{$col}))
 {
     $i++;
+    $col = $header_col_new_order_array[$i];
 }
-printf "%s", $array[$i];
+printf "%s", $header_array_orig_order[$col];
 $i++;
+$col = $header_col_new_order_array[$i];
 
 # insert RefType column
 printf "\t%s", 'RefType';
 
 for (; $i < @array; $i++)
 {
-    if (!defined($strip_col_flags{$i}))
+    $col = $header_col_new_order_array[$i];
+
+    if (!defined($strip_col_flags{$col}))
     {
-        printf "\t%s", $array[$i];
+        printf "\t%s", $header_array_orig_order[$col];
     }
 }
 printf "\n";
@@ -711,13 +993,7 @@ while(defined($line=<INFILE>))
 
     for ($i = 0; $i < @array; $i++)
     {
-        # remove mis-escaped quotes
-        if ($array[$i] =~ /^\"/ && $array[$i] =~ /\"$/)
-        {
-            $array[$i] =~ s/^\"//;
-            $array[$i] =~ s/\"$//;
-        }
-
+        $array[$i] =~ s/^\s*\"(.*)\"$/$1/;
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
         $array[$i] =~ s/\s+/ /g;
@@ -733,11 +1009,11 @@ while(defined($line=<INFILE>))
     {
         # clean up GenBank junk
         if ((defined($id_col) && $i == $id_col &&
-             !($header_array[$i] =~ /ModificationID/i)) ||
-            $header_array[$i] =~ /^Protein/i ||
-            $header_array[$i] =~ /protein$/i ||
-            $header_array[$i] =~ /\bprotein ids\b/i ||
-            $header_array[$i] =~ /^Protein Accession/i)
+             !($header_array_orig_order[$i] =~ /ModificationID/i)) ||
+            $header_array_orig_order[$i] =~ /^Protein/i ||
+            $header_array_orig_order[$i] =~ /protein$/i ||
+            $header_array_orig_order[$i] =~ /\bprotein ids\b/i ||
+            $header_array_orig_order[$i] =~ /^Protein Accession/i)
         {
             $blessed_string = $array[$i];
             $blessed_string =~ s/\,/;/g;
@@ -772,12 +1048,12 @@ while(defined($line=<INFILE>))
         # clean up MaxQuant junk
         # holy crap is this bad
         if ((defined($id_col) && $i == $id_col &&
-             !($header_array[$i] =~ /ModificationID/i)) ||
-            $header_array[$i] =~ /^Protein/i ||
-            $header_array[$i] =~ /protein$/i ||
-            $header_array[$i] =~ /\bprotein ids\b/i ||
-            $header_array[$i] =~ /^Protein Accession/i ||
-            $header_array[$i] =~ /^Leading Proteins/i)
+             !($header_array_orig_order[$i] =~ /ModificationID/i)) ||
+            $header_array_orig_order[$i] =~ /^Protein/i ||
+            $header_array_orig_order[$i] =~ /protein$/i ||
+            $header_array_orig_order[$i] =~ /\bprotein ids\b/i ||
+            $header_array_orig_order[$i] =~ /^Protein Accession/i ||
+            $header_array_orig_order[$i] =~ /^Leading Proteins/i)
         {
 
             @split_array = split /;/, $array[$i];
@@ -841,12 +1117,12 @@ while(defined($line=<INFILE>))
     for ($i = 0; $i < @array; $i++)
     {
         if ((defined($id_col) && $i == $id_col &&
-             !($header_array[$i] =~ /ModificationID/i)) ||
-            $header_array[$i] =~ /^Protein/i ||
-            $header_array[$i] =~ /protein$/i ||
-            $header_array[$i] =~ /\bprotein ids\b/i ||
-            $header_array[$i] =~ /^Protein Accession/i ||
-            $header_array[$i] =~ /^Leading Proteins/i)
+             !($header_array_orig_order[$i] =~ /ModificationID/i)) ||
+            $header_array_orig_order[$i] =~ /^Protein/i ||
+            $header_array_orig_order[$i] =~ /protein$/i ||
+            $header_array_orig_order[$i] =~ /\bprotein ids\b/i ||
+            $header_array_orig_order[$i] =~ /^Protein Accession/i ||
+            $header_array_orig_order[$i] =~ /^Leading Proteins/i)
         {
             @split_array = split /;/, $array[$i];
 
@@ -882,9 +1158,9 @@ while(defined($line=<INFILE>))
         $skip_flag = 0;
         for ($i = 0; $i < @array; $i++)
         {
-            if ($header_array[$i] =~ /^Protein/i ||
-                $header_array[$i] =~ /protein$/i ||
-                $header_array[$i] =~ /^Protein Accession/i)
+            if ($header_array_orig_order[$i] =~ /^Protein/i ||
+                $header_array_orig_order[$i] =~ /protein$/i ||
+                $header_array_orig_order[$i] =~ /^Protein Accession/i)
             {
                 if ($array[$i] =~ /TRY1_BOVIN/)
                 {
@@ -986,12 +1262,15 @@ while(defined($line=<INFILE>))
 
     
     $i = 0;
-    while (defined($strip_col_flags{$i}))
+    $col = $header_col_new_order_array[$i];
+    while (defined($strip_col_flags{$col}))
     {
         $i++;
+        $col = $header_col_new_order_array[$i];
     }
-    printf "%s", $array[$i];
+    printf "%s", $array[$col];
     $i++;
+    $col = $header_col_new_order_array[$i];
     
     # insert RefType column
     if ($peptide_flag ne '')
@@ -1030,9 +1309,11 @@ while(defined($line=<INFILE>))
     
     for (; $i < @array; $i++)
     {
-        if (!defined($strip_col_flags{$i}))
+        $col = $header_col_new_order_array[$i];
+
+        if (!defined($strip_col_flags{$col}))
         {
-            printf "\t%s", $array[$i];
+            printf "\t%s", $array[$col];
         }
     }
     printf "\n";
