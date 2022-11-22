@@ -2,6 +2,8 @@
 
 # Changelog:
 #
+# 2022-11-21: add support for multiple Proteome Discoverer plexes
+# 2022-11-21: remove first level of enclosing double quotes from fields
 # 2022-08-17: support TMT-18
 # 2022-04-21: begin adding Proteome Discoverer support
 # 2022-01-19: default 100% injection replicates to "auto" reference channel
@@ -165,12 +167,13 @@ open INFILE, "$filename" or die "can't open input file $filename\n";
 
 $line = <INFILE>;
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//;
+#$line =~ s/\"//g;
 
 @header_array = split /\t/, $line;
 
 for ($i = 0; $i < @header_array; $i++)
 {
+    $header_array[$i] =~ s/^\s*\"(.*)\"$/$1/;
     $header_array[$i] =~ s/^\s+//;
     $header_array[$i] =~ s/\s+$//;
     $header_array[$i] =~ s/\s+/ /g;
@@ -223,11 +226,15 @@ for($i = 0; $i < @header_array; $i++)
     # Proteome Discoverer
     if ($header =~ /^Abundances \(Grouped\):\s*/)
     {
-        # I haven't seen multi plex data yet,
-        # so the script only supports single plex data right now
-        $plex             = 'Plex1';
+        $plex_num = 1;
+        if ($header =~ /^Abundances \(Grouped\):\s*([0-9A-Za-z]+),\s*([0-9]+)/)
+        {
+            $plex_num = $2;
+        }
+
+        $plex             = 'Plex' . $plex_num;
         $plex_hash{$plex} = 1;
-    
+
         $tmt_flag         = 1;
         $intensity_flag   = 1;
     }
@@ -354,6 +361,7 @@ while(defined($line=<INFILE>))
             $array[$i] =~ s/\"$//;
         }
 
+        $array[$i] =~ s/^\s*\"(.*)\"$/$1/;
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
         $array[$i] =~ s/\s+/ /g;
