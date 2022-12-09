@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2022-12-09:  change |& to 2>&1| to fix Ubuntu/Debian sh --> dash
 # 2022-04-26:  add --iron-untilt to usage statement (no longer experimental)
 # 2022-04-21:  begin adding support for Proteome Discoverer
 # 2022-04-21:  remove all double quotes, not just the first one per line (oops)
@@ -525,7 +526,7 @@ sub iron_samples
     }
 
     # normalize data as usual
-    $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" %s %s %s \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|FitLine)\"",
+    $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" %s %s %s \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
         $median_sample, $exclusions_string, $spikeins_string, $bg_string,
         $iron_input_name, $iron_output_name;
 
