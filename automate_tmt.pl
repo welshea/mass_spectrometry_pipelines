@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2022-12-09: change |& to 2>&1| to fix Ubuntu/Debian sh --> dash
 # 2022-07-08: better handling of 126C default when no pool specified
 # 2022-04-26: add --iron-untilt to usage statement (no longer experimental)
 # 2022-04-19: strip accidental .txt from --comp-pool flags documentation
@@ -860,12 +861,12 @@ sub iron_pools
 
         if ($exclusions_flag)
         {
-          $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|Fit)\"",
+          $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|Fit)\"",
               $exclusions_filename, $median_sample, $iron_input_name, $iron_output_name;
         }
         else
         {
-          $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|Fit)\"",
+          $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|Fit)\"",
               $median_sample, $iron_input_name, $iron_output_name;
         }
         
@@ -1142,12 +1143,12 @@ sub iron_samples
 
             if ($exclusions_flag)
             {
-              $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|FitLine)\"",
+              $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
                   $exclusions_filename, $median_sample, $iron_input_name, $iron_output_name;
             }
             else
             {
-              $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" |& grep -P \"^Global(Scale|FitLine)\"",
+              $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
                   $median_sample, $iron_input_name, $iron_output_name;
             }
 
