@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-12-16: plex + label zero-padding + sorting, need not start with "Plex"
 # 2022-11-22: zero-pad Plex numbers in large experiments
 # 2022-11-22: sort samples into plex + label order
 # 2022-11-21: add support for multiple Proteome Discoverer plexes
@@ -95,7 +96,7 @@ sub cmp_renamed_header_cols
     my $ch_b_digits = '';
 
     # may contain a _run1 or _run2 after the plex
-    if ($header_a =~ /^Plex([0-9]+).*_TMT-([0-9CN]+)$/)
+    if ($header_a =~ /([0-9]+).*_TMT-([0-9CN]+)$/)
     {
         $plex_a = $1;
         $ch_a   = $2;
@@ -103,7 +104,7 @@ sub cmp_renamed_header_cols
         $ch_a_digits = $ch_a;
         $ch_a_digits =~ s/[^0-9]//g;
     }
-    if ($header_b =~ /^Plex([0-9]+).*_TMT-([0-9CN]+)$/)
+    if ($header_b =~ /([0-9]+).*_TMT-([0-9CN]+)$/)
     {
         $plex_b = $1;
         $ch_b   = $2;
@@ -864,7 +865,7 @@ if ($pd_grouped_flag)
     {
         $header = $array[$col];
 
-        if ($header =~ /Plex([0-9]+)_TMT-([0-9CN]+)/)
+        if ($header =~ /([0-9]+)_TMT-([0-9CN]+)/)
         {
             $plex   = $1;
             $ch_str = $2;
@@ -907,7 +908,7 @@ for ($i = 0; $i < @array; $i++)
 {
     $header = $array[$i];
 
-    if ($header =~ /^Plex([0-9]+)(.*_TMT-[0-9CN]+)$/)
+    if ($header =~ /([0-9]+)(.*_TMT-[0-9CN]+)$/)
     {
         $plex    = $1;
         $end_str = $2;
@@ -927,14 +928,16 @@ if ($max_plex_digits > 1)
     {
         $header = $array[$i];
 
-        if ($header =~ /^Plex([0-9]+)(.*_TMT-[0-9CN]+)$/)
+        if ($header =~ /^([^0-9]+)([0-9]+)(.*_TMT-[0-9CN]+)$/)
         {
-            $plex_num = $1;
-            $end_str  = $2;
+            $plex_txt = $1;
+            $plex_num = $2;
+            $end_str  = $3;
             
-            $plex_new = sprintf "Plex%0*d", $max_plex_digits, $plex_num;
-            
-            $array[$i] =~ s/^Plex$plex_num/$plex_new/;
+            $plex_new = sprintf "%s%0*d%s",
+                $plex_txt, $max_plex_digits, $plex_num, $end_str;
+
+            $array[$i] = $plex_new;;
         }
     }
 }
