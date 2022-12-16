@@ -195,17 +195,39 @@ csv2tab_not_excel.pl
 
   Convert CSV text files to tab-delimited text.
 
-  Usage;
+  Usage:
     csv2tab_not_excel.pl input.csv > output_tab_delimited.txt
 
   Output:
     Simple tab-delimited output.  Fields containing commas and/or double-
     quotes are not re-escaped, nor are embedded tabs, newlines, or carriage
-    returns supported.  It is slower than python's build-in functions, but is
+    returns supported.  It is slower than python's built-in functions, but is
     more robust to various errors in CSV file formats, and produces a properly
     cleaned (no escaped fields) simple tab-delimited output.
 
     See comments within script for additonal discussion and rationale.
+
+
+
+filter_rows_by_missing_batches.pl
+
+  Filter input prior to COMBAT de-batching so that COMBAT will not crash.
+
+  Usage: filter_rows_by_missing_batches.pl [options] combat_batch_input_file data_file [min # value per each]
+
+    Options:
+      --keep-all-cols    keep all columns, even if not in batch input file
+
+    First column is sample name
+    Batch column header is given as "Batch"
+    Any columns after Batch are treated as co-variates
+
+  Output:
+    Rows with < 2 values per batch + co-variate combination are pruned
+    Only samples present in both files add to batch counts
+
+    By default, columns not present in the batch input file are removed
+    Use the --keep-all-cols flag to keep all columns
 
 
 
@@ -289,9 +311,9 @@ generate_proteomics_glue_script.pl
 
     --comp-pool     average all plex channels for cross-plex de-batching
     --no-comp-pool  use reference channel for de-batching (default)
-    --comp-pool-exclusions-dark
+    --comp-pool-exclusions-dark.txt
                        auto-excludes dark samples from computational pool
-    --comp-pool-exclusions-boost
+    --comp-pool-exclusions-boost.txt
                        excludes boosting channels (N, N-2) from comp pool
     --comp-pool-exclusions=filename.txt
                        load comp pool sample exclusions from tab-delimited file
