@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-12-23  add in additional annotation columns at beginning, if present
 # 2022-08-03  Has_Contaminant_Flag, All_Reverse_Flag now [0,1] instead of [0-3]
 # 2021-08-30  move amino acid column, insert new position column
 # 2021-08-30  generate new ModificationID from new sorted accession order
@@ -911,6 +912,12 @@ sub print_probeid_annotation
     $type_str = '';
     $location_str = '';
     $description_str = '';
+    
+    # initialize extra annotation strings
+    foreach $col (@annotation_extra_col_array)
+    {
+        $row_extra_str_by_col_hash{$col} = '';
+    }
 
     %seen_accession_rna_hash = ();
     %seen_accession_protein_hash = ();
@@ -920,6 +927,7 @@ sub print_probeid_annotation
     %seen_type_hash = ();
     %seen_location_hash = ();
     %seen_description_hash = ();
+    %seen_extra_hash = ();
     %symbol_with_geneid_hash = ();
 
     # flag accessions with pseudogenes
@@ -1135,7 +1143,42 @@ sub print_probeid_annotation
                 $seen_description_hash{$field} = 1;
             }
         }
+        
+        # handle extra annotation columns
+        foreach $col (@annotation_extra_col_array)
+        {
+            $value_str  = $row_extra_str_by_col_hash{$col};
+            $value_orig = $accession_annotation_extra_hash{$accession}{$col};
+            
+            if (!defined($value_orig))
+            {
+                $value_orig = '';
+            }
+
+            $value_orig =~ s/^null$//i;
+            $value_orig =  bless_delimiter_bar($value_orig);
+
+            foreach $field (split /\|/, $value_orig)
+            {
+                if ($field =~ /\S/ &&
+                    !(defined($seen_extra_hash{$col}) &&
+                      defined($seen_extra_hash{$col}{$field})))
+                {
+                    if ($value_str =~ /\S/)
+                    {
+                        $value_str .= '|';
+                    }
+                    $value_str .= $field;
+
+                    $seen_extra_hash{$col}{$field} = 1;
+                }
+            }
+            
+            # store extra annotation strings as we grow them
+            $row_extra_str_by_col_hash{$col} = $value_str;
+        }
     }
+
     
     if (!($accession_rna_str =~ /[A-Za-z0-9]/))
     {
@@ -1178,6 +1221,20 @@ sub print_probeid_annotation
     $type_str              = bless_delimiter_bar($type_str);
     $type_str              =~ s/\;/\|/g;
 
+    # clean up extra annotation
+    foreach $col (@annotation_extra_col_array)
+    {
+        $value_str = $row_extra_str_by_col_hash{$col};
+    
+        if (!($value_str =~ /\S/))
+        {
+            $value_str = '---';
+        }
+
+        $value_str = bless_delimiter_space($value_str);
+
+        $row_extra_str_by_col_hash{$col} = $value_str;
+    }
 
     # remove symbols without geneids if we already have some
     @temp_array = keys %symbol_with_geneid_hash;
@@ -1734,6 +1791,14 @@ sub print_probeid_annotation
     $line_new .= "\t$cow_contam";
     $line_new .= "\t$target_species_flag";
     $line_new .= "\t$accession_pruned_str";
+
+    # insert extra annotation fields
+    foreach $col (@annotation_extra_col_array)
+    {
+        $value_str = $row_extra_str_by_col_hash{$col};
+        $line_new .= "\t$value_str";
+    }
+
     $line_new .= "\t$gene_id_str";
     $line_new .= "\t$count_symbols";
     $line_new .= "\t$warning_level";
@@ -1830,6 +1895,11 @@ for ($i = 0; $i < @array; $i++)
     }
     
     $accession_header_hash{$field} = $i;
+    
+    if ($field =~ /[A-Za-z0-9]/)
+    {
+        $annotation_col_to_header_hash{$i} = $field;
+    }
 }
 
 $accession_accession_col         = $accession_header_hash{'Accession'};
@@ -1888,6 +1958,36 @@ if (!defined($accession_description_col))
     exit(1);
 }
 
+
+# flag regular annotation columns
+$annotation_regular_col_hash{$accession_accession_col} = 1;
+$annotation_regular_col_hash{$accession_accession_rna_col} = 1;
+$annotation_regular_col_hash{$accession_accession_protein_col} = 1;
+$annotation_regular_col_hash{$accession_gene_id_col} = 1;
+$annotation_regular_col_hash{$accession_symbol_col} = 1;
+$annotation_regular_col_hash{$accession_alias_col} = 1;
+$annotation_regular_col_hash{$accession_type_col} = 1;
+$annotation_regular_col_hash{$accession_location_col} = 1;
+$annotation_regular_col_hash{$accession_description_col} = 1;
+
+# detect extra annotation columns that we didn't originally support
+%annotation_extra_col_hash = ();
+foreach $col (sort {$a<=>$b} keys %annotation_col_to_header_hash)
+{
+    if (defined($annotation_regular_col_hash{$col}))
+    {
+        next;
+    }
+
+    $header = $annotation_col_to_header_hash{$col};
+    $annotation_extra_col_hash{$col} = $header;
+}
+@annotation_extra_col_array = sort {$a<=>$b} keys %annotation_extra_col_hash;
+$i = 0;
+foreach $col (@annotation_extra_col_array)
+{
+    $annotation_extra_header_array[$i++] = $annotation_extra_col_hash{$col};
+}
 
 
 while(defined($line=<ANNOTATION>))
@@ -1950,6 +2050,21 @@ while(defined($line=<ANNOTATION>))
     $accession_annotation_hash{$accession}{type}              = $type;
     $accession_annotation_hash{$accession}{location}          = $location;
     $accession_annotation_hash{$accession}{description}       = $description;
+    
+    # store extra annotation, by col
+    # if we store by col, we don't need to worry about header collisions
+    foreach $col (@annotation_extra_col_array)
+    {
+        $value = $array[$col];
+        
+        if (!defined($value) || !($value =~ /\S/) ||
+            $value eq '---')
+        {
+            $value = '';
+        }
+
+        $accession_annotation_extra_hash{$accession}{$col} = $value;
+    }
 }
 close ANNOTATION;
 
@@ -2074,6 +2189,13 @@ printf "\t%s", 'All_Reverse_Flag';
 printf "\t%s", 'Cow_Contaminant_Flag';
 printf "\t%s", 'Target_Species_Flag';
 printf "\t%s", 'Accession_Protein';
+
+# insert extra annotation fields
+foreach $header (@annotation_extra_header_array)
+{
+    printf "\t%s", $header;
+}
+
 printf "\t%s", 'GeneID';
 printf "\t%s", 'NumGenes';
 printf "\t%s", 'WarningLevel';
