@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-01-11:  rescale normalized rows so log2 normalized mean == log2 raw mean
 # 2022-12-09:  change |& to 2>&1| to fix Ubuntu/Debian sh --> dash
 # 2022-04-26:  add --iron-untilt to usage statement (no longer experimental)
 # 2022-04-21:  begin adding support for Proteome Discoverer
@@ -593,6 +594,51 @@ sub iron_samples
             $array[$i] =~ s/\s+/ /g;
         }
         
+        # mean of original log2 values
+        $mean_raw = 0;
+        $n        = 0;
+        for ($i = 0; $i < $num_samples; $i++)
+        {
+            $sample = $sample_array[$i];
+            $col    = $sample_to_file_col_hash{$sample};
+            
+            $value  = $orig_data_array[$row][$col];
+            
+            if (defined($value) && is_number($value) && $value > 0)
+            {
+                $mean_raw += log($value);
+                $n++;
+            }
+        }
+        if ($n)
+        {
+            $mean_raw /= $n * $log2;
+        }
+
+        $mean_norm = 0;
+        $n         = 0;
+        for ($i = 0; $i < $num_samples; $i++)
+        {
+            $value = $array[$i+1];
+            
+            if (defined($value) && is_number($value) && $value > 0)
+            {
+                $mean_norm += log($value);
+                $n++;
+            }
+        }
+        if ($n)
+        {
+            $mean_norm /= $n * $log2;
+        }
+        
+        # amount to shift normalized data so it has same log2 mean as raw
+        $offset = 0;
+        if ($mean_raw > 0 && $mean_norm > 0)
+        {
+            $offset = $mean_raw - $mean_norm;
+        }
+        
         for ($i = 0; $i < $num_samples; $i++)
         {
             $value = $array[$i+1];
@@ -600,7 +646,7 @@ sub iron_samples
             # paranoia for log taking
             if (is_number($value) && $value > 0)
             {
-                $value = log($value) / $log2;
+                $value = log($value) / $log2 + $offset;
             }
             else
             {
