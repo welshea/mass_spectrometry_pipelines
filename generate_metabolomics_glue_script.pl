@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-10-10:  add LipidMaps annotation
 # 2022-09-15:  add --no-log2 flag
 # 2022-09-07:  fix typo in blank-based background code
 # 2022-08-11:  add blank-based background flagging; disable for now
@@ -512,6 +513,12 @@ if ($lipidomics_flag)
         $annotate_pipe_str = sprintf " | %s - ",
                                  'lipidomics_assign_main_ion.pl';
     }
+    
+    # annotate with lipidmaps
+    $annotate_pipe_str .= sprintf " | %s \"%s/%s\" - ",
+                             'annotate_with_lipidmaps.pl',
+                             $script_path,
+                             'lipidmaps_sdf_parsed.txt';
 }
 # regular metabolomics
 else
