@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2022-01-13:  allow for numbers following blank sample names
+# 2022-01-13:  accept only blnk as abbreviation for blank, not blk or blak
 # 2022-09-15:  add ParentFormula column for LipidSearch adducts
 # 2022-09-14:  conform formulas containing spaces (LipidSearch)
 # 2022-08-11:  improve sample blank detection
@@ -1475,10 +1477,10 @@ while(defined($line=<INFILE>))
 
             # don't warn about blank samples
 
-            # if ($sample =~ /processing_bla?n?k\d*([^A-Za-z0-9]|$)/i ||
+            # if ($sample =~ /processing_bla?nk\d*([^A-Za-z0-9]|$)/i ||
             #     $sample =~ /(^|[^A-Za-z0-9])blank\d*([^A-Za-z0-9]|$)/i)
-            if ($sample =~ /Bla?n?k(\b|[A-Z_])/ ||
-                $sample =~ /(\b|_)bla?n?k(\b|_)/i)
+            if ($sample =~ /Bla?nk(\b|[A-Z0-9_])/ ||
+                $sample =~ /(\b|_)bla?nk(\b|[0-9_])/i)
             {
                 $too_low_blank_count++;
             }
