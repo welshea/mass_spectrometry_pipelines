@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-01-17:  protect ] or ) immediately following the short name
 # 2022-06-16:  better handling of () and {} near pos/neg in sample names
 # 2022-06-16:  better handling of [] near pos/neg in sample names
 # 2022-06-16:  bugfix: stop attempting to interpret sample names as REGEX
@@ -1025,6 +1026,19 @@ foreach $header (@actual_sample_lc_array)
     $tomerge_short = $tomerge_case;
     $tomerge_short =~ s/^\Q$common_prefix_all\E//i;
     $tomerge_short =~ s/\Q$common_suffix_all\E$//i;
+    
+    # protect ] or ) immediately following the short name
+    $temp_str = $tomerge_case;
+    $temp_str =~ s/.*?\Q$tomerge_short\E//;
+    if ($tomerge_case =~ /[\(\[]/ &&
+        length $temp_str)
+    {
+        $c = substr $temp_str, 0, 1;
+        if ($c eq ']' || $c eq ')')
+        {
+            $tomerge_short .= $c;
+        }
+    }
     
     if ($count_pos_matches)
     {
