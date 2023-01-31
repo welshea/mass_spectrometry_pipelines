@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-# 2023-01-32  oh the irony, fix commments typo in 2022-07-12 changelog
+# 2022-10-24  fix "commments" typo in 2022-07-12 changelog (oh, the irony)
 # 2022-07-12  minor typo corrections in documentation comments
 # 2021-12-09  minor typo corrections in documentation comments
 # 2021-08-19  improve/update documentation of csv2tsv_not_excel() function
