@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2023-01-32  oh the irony, fix commments typo in 2022-07-12 changelog
+# 2022-07-12  minor typo corrections in documentation comments
+# 2021-12-09  minor typo corrections in documentation comments
 # 2021-08-19  improve/update documentation of csv2tsv_not_excel() function
 # 2021-08-16  strip leading/trailing spaces from enclosed fields,
 #             instead of the previous intentional preservation behavior
@@ -42,7 +45,7 @@
 # due to the allowance of embedded newlines in 1).  The common implementation
 # of 1) appears to assumes MS-DOS CRLF end-of-line (EOL) characters, rather
 # than unix LF or a mix-and-match of some lines ending in CRLF and others in
-# LF (frequently occurs aftering editing a CRLF file in Unix).  For example,
+# LF (frequently occurs after editing a CRLF file in Unix).  For example,
 # Excel appears to assume that LF will be used to denote an embedded newline,
 # with CRLF indicating a "real" newline.  This, as well as 2), is problematic
 # in Unix software, which generally assumes LF is the EOL character, since
@@ -119,7 +122,7 @@
 #      files.""
 #
 #
-# I choose to ignore leading/trailing spaces for the purposes of determing
+# I choose to ignore leading/trailing spaces for the purposes of determining
 # whether a field is enclosed within double-quotes or not.  I shall peserve
 # them if the field is not enclosed ('spaces are considered part of a field
 # and should not be ignored' and 'be conservative in what you do'), but remove
@@ -138,7 +141,7 @@
 #      either removed (at beginning/end of field or space on either side),
 #      or replaced with a single space (if removing would otherwise merge
 #      non-space text together).  Existing spaces are preserved, only
-#      multiple unescaped tabs in a row are stripped/condensed.
+#      one or more unescaped tabs in a row are stripped/condensed.
 #
 #      While not exactly standards compliant (is there even a standard for
 #      for how to handle embedded tabs??), I have observed this to be closest
@@ -222,7 +225,7 @@ sub csv2tsv_not_excel
     #  double-quotes are used for "grouping".
     #
     my $tab = "\x1A";    # (substitute)      need single char for split regex
-    my $dq  = "\x1D";    # (group separator) seed single char for split regex
+    my $dq  = "\x1D";    # (group separator) need single char for split regex
     
     # remove null characters, since I've only seen them randomly introduced
     #  during NTFS glitches; "Null characters may be inserted into or removed
@@ -267,7 +270,7 @@ sub csv2tsv_not_excel
         #  but *much* slower on lines containing very few quoted fields
         # use split loop instead
         #
-        # /e to evaluates code to handle different capture cases correctly
+        # /e to evaluate code to handle different capture cases correctly
         #$line =~ s/(,?)((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))|(,)/defined($3) ? "\t" : ((defined($1) && $1 ne '') ? "\t$2" : $2)/ge;
     }
     else
