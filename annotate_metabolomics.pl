@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
 
+# 2022-02-09:  bugfix false positive D in is_heavy_labeled()
+# 2022-02-09:  more robust stripping of double quotes
+# 2022-02-09:  support original internal identifier matching
 # 2022-09-08:  don't split m/z on forward slash
 # 2022-07-15:  conform by removing likely abbreviations from ends
 # 2022-07-15:  update is_heavy_labeled() function
@@ -537,12 +540,12 @@ sub is_heavy_labeled
     
     if ($string =~ /\([^()]*\b13C[0-9]*\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\b14N[0-9]*\b[^()]*\)/) { return 1; }
-    if ($string =~ /\([^()]*\bD[0-9]*\b[^()]*\)/)   { return 1; }
+    if ($string =~ /\([^()]*[)-]D[0-9]+\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\bBOC\b[^()]*\)/)       { return 1; }
 
     if ($string =~ /\b13C[0-9]+\b/) { return 1; }
     if ($string =~ /\b14N[0-9]+\b/) { return 1; }
-    if ($string =~ /\bD[0-9]+\b/)   { return 1; }
+    if ($string =~ /[)-]D[0-9]+\b/) { return 1; }
     if ($string =~ /\bBOC\b/)       { return 1; }
     
     return 0;
@@ -1139,10 +1142,13 @@ while($line=<ANNOTATION>)
 
 # annotation header line
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//g;
 @array = split /\t/, $line;    # skip empty headers at and
 for ($i = 0; $i < @array; $i++)
 {
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+    $array[$i] =~ s/^\"(.*)\"$/$1/;
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
@@ -1177,6 +1183,12 @@ for ($i = 0; $i < @array; $i++)
            $header =~ /identity/i)
     {
         $annotation_name_col = $i;
+    }
+    # original internal identifier, for backwards compatability with old data
+    elsif (!defined($annotation_name_orig_col) &&
+           $header =~ /identity orig/i)
+    {
+        $annotation_name_orig_col = $i;
     }
     elsif (!defined($annotation_synonym_col) &&
            $header =~ /synonym$/i)
@@ -1348,13 +1360,16 @@ $row = 0;
 while(defined($line=<ANNOTATION>))
 {
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
 
     @array = split /\t/, $line, -1;    # don't skip empty fields at and
 
     # clean up fields
     for ($col = 0; $col < @array; $col++)
     {
+        $array[$col] =~ s/^\s+//;
+        $array[$col] =~ s/\s+$//;
+        $array[$col] =~ s/\s+/ /g;
+        $array[$col] =~ s/^\"(.*)\"$/$1/;
         $array[$col] =~ s/^\s+//;
         $array[$col] =~ s/\s+$//;
         $array[$col] =~ s/\s+/ /g;
@@ -1365,6 +1380,12 @@ while(defined($line=<ANNOTATION>))
     $mz          = $array[$annotation_mz_col];
     $formula     = $array[$annotation_formula_col];
     $name        = $array[$annotation_name_col];
+    
+    $name_orig   = '';
+    if (defined($annotation_name_orig_col))
+    {
+        $name_orig = $array[$annotation_name_orig_col];
+    }
 
     $kegg        = '';
     $kegg_map    = '';
@@ -1443,6 +1464,11 @@ while(defined($line=<ANNOTATION>))
     }
     
     $conformed_name_hash{$name} = conform_name($name);
+    
+    if ($name_orig =~ /[A-Za-z0-9]/)
+    {
+        $conformed_name_hash{$name_orig} = conform_name($name_orig);
+    }
 
     # concatenate synonym and traditional iupac fields
     if ($traditional_str ne '')
@@ -1475,6 +1501,7 @@ while(defined($line=<ANNOTATION>))
 
           $annotation_hash{$row}{formula}   = $formula;
           $annotation_hash{$row}{name}      = $name;
+          $annotation_hash{$row}{name_orig} = $name_orig;
         @{$annotation_hash{$row}{syn_arr}}  = @synonym_array;
           $annotation_hash{$row}{kegg}      = $kegg;
           $annotation_hash{$row}{kegg_map}  = $kegg_map;
@@ -1593,6 +1620,7 @@ while(defined($line=<ANNOTATION>))
 
               $annotation_hash{$row}{formula}   = $formula;
               $annotation_hash{$row}{name}      = $name;
+              $annotation_hash{$row}{name_orig} = $name_orig;
             @{$annotation_hash{$row}{syn_arr}}  = @synonym_array;
               $annotation_hash{$row}{kegg}      = $kegg;
               $annotation_hash{$row}{kegg_map}  = $kegg_map;
@@ -1702,10 +1730,13 @@ while($line=<DATA>)
 
 # data header line
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//g;
 @array = split /\t/, $line;    # skip empty headers at and
 for ($i = 0; $i < @array; $i++)
 {
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+    $array[$i] =~ s/^\"(.*)\"$/$1/;
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
@@ -1851,13 +1882,15 @@ $row_data = 0;
 while(defined($line=<DATA>))
 {
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
-
     @array = split /\t/, $line, -1;    # don't skip empty fields at and
 
     # clean up fields
     for ($col = 0; $col < @array; $col++)
     {
+        $array[$col] =~ s/^\s+//;
+        $array[$col] =~ s/\s+$//;
+        $array[$col] =~ s/\s+/ /g;
+        $array[$col] =~ s/^\"(.*)\"$/$1/;
         $array[$col] =~ s/^\s+//;
         $array[$col] =~ s/\s+$//;
         $array[$col] =~ s/\s+/ /g;
@@ -2147,6 +2180,121 @@ while(defined($line=<DATA>))
                     }
                 }
             }
+            
+            # try the old names, in case we are looking at old data
+            # 1C/1D: conformed old name, original + pos/neg m/z
+            if ($match_flag == 0 && defined($annotation_name_orig_col))
+            {
+                %candidate_name_hash = ();
+                %temp_row_score_hash = ();
+                @candidate_row_array = ();
+
+                # score each row
+                foreach $row (@row_mz_pos_neg_array)
+                {
+                    $name_db           = $annotation_hash{$row}{name_orig};
+                    if ($name_db eq '')
+                    {
+                        next;
+                    }
+                    $name_db_lc        = lc $name_db;
+                    $name_db_conformed = $conformed_name_hash{$name_db};
+
+                    if ($name_lc_conformed eq $name_db_conformed)
+                    {
+                        $frac_id = 0;
+                        $score =
+                            score_substring_mismatch($name_lc,
+                                                     $name_db_lc,
+                                                     $align_method,
+                                                     \$frac_id);
+
+                        $candidate_name_hash{$name_db_lc} = 1;
+
+                        $temp_row_score_hash{$row} = $score;
+                    }
+                }
+                
+                @candidate_row_array =
+                    sort cmp_conformed_rows keys %temp_row_score_hash;
+                @temp_name_array     = keys %candidate_name_hash;
+
+                # only 1 good candidate in database, should be right?
+                if (@temp_name_array == 1)
+                {
+                    $match_type = '1C';
+                }
+                # less certain, since there are multiple candidates
+                else
+                {
+                    $match_type = '1D';
+                }
+
+                # keep highest score (and ties) as matches
+                if (@candidate_row_array)
+                {
+                    $best_row      = $candidate_row_array[0];
+                    $best_score    = $temp_row_score_hash{$best_row};
+                    $best_count    = $annotation_hash{$best_row}{col_count};
+                    $best_has_kegg = $annotation_hash{$best_row}{kegg};
+                    if (defined($best_has_kegg) && $best_has_kegg ne '')
+                    {
+                        $best_has_kegg = 1;
+                    }
+                    else
+                    {
+                        $best_has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($best_has_kegg &&
+                        $annotation_hash{$best_row}{kegg_map} ne '')
+                    {
+                        $best_has_kegg = 2;
+                    }
+                }
+                foreach $row (@candidate_row_array)
+                {
+                    $score    = $temp_row_score_hash{$row};
+                    $count    = $annotation_hash{$row}{col_count};
+                    $has_kegg = $annotation_hash{$row}{kegg};
+                    if (defined($has_kegg) && $has_kegg ne '')
+                    {
+                        $has_kegg = 1;
+                    }
+                    else
+                    {
+                        $has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($has_kegg &&
+                        $annotation_hash{$row}{kegg_map} ne '')
+                    {
+                        $has_kegg = 2;
+                    }
+                    
+                    if ($has_kegg == $best_has_kegg &&
+                        $count    == $best_count &&
+                        $score    == $best_score)
+                    {
+                        $match_flag = 1;
+                        
+                        # store each row only once per row
+                        if (!defined($matched_row_hash{$row}))
+                        {
+                            $matched_row_array[$num_matches]  = $row;
+                            $matched_type_array[$num_matches] = $match_type;
+                            $num_matches++;
+                        }
+                        $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
+                    }
+                    # no longer tied
+                    else
+                    {
+                        last;
+                    }
+                }
+            }            
 
             # 2A/2B: conformed,   original + pos/neg m/z, synonyms
             #
