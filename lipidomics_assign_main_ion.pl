@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2022-02-13:  count [-2H] adducts, warn LipidSearch export may be incorrect
+# 2023-02-13:  also warn if tScore headers are detected
+# 2023-02-13:  count [-2H] adducts, warn LipidSearch export may be incorrect
 # 2022-08-05:  support main ion flagging from LipidSearch summary file
 # 2022-08-05:  denote non-canonical main ions
 # 2022-08-03:  rename SuperClass to Class
@@ -460,6 +461,7 @@ sub read_in_lipidsearch_summary_file
 $num_files            = 0;
 $valid_summary_flag   = 0;
 $adduct_minus2h_count = 0;    # these should have been filtered out already
+$tscore_detected_flag = 0;    # may only be present in incorrect exports?
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -547,6 +549,12 @@ for ($i = 0; $i < @array; $i++)
     $field = $array[$i];
     $header_col_hash{$field} = $i;
     $header_col_array[$i] = $field;
+
+    # flag suspicious columns that may indicate wrong export options
+    if ($field =~ /^tScore/)
+    {
+       $tscore_detected_flag = 1;
+    }
 }
 
 
@@ -1419,4 +1427,9 @@ if ($adduct_minus2h_count)
 {
     printf STDERR "WARNING -- %s [-2H] adducts detected; check LipidSearch export options\n",
         $adduct_minus2h_count;
+}
+
+if ($tscore_detected_flag)
+{
+    printf STDERR "WARNING -- tScore column headers detected; check LipidSearch export options\n";
 }
