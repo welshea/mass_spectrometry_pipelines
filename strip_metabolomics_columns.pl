@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2023-02-13:  warn if tScore headers are detected
+# 2022-02-09:  bugfix false positive D in is_heavy_labeled()
 # 2022-01-13:  allow for numbers following blank sample names
 # 2022-01-13:  accept only blnk as abbreviation for blank, not blk or blak
 # 2022-09-15:  add ParentFormula column for LipidSearch adducts
@@ -168,12 +170,12 @@ sub is_heavy_labeled
     
     if ($string =~ /\([^()]*\b13C[0-9]*\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\b14N[0-9]*\b[^()]*\)/) { return 1; }
-    if ($string =~ /\([^()]*\bD[0-9]*\b[^()]*\)/)   { return 1; }
+    if ($string =~ /\([^()]*[)-]D[0-9]+\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\bBOC\b[^()]*\)/)       { return 1; }
 
     if ($string =~ /\b13C[0-9]+\b/) { return 1; }
     if ($string =~ /\b14N[0-9]+\b/) { return 1; }
-    if ($string =~ /\bD[0-9]+\b/)   { return 1; }
+    if ($string =~ /[)-]D[0-9]+\b/) { return 1; }
     if ($string =~ /\bBOC\b/)       { return 1; }
     
     return 0;
@@ -455,6 +457,7 @@ $discard_heavy_flag        = 0;
 $scale_heavy_flag          = 0;
 $seen_heavy_flag           = 0;
 
+$tscore_detected_flag      = 0;       # only present in incorrect exports?
 $syntax_error_flag         = 0;
 $num_files                 = 0;
 
@@ -592,6 +595,12 @@ for ($i = 0; $i < @array; $i++)
     $field = $array[$i];
     $header_col_hash{$field} = $i;
     $header_col_array[$i] = $field;
+
+    # flag suspicious columns that may indicate wrong export options
+    if ($field =~ /^tScore/)
+    {
+       $tscore_detected_flag = 1;
+    }
 }
 
 
@@ -1565,4 +1574,9 @@ if ($seen_heavy_flag && $scale_heavy_flag == 1)
 {
     printf STDERR "CAUTION -- treating heavy rows as biological: normalize them\n";
     printf STDERR "           use --heavy-spikein if they are all spike-ins\n";
+}
+
+if ($tscore_detected_flag)
+{
+    printf STDERR "WARNING -- tScore column headers detected; check LipidSearch export options\n";
 }
