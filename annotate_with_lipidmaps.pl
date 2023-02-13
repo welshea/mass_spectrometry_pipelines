@@ -250,7 +250,6 @@ if (!defined($data_formula_col))
 if (!defined($data_lgroup_col))
 {
     printf STDERR "WARNING -- missing LipidGroup col; LipidMaps annotation may suffer\n";
-        $data_filename;
 }
 
 
@@ -363,7 +362,7 @@ while(defined($line=<DATA>))
 
             $inner =~ s/[a-z]*([0-9]+)[a-z]*/$1/g;
             
-            $lname_conformed = $first . $inner . ')';
+            $name_conformed = $first . $inner . ')';
         }
         
         # remove any ions that may be there
