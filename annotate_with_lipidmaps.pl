@@ -1,9 +1,5 @@
 #!/usr/bin/perl -w
 
-
-# 2022-10-10  initial commit to git
-
-
 # Be sure the annotation file hasn't gone through Excel,
 # since Excel will have done some problematic escapes of ", etc.
 
@@ -13,8 +9,7 @@
 # from the FattyAcid (lipid) and Class (lipid), and LipidIon (adduct)
 # columns.
 
-
-use File::Basename;
+# 2023-02-13:  less-good fallback if LipidGroup column is missing from data
 
 
 $lmaps_header_names_col_hash{'NAME'}            = -1;
@@ -25,16 +20,6 @@ $lmaps_header_names_col_hash{'SYNONYMS'}        = -1;
 
 $lipidmaps_filename = shift;
 $data_filename = shift;
-
-
-if (!defined($lipidmaps_filename) || !defined($data_filename))
-{
-    $program_name = basename($0);
-    
-    print "Usage: $program_name lipidmaps_sdf_parsed.txt data.txt\n";
-    exit(1);
-}
-
 
 
 open LIPIDMAPS, "$lipidmaps_filename" or die "can't open Lipid Maps file $lipidmaps_filename\n";
@@ -262,10 +247,8 @@ if (!defined($data_formula_col))
 }
 if (!defined($data_lgroup_col))
 {
-    printf STDERR "ABORT -- LipidGroup column not found in file %s\n",
+    printf STDERR "WARNING -- missing LipidGroup col; LipidMaps annotation will suffer\n";
         $data_filename;
-
-    exit(2);
 }
 
 
@@ -288,7 +271,12 @@ while(defined($line=<DATA>))
     $name    = $array[$data_name_col];
     $name_lc = lc $name;
     $formula = $array[$data_formula_col];
-    $lgroup  = $array[$data_lgroup_col];
+    
+    $lgroup  = '';
+    if (defined($data_lgroup_col))
+    {
+        $lgroup  = $array[$data_lgroup_col];
+    }
 
     # remove any ions that may be there
     $name_lc =~ s/[+-][A-Za-z0-9+-]+//g;
@@ -591,6 +579,11 @@ for ($row = 0; $row < $num_data_rows; $row++)
         }
         
         $value = $array[$i];
+        if (!defined($value))
+        {
+            $value = '';
+        }
+        
         print "$value";
         
         
