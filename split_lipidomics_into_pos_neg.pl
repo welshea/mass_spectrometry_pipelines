@@ -1,12 +1,13 @@
 #!/usr/bin/perl -w
 
-# 2022-09-15  handle more mixed +/- adducts
-# 2022-08-04  default to removing unobservable adducts
-# 2022-08-04  change most ion related variable names to adduct related
-# 2022-08-03  add additional known adduct charges
-# 2022-03-01  infer unknown adduct charge from known adducts
-# 2022-02-28  major changes to support LipidSearch mergeResult.txt
-# 2021-11-30  initial release
+# 2023-02-13:  warn if tScore headers are detected
+# 2022-09-15:  handle more mixed +/- adducts
+# 2022-08-04:  default to removing unobservable adducts
+# 2022-08-04:  change most ion related variable names to adduct related
+# 2022-08-03:  add additional known adduct charges
+# 2022-03-01:  infer unknown adduct charge from known adducts
+# 2022-02-28:  major changes to support LipidSearch mergeResult.txt
+# 2021-11-30:  initial release
 
 
 use Scalar::Util qw(looks_like_number);
@@ -166,7 +167,9 @@ $filename_pos  = 'lipidomics_split_pos.txt';
 $filename_neg  = 'lipidomics_split_neg.txt';
 
 
-$all_adducts_flag = 0;    # default to removing adducts we don't want
+$all_adducts_flag     = 0;    # default to removing adducts we don't want
+$tscore_detected_flag = 0;    # only present in incorrect exports?
+
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -274,6 +277,12 @@ for ($i = 0; $i < @array; $i++)
     $field = $array[$i];
     $header_col_hash{$field} = $i;
     $header_col_array[$i] = $field;
+
+    # flag suspicious columns that may indicate wrong export options
+    if ($field =~ /^tScore/)
+    {
+       $tscore_detected_flag = 1;
+    }
 }
 
 
@@ -955,4 +964,9 @@ foreach $adduct (@filtered_adduct_array)
 {
     printf STDERR "WARNING -- removed %s adducts, not in observeable adduct list\n",
         $adduct;
+}
+
+if ($tscore_detected_flag)
+{
+    printf STDERR "WARNING -- tScore column headers detected; check LipidSearch export options\n";
 }
