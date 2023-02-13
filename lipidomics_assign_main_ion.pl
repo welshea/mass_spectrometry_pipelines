@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2022-08-05:  flag main ions from LipidSearch summary file
+# 2022-02-13:  count [-2H] adducts, warn LipidSearch export may be incorrect
+# 2022-08-05:  support main ion flagging from LipidSearch summary file
 # 2022-08-05:  denote non-canonical main ions
 # 2022-08-03:  rename SuperClass to Class
 # 2022-03-10:  annotate lipid class with more descriptive categories
@@ -456,8 +457,9 @@ sub read_in_lipidsearch_summary_file
 
 
 
-$num_files          = 0;
-$valid_summary_flag = 0;
+$num_files            = 0;
+$valid_summary_flag   = 0;
+$adduct_minus2h_count = 0;    # these should have been filtered out already
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -1016,6 +1018,11 @@ for ($row = 0; $row < $num_rows; $row++)
     $row_fattyacid_ion_array[$row]                 = $fattyacid_ion;
     $row_adduct_array[$row]                        = $adduct;
     $fattyacid_hash{$fattyacid_base}{$row}{adduct} = $adduct;
+    
+    if ($adduct eq '-2H')
+    {
+        $adduct_minus2h_count++;
+    }
 }
 
 
@@ -1405,4 +1412,11 @@ foreach $lipid_class (sort keys %missing_class_annotation_hash)
 {
     printf STDERR "WARNING -- missing lipid class annotation:  %s\n",
         $lipid_class;
+}
+
+
+if ($adduct_minus2h_count)
+{
+    printf STDERR "WARNING -- %s [-2H] adducts detected; check LipidSearch export options\n",
+        $adduct_minus2h_count;
 }
