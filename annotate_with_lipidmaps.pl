@@ -9,6 +9,8 @@
 # from the FattyAcid (lipid) and Class (lipid), and LipidIon (adduct)
 # columns.
 
+
+# 2023-02-13:  improved missing LipidGroup fallback
 # 2023-02-13:  less-good fallback if LipidGroup column is missing from data
 
 
@@ -247,7 +249,7 @@ if (!defined($data_formula_col))
 }
 if (!defined($data_lgroup_col))
 {
-    printf STDERR "WARNING -- missing LipidGroup col; LipidMaps annotation will suffer\n";
+    printf STDERR "WARNING -- missing LipidGroup col; LipidMaps annotation may suffer\n";
         $data_filename;
 }
 
@@ -275,7 +277,7 @@ while(defined($line=<DATA>))
     $lgroup  = '';
     if (defined($data_lgroup_col))
     {
-        $lgroup  = $array[$data_lgroup_col];
+        $lgroup = $array[$data_lgroup_col];
     }
 
     # remove any ions that may be there
@@ -338,6 +340,11 @@ while(defined($line=<DATA>))
     {
         # conform LipidGroup to what we expect from conformed abbrev
         $lgroup_conformed = $lgroup;
+        $name_conformed   = $name;
+
+        # replace underscores with slashes for name mapping
+        $lgroup_conformed =~ tr/_/\//;
+        $name_conformed   =~ tr/_/\//;
 
         # strip lowercase letters from in front/behind numbers
         if ($lgroup =~ m/^([^(]+\()(.*)\)/)
@@ -349,18 +356,33 @@ while(defined($line=<DATA>))
             
             $lgroup_conformed = $first . $inner . ')';
         }
+        if ($name =~ m/^([^(]+\()(.*)\)/)
+        {
+            $first = $1;
+            $inner = $2;
+
+            $inner =~ s/[a-z]*([0-9]+)[a-z]*/$1/g;
+            
+            $lname_conformed = $first . $inner . ')';
+        }
         
-        # remove ions
+        # remove any ions that may be there
         $lgroup_conformed =~ s/[+-][A-Za-z0-9+-]+//g;
+        $name_conformed   =~ s/[+-][A-Za-z0-9+-]+//g;
         
         # conform abbreviations
-        $lgroup_conformed =~ s/^AcCa\(/CAR\(/;    # Acyl carnitine
-        $lgroup_conformed =~ s/^ChE\(/CE\(/;      # Cholesterol esters
-        $lgroup_conformed =~ s/^Hex1(?![0-9])/Hex/;      # 1 is left off
-        $lgroup_conformed =~ s/^SPH\(/SPB\(/;     # Sphingoid bases
+        $lgroup_conformed =~ s/^AcCa\(/CAR\(/;       # Acyl carnitine
+        $lgroup_conformed =~ s/^ChE\(/CE\(/;         # Cholesterol esters
+        $lgroup_conformed =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
+        $lgroup_conformed =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
+        $name_conformed   =~ s/^AcCa\(/CAR\(/;       # Acyl carnitine
+        $name_conformed   =~ s/^ChE\(/CE\(/;         # Cholesterol esters
+        $name_conformed   =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
+        $name_conformed   =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
         
         # check abbreviations
-        if (defined($abbrev_lmid_hash{$lgroup_conformed}) &&
+        if ($num_hits == 0 &&
+            defined($abbrev_lmid_hash{$lgroup_conformed}) &&
             defined($formula_lmid_hash{$formula}))
         {
             @temp_array = keys %{$abbrev_lmid_hash{$lgroup_conformed}};
@@ -370,7 +392,25 @@ while(defined($line=<DATA>))
                 if (!defined($lmid_hits_hash{$lm_id}) &&
                     defined($formula_lmid_hash{$formula}{$lm_id}))
                 {
-                    $match_type             = '03_lipidgroup';
+                    $match_type             = '03a_lipidgroup';
+                    $lmid_hits_hash{$lm_id} = $match_type;
+                    $num_hits++;
+                }
+            }
+        }
+        # fallback to lipid name
+        if ($num_hits == 0 &&
+            defined($abbrev_lmid_hash{$name_conformed}) &&
+            defined($formula_lmid_hash{$formula}))
+        {
+            @temp_array = keys %{$abbrev_lmid_hash{$name_conformed}};
+            foreach $lm_id (@temp_array)
+            {
+                # must match formula as well
+                if (!defined($lmid_hits_hash{$lm_id}) &&
+                    defined($formula_lmid_hash{$formula}{$lm_id}))
+                {
+                    $match_type             = '03b_lipid';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -379,7 +419,8 @@ while(defined($line=<DATA>))
 
         # also check synonyms, names, etc.
         $lgroup_conformed_lc = lc $lgroup_conformed;
-        if (defined($name_lc_lmid_hash{$lgroup_conformed_lc}) &&
+        if ($num_hits == 0 &&
+            defined($name_lc_lmid_hash{$lgroup_conformed_lc}) &&
             defined($formula_lmid_hash{$formula}))
         {
             @temp_array = keys %{$name_lc_lmid_hash{$lgroup_conformed_lc}};
@@ -389,7 +430,26 @@ while(defined($line=<DATA>))
                 if (!defined($lmid_hits_hash{$lm_id}) &&
                     defined($formula_lmid_hash{$formula}{$lm_id}))
                 {
-                    $match_type             = '03_lipidgroup';
+                    $match_type             = '03c_lipidgroup';
+                    $lmid_hits_hash{$lm_id} = $match_type;
+                    $num_hits++;
+                }
+            }
+        }
+        # fallback to lipid name
+        $name_conformed_lc = lc $name_conformed;
+        if ($num_hits == 0 &&
+            defined($name_lc_lmid_hash{$name_conformed_lc}) &&
+            defined($formula_lmid_hash{$formula}))
+        {
+            @temp_array = keys %{$name_lc_lmid_hash{$name_conformed_lc}};
+            foreach $lm_id (@temp_array)
+            {
+                # must match formula as well
+                if (!defined($lmid_hits_hash{$lm_id}) &&
+                    defined($formula_lmid_hash{$formula}{$lm_id}))
+                {
+                    $match_type             = '03c_lipidgroup';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -426,7 +486,19 @@ while(defined($line=<DATA>))
                         if ($lmaps_class eq $lgroup_class &&
                             !defined($lmid_hits_hash{$lm_id}))
                         {
-                            $match_type             = '04_lipidclass';
+                            $match_type             = '04a_lipidgroupclass';
+                            $lmid_hits_hash{$lm_id} = $match_type;
+                            $num_hits++;
+                        }
+                    }
+                    if ($name_conformed =~ /(^[^)]+)\(/)
+                    {
+                        $name_class = $1;
+
+                        if ($lmaps_class eq $name_class &&
+                            !defined($lmid_hits_hash{$lm_id}))
+                        {
+                            $match_type             = '04b_lipidclass';
                             $lmid_hits_hash{$lm_id} = $match_type;
                             $num_hits++;
                         }
