@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-02-13:  attempt to replace non-canonical main with best canonical
 # 2023-02-13:  also warn if tScore headers are detected
 # 2023-02-13:  count [-2H] adducts, warn LipidSearch export may be incorrect
 # 2022-08-05:  support main ion flagging from LipidSearch summary file
@@ -1182,6 +1183,46 @@ foreach $fattyacid_base (@fattyacid_base_array)
         #    $fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'main';
         #    ##$fattyacid_hash{$fattyacid_base}{$row_main}{main} = 'singleton';
         #}
+        
+        # attempt to replace non-canonical with best canonical
+        if (@group_row_array > 1)
+        {
+            $adduct      =  $row_adduct_array[$row_main];
+            $lipid_class =  $fattyacid_base;
+            $lipid_class =~ s/\(.*//;
+
+            # only check lipids we have prior knowledge for
+            # main ion is not one generally observed to be highest
+            if ( defined($optimal_main_hash{$lipid_class}) &&
+                !defined($optimal_main_hash{$lipid_class}{$adduct}))
+            {
+                for ($j = 0; $j < @group_row_array; $j++)
+                {
+                    $row_j    = $group_row_array[$j];
+                    $adduct_j = $row_adduct_array[$row_j];
+                        
+                    if (defined($optimal_main_hash{$lipid_class}{$adduct_j}))
+                    {
+                        # remove the original main ion assignment
+                        delete
+                            $fattyacid_hash{$fattyacid_base}{$row_main}{main};
+
+                        # flag the best canonical row as the main ion
+                        $fattyacid_hash{$fattyacid_base}{$row_j}{main} =
+                            'main';
+                        
+                        $fattyacid_ion = $row_fattyacid_ion_array[$row_main];
+                        $rt_avg        = $row_rt_avg_array[$row_main];
+
+                        printf STDERR
+                            "WARNING -- replaced non-canonical:  %s\trt:%06.3f --> %s\n",
+                            $fattyacid_ion, $rt_avg, $adduct_j;
+                            
+                        last;
+                    }
+                }
+            }
+        }
     }
     
     # identify the main ions from LipidSearch
@@ -1250,10 +1291,11 @@ foreach $fattyacid_base (sort keys %fattyacid_hash)
                         'main, non-canonical';
                 
                     $fattyacid_ion = $row_fattyacid_ion_array[$row];
+                    $rt_avg = $row_rt_avg_array[$row];
                 
                     printf STDERR
-                        "WARNING -- non-canonical main ion:  %s\t%s\t%s\t%s\n",
-                        $fattyacid_ion, $lipid_class, $adduct, $main_str;
+                        "WARNING -- non-canonical main ion:  %s\trt:%06.3f\n",
+                        $fattyacid_ion, $rt_avg;
                 }
             }
         }
