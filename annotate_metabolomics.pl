@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2022-02-14:  support alternative name for original internal identifier col
 # 2022-02-09:  bugfix false positive D in is_heavy_labeled()
 # 2022-02-09:  more robust stripping of double quotes
 # 2022-02-09:  support original internal identifier matching
@@ -1186,7 +1187,12 @@ for ($i = 0; $i < @array; $i++)
     }
     # original internal identifier, for backwards compatability with old data
     elsif (!defined($annotation_name_orig_col) &&
-           $header =~ /identity orig/i)
+           $header =~ /^identity orig/i)
+    {
+        $annotation_name_orig_col = $i;
+    }
+    elsif (!defined($annotation_name_orig_col) &&
+           $header =~ /^identity alt/i)
     {
         $annotation_name_orig_col = $i;
     }
