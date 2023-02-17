@@ -83,7 +83,21 @@ use POSIX;
 use align_text;    # text string alignment module
 
 $mz_tol_ppm   = 10;       # 10 ppm
-$mz_trash_ppm = 20000;    # to catch bad MZmine assignments
+
+# Used to catch blatantly bad MZmine assignments.
+# Currently set high to allow through issues with my own adduct
+#  generation when matching against HMDB database.
+#
+# 36000 for cholates / cholines
+# 25000 for N-Acetyl-D-Mannosamine
+#  6300 for carnintines
+#  3800 for thiamine
+#   743 for cyanocobalamin
+#   268 for quinolinic acid
+#    78 for selenomethionine
+#    10 for mesoxalic acid
+$mz_trash_ppm = 36000;
+
 $rt_tol       = 1.0;      # minutes
 $align_method = 'overlap';
 
