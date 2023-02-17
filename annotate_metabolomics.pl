@@ -1974,12 +1974,13 @@ while(defined($line=<DATA>))
     $num_matches       = 0;
     
     # keep track of originally incorrectly identified metabolites
-    %trash_mz_name_hash = ();
-    %bad_mz_name_hash   = ();
-    %bad_mz_row_hash    = ();
-    $has_trash_mz_flag  = 0;
-    $has_bad_mz_flag    = 0;
-    $has_good_mz_flag   = 0;
+    %trash_mz_name_hash    = ();
+    %bad_mz_name_hash      = ();
+    %bad_mz_row_hash       = ();
+    $has_trash_mz_flag     = 0;
+    $has_not_trash_mz_flag = 0;
+    $has_bad_mz_flag       = 0;
+    $has_good_mz_flag      = 0;
 
 
     # scan for match(es) in annotation database
@@ -2955,7 +2956,8 @@ while(defined($line=<DATA>))
             # at least one good m/z match
             if ($num_matches && !($match_type =~ /[34]/))
             {
-                $has_good_mz_flag = 1;
+                $has_good_mz_flag      = 1;
+                $has_not_trash_mz_flag = 1;
             }
             
             # at least one bad m/z match
@@ -2974,6 +2976,10 @@ while(defined($line=<DATA>))
                     {
                         $has_trash_mz_flag = 1;
                         $trash_mz_name_hash{$name_oc} = 'trash';
+                    }
+                    else
+                    {
+                        $has_not_trash_mz_flag = 1;
                     }
                 }
             }
@@ -3055,8 +3061,8 @@ while(defined($line=<DATA>))
 
     # remove originally bad MZMine identifications
     $name_corrected = $name;
-    if ($has_trash_mz_flag ||
-        ($has_good_mz_flag && $has_bad_mz_flag))
+    if (($has_good_mz_flag && $has_bad_mz_flag) ||
+        ($has_not_trash_mz_flag == 0 && $has_trash_mz_flag))
     {
         # remove hit from original name field
         @name_array_new = ();
@@ -3074,7 +3080,7 @@ while(defined($line=<DATA>))
         
         if ($name_corrected eq '')
         {
-            $name_corrected = '(all identifications removed)';
+            $name_corrected = '(all ids removed)';
         }
 
         printf STDERR "CORRECTION -- remove poor ids:\t%s\t%s --> %s\n",
