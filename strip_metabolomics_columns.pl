@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-02-17:  bugfix mixed (un)identified row names were flagged unidentified
 # 2023-02-13:  warn if tScore headers are detected
 # 2022-02-09:  bugfix false positive D in is_heavy_labeled()
 # 2022-01-13:  allow for numbers following blank sample names
@@ -60,6 +61,82 @@
 
 use Scalar::Util qw(looks_like_number);
 use POSIX;
+
+
+# oh no, semicolon can appear within heavy labels
+# ex: L-LYSINE (13C6, 99%; 15N2, 99%)
+sub bless_delimiter_bar_metabolomics
+{
+    my $text = $_[0];
+    my @temp_array;
+    my $n;
+    my $i;
+
+    # convert semicolons only if they are not within ()
+    # incrementing $i within array access for minor speed increase
+    #   requires initializing things to -2
+    #
+    # regular expression from MichaelRushton:
+    #   https://stackoverflow.com/questions/133601/can-regular-expressions-be-used-to-match-nested-patterns
+    @temp_array = split /(\((?>[^()]+|(?1))*\))/, $text;
+    $n = @temp_array - 2;
+    for ($i = -2; $i < $n;)
+    {
+        $i += 2;
+        $temp_array[$i] =~ tr/\;/\|/;
+
+        # / can also be a delimiter in some much older metabolomics data
+        # protect m/z
+        $temp_array[$i] =~ s/\bm\/z\b/M_OvEr_Z/g;
+        $temp_array[$i] =~ tr/\//\|/;
+        $temp_array[$i] =~ s/M_OvEr_Z/m\/z/g;
+    }
+    $text = join '', @temp_array;
+
+    # clean up delimiters
+    $text =~ s/\|+/\|/g;
+    $text =~ s/^\|//;
+    $text =~ s/\|$//;
+    
+    
+    # clean up spaces
+    $text =~ s/^\s+//;
+    $text =~ s/\s+$//;
+    $text =~ s/\s+\|/\|/g;
+    $text =~ s/\|\s+/\|/g;
+    
+    return $text;
+}
+
+
+# consider it identified if it has two letters in a row
+# this should result in treating purely chemical formulas as unidentified
+sub does_name_str_contain_identified
+{
+    my @name_array;
+    my $name_str;
+    my $name;
+    my $id_flag;
+    
+    $name_str = bless_delimiter_bar_metabolomics($_[0]);
+    
+    @name_array = split /\|/, $name_str;
+
+    $id_flag = 0;
+    foreach $name (@name_array)
+    {
+        if (($name =~ /[A-Za-z][A-Za-z]/ ||
+             $name =~ /[A-Za-z][0-9]/) &&
+            !($name =~ /\d m\/z adduct of \d/) &&
+            !($name =~ /Complex of [0-9.]+ and \d+/))
+        {
+            $id_flag = 1;
+        }
+    }
+    
+    return $id_flag;
+}
+
 
 sub is_number
 {
@@ -1299,16 +1376,11 @@ while(defined($line=<INFILE>))
 
     
     # store identified/unidentified
-    # consider it identified if it has two letters in a row
-    # this should result in treating purely chemical formulas as unidentified
     #
     # include heavy labeled metabolites in the unidentified list, since
     # we're going to use that for iron training exclusions
     $identified_flag = 0;
-    if (($name =~ /[A-Za-z][A-Za-z]/ ||
-         $name =~ /[A-Za-z][0-9]/) &&
-        !($name =~ /\d m\/z adduct of \d/) &&
-        !($name =~ /Complex of [0-9.]+ and \d+/))
+    if (does_name_str_contain_identified($name))
     {
         $identified_flag = 1;
         
