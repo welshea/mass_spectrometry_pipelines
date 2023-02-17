@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 
-# 2023-02-17:  bugfix auto-trash bad MZMine matches when good match present
+# 2023-02-17:  get auto-trash bad MZMine matches working again
 # 2023-02-17:  fallback to data row ID column if PosNeg column not present
 # 2022-02-14:  support alternative name for original internal identifier col
 # 2022-02-09:  bugfix false positive D in is_heavy_labeled()
@@ -82,9 +82,9 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 use align_text;    # text string alignment module
 
-$mz_tol_ppm   = 10;    # 10 ppm
-$mz_trash_ppm = 50;    # 50 ppm, to catch bad MZmine assignments
-$rt_tol       = 1.0;   # minutes
+$mz_tol_ppm   = 10;       # 10 ppm
+$mz_trash_ppm = 20000;    # to catch bad MZmine assignments
+$rt_tol       = 1.0;      # minutes
 $align_method = 'overlap';
 
 $bad_row_id      = 9E99;
@@ -1974,10 +1974,12 @@ while(defined($line=<DATA>))
     $num_matches       = 0;
     
     # keep track of originally incorrectly identified metabolites
-    %bad_mz_name_hash  = ();
-    %bad_mz_row_hash   = ();
-    $has_bad_mz_flag   = 0;
-    $has_good_mz_flag  = 0;
+    %trash_mz_name_hash = ();
+    %bad_mz_name_hash   = ();
+    %bad_mz_row_hash    = ();
+    $has_trash_mz_flag  = 0;
+    $has_bad_mz_flag    = 0;
+    $has_good_mz_flag   = 0;
 
 
     # scan for match(es) in annotation database
@@ -2961,10 +2963,20 @@ while(defined($line=<DATA>))
             {
                 $has_bad_mz_flag  = 1;
                 $bad_mz_name_hash{$name_oc} = 'unmatched';
+
+                foreach $row (@matched_row_array)
+                {
+                    $ppm = 1000000 *
+                           abs(($annotation_hash{$row}{mz} - $mz) /
+                               $annotation_hash{$row}{mz});
+
+                    if ($ppm > $mz_trash_ppm)
+                    {
+                        $has_trash_mz_flag = 1;
+                        $trash_mz_name_hash{$name_oc} = 'trash';
+                    }
+                }
             }
-            
-            
-            # printf STDERR "%s  %s\n", $name, @matched_type_array;
         }
     }
     
@@ -3043,7 +3055,8 @@ while(defined($line=<DATA>))
 
     # remove originally bad MZMine identifications
     $name_corrected = $name;
-    if ($has_good_mz_flag && $has_bad_mz_flag)
+    if ($has_trash_mz_flag ||
+        ($has_good_mz_flag && $has_bad_mz_flag))
     {
         # remove hit from original name field
         @name_array_new = ();
@@ -3058,6 +3071,11 @@ while(defined($line=<DATA>))
             }
         }
         $name_corrected = join ';', @name_array_new;
+        
+        if ($name_corrected eq '')
+        {
+            $name_corrected = '(all identifications removed)';
+        }
 
         printf STDERR "CORRECTION -- remove poor ids:\t%s\t%s --> %s\n",
             $first_field, $name, $name_corrected;
