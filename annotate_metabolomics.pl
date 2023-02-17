@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2023-02-17:  fallback to data row ID column if PosNeg column not present
 # 2022-02-14:  support alternative name for original internal identifier col
 # 2022-02-09:  bugfix false positive D in is_heavy_labeled()
 # 2022-02-09:  more robust stripping of double quotes
@@ -1811,6 +1812,13 @@ for ($i = 0; $i < @array; $i++)
     {
         $data_pos_neg_col = $i;
     }
+    # fallback to row ID column if pos/neg column not present
+    # identifiers will, after pipeline processing, start with pos_ / neg_
+    elsif (!defined($data_pos_neg_col) &&
+           $header =~ /^row ID$/i)
+    {
+        $data_pos_neg_col = $i;
+    }
     elsif (!defined($data_formula_col) &&
            $header =~ /formula/i)
     {
@@ -1937,11 +1945,11 @@ while(defined($line=<DATA>))
     {
         $pos_flag = 0;
         $neg_flag = 0;
-        if ($array[$data_pos_neg_col] =~ /pos/i)
+        if ($array[$data_pos_neg_col] =~ /^pos/i)
         {
             $pos_flag = 1;
         }
-        if ($array[$data_pos_neg_col] =~ /neg/i)
+        if ($array[$data_pos_neg_col] =~ /^neg/i)
         {
             $neg_flag = 1;
         }
