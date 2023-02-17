@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2023-02-17:  bugfix auto-trash bad MZMine matches when good match present
 # 2023-02-17:  fallback to data row ID column if PosNeg column not present
 # 2022-02-14:  support alternative name for original internal identifier col
 # 2022-02-09:  bugfix false positive D in is_heavy_labeled()
@@ -82,6 +83,7 @@ use POSIX;
 use align_text;    # text string alignment module
 
 $mz_tol_ppm   = 10;    # 10 ppm
+$mz_trash_ppm = 50;    # 50 ppm, to catch bad MZmine assignments
 $rt_tol       = 1.0;   # minutes
 $align_method = 'overlap';
 
@@ -2895,9 +2897,6 @@ while(defined($line=<DATA>))
 
                 $matched_row_hash{$bad_row_id} = 1;
                 $matched_row_type_hash{$bad_row_id}{$match_type} = 1;
-
-                #$bad_mz_name_hash{$name_oc} = 'unmatched';
-                #$has_bad_mz_flag            = 1;
             }
             
 
@@ -2956,6 +2955,14 @@ while(defined($line=<DATA>))
             {
                 $has_good_mz_flag = 1;
             }
+            
+            # at least one bad m/z match
+            if ($num_matches && $match_type =~ /[34]/)
+            {
+                $has_bad_mz_flag  = 1;
+                $bad_mz_name_hash{$name_oc} = 'unmatched';
+            }
+            
             
             # printf STDERR "%s  %s\n", $name, @matched_type_array;
         }
