@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2023-02-20:  get auto-trash bad MZMine matching working on mappings again
 # 2023-02-17:  get auto-trash bad MZMine matches working again
 # 2023-02-17:  fallback to data row ID column if PosNeg column not present
 # 2022-02-14:  support alternative name for original internal identifier col
@@ -2560,6 +2561,7 @@ while(defined($line=<DATA>))
                         $score    == $best_score)
                     {
                         $match_flag = 1;
+                        $bad_mz_row_hash{$row} = 1;
                         
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
@@ -2701,6 +2703,7 @@ while(defined($line=<DATA>))
                         $score    == $best_score)
                     {
                         $match_flag = 1;
+                        $bad_mz_row_hash{$row} = 1;
                         
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
