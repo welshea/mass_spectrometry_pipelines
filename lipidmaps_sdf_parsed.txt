@@ -1,1 +1,1 @@
-/home/welshea/data/metabolomics/lipidomics/lipidmaps/lipidmaps_sdf_parsed.txt
+/share/data2/welshea/metabolomics/lipidomics/lipidmaps/lipidmaps_sdf_parsed.txt
