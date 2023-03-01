@@ -1,13 +1,14 @@
 #!/usr/bin/perl -w
 
 
+# 2023-03-01:  correct recent 2022-02 changelog dates to 2023
 # 2023-02-20:  get auto-trash bad MZMine matching working on mappings again
 # 2023-02-17:  get auto-trash bad MZMine matches working again
 # 2023-02-17:  fallback to data row ID column if PosNeg column not present
-# 2022-02-14:  support alternative name for original internal identifier col
-# 2022-02-09:  bugfix false positive D in is_heavy_labeled()
-# 2022-02-09:  more robust stripping of double quotes
-# 2022-02-09:  support original internal identifier matching
+# 2023-02-14:  support alternative name for original internal identifier col
+# 2023-02-09:  bugfix false positive D in is_heavy_labeled()
+# 2023-02-09:  more robust stripping of double quotes
+# 2023-02-09:  support original internal identifier matching
 # 2022-09-08:  don't split m/z on forward slash
 # 2022-07-15:  conform by removing likely abbreviations from ends
 # 2022-07-15:  update is_heavy_labeled() function
