@@ -1,1 +1,0 @@
-/share/data2/welshea/uniprot/merged_protein_annotations_human_mouse_subcellular.txt
