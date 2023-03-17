@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-03-17  better sorting of isoforms, fragments, Ensembl accessions
 # 2022-12-23  add in additional annotation columns at beginning, if present
 # 2022-08-03  Has_Contaminant_Flag, All_Reverse_Flag now [0,1] instead of [0-3]
 # 2021-08-30  move amino acid column, insert new position column
@@ -236,6 +237,7 @@ sub filter_description_species
     return $description;
 }
 
+
 sub filter_description_general
 {
     my $description = $_[0];
@@ -281,6 +283,10 @@ sub filter_description_general
     $description =~ s/\bsimilarity to\b//ig;
     $description =~ s/\bsimilarity\b//ig;
     $description =~ s/\bhomolog\b//ig;
+    $description =~ s/(?:^|\|\s+)Isoform of [A-Za-z0-9_.-]+[,;| ]*//ig;
+    $description =~ s/[,;| ]*Isoform [A-Za-z0-9_.-]+ of\s+//ig;
+    $description =~ s/\bisoform\b//ig;
+    $description =~ s/\(fragment\)//ig;
     $description =~ s/\(\)//ig;
 
     $description =~ s/\bpartial cds\b//ig;
@@ -465,16 +471,18 @@ sub filter_description_accession_symbol
 # to be used with sort function
 sub compare_accession
 {
-    my $accession_a = $a;
-    my $accession_b = $b;
-    my %hash_a = %{$accession_annotation_hash{$accession_a}};
-    my %hash_b = %{$accession_annotation_hash{$accession_b}};
-    my $symbol_a = $hash_a{symbol};
-    my $symbol_b = $hash_b{symbol};
+    my $accession_a   = $a;
+    my $accession_b   = $b;
+    my %hash_a        = %{$accession_annotation_hash{$accession_a}};
+    my %hash_b        = %{$accession_annotation_hash{$accession_b}};
+    my $geneid_a      = $hash_a{gene_id};
+    my $geneid_b      = $hash_b{gene_id};
+    my $symbol_a      = $hash_a{symbol};
+    my $symbol_b      = $hash_b{symbol};
+    my $type_a        = $hash_a{type};
+    my $type_b        = $hash_b{type};
     my $description_a = $hash_a{description};
     my $description_b = $hash_b{description};
-    my $type_a   = $hash_a{type};
-    my $type_b   = $hash_b{type};
     my $value_a;
     my $value_b;
     my $temp_a;
@@ -482,31 +490,66 @@ sub compare_accession
     my $sub_description;
     my $temp_length;
     my $debug = 0;
+
+
+    if (!defined($geneid_a))       { $geneid_a = ''; }
+    if (!defined($geneid_b))       { $geneid_b = ''; }
+    if (!defined($symbol_a))       { $symbol_a = '~'; }
+    if (!defined($symbol_b))       { $symbol_b = '~'; }
+    if (!defined($type_a))         { $type_a   = ''; }
+    if (!defined($type_b))         { $type_b   = ''; }
+    #if (!defined($description_a)) { $description_a = '~'; }
+    #if (!defined($description_b)) { $description_b = '~'; }
+
+
+    # has geneid assigned
+    if ($geneid_a =~ /[0-9]/ && !($geneid_b =~ /[0-9]/)) { return -1; }
+    if ($geneid_b =~ /[0-9]/ && !($geneid_a =~ /[0-9]/)) { return  1; }
+
+
+    # has symbol
+    if ($symbol_a =~ /[A-Za-z0-9]/ && !($symbol_b =~ /[A-Za-z0-9]/)) { return -1; }
+    if ($symbol_b =~ /[A-Za-z0-9]/ && !($symbol_a =~ /[A-Za-z0-9]/)) { return  1; }
+
     
     # best refseqs
     if (  $accession_a =~ /^NM_/  && !($accession_b =~ /^NM_/)) {return -1;}
-    if (!($accession_a =~ /^NM_/) &&   $accession_b =~ /^NM_/)  {return 1;}
+    if (!($accession_a =~ /^NM_/) &&   $accession_b =~ /^NM_/)  {return  1;}
     if (  $accession_a =~ /^NR_/  && !($accession_b =~ /^NR_/)) {return -1;}
-    if (!($accession_a =~ /^NR_/) &&   $accession_b =~ /^NR_/)  {return 1;}
+    if (!($accession_a =~ /^NR_/) &&   $accession_b =~ /^NR_/)  {return  1;}
     if (  $accession_a =~ /^NP_/  && !($accession_b =~ /^NP_/)) {return -1;}
-    if (!($accession_a =~ /^NP_/) &&   $accession_b =~ /^NP_/)  {return 1;}
+    if (!($accession_a =~ /^NP_/) &&   $accession_b =~ /^NP_/)  {return  1;}
 
+    
     # symbol sketchiness
     $value_a = score_symbol_sketchiness($symbol_a);
     $value_b = score_symbol_sketchiness($symbol_b);
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
+
 
     # worse refseqs
     if (  $accession_a =~ /^XM_/  && !($accession_b =~ /^XM_/)) {return -1;}
-    if (!($accession_a =~ /^XM_/) &&   $accession_b =~ /^XM_/)  {return 1;}
+    if (!($accession_a =~ /^XM_/) &&   $accession_b =~ /^XM_/)  {return  1;}
     if (  $accession_a =~ /^XR_/  && !($accession_b =~ /^XR_/)) {return -1;}
-    if (!($accession_a =~ /^XR_/) &&   $accession_b =~ /^XR_/)  {return 1;}
+    if (!($accession_a =~ /^XR_/) &&   $accession_b =~ /^XR_/)  {return  1;}
     if (  $accession_a =~ /^XP_/  && !($accession_b =~ /^XP_/)) {return -1;}
-    if (!($accession_a =~ /^XP_/) &&   $accession_b =~ /^XP_/)  {return 1;}
+    if (!($accession_a =~ /^XP_/) &&   $accession_b =~ /^XP_/)  {return  1;}
+    if (  $accession_a =~ /^YP_/  && !($accession_b =~ /^YP_/)) {return -1;}
+    if (!($accession_a =~ /^YP_/) &&   $accession_b =~ /^YP_/)  {return  1;}
     if (  $accession_a =~ /^NG_/  && !($accession_b =~ /^NG_/)) {return -1;}
-    if (!($accession_a =~ /^NG_/) &&   $accession_b =~ /^NG_/)  {return 1;}
-    
+    if (!($accession_a =~ /^NG_/) &&   $accession_b =~ /^NG_/)  {return  1;}
+
+
+    # Ensembl accessions
+    if (  $accession_a =~ /^ENS[A-Z]{0,3}T_/  && !($accession_b =~ /^ENS[A-Z]{0,3}T_/)) {return -1;}
+    if (!($accession_a =~ /^ENS[A-Z]{0,3}T_/) &&   $accession_b =~ /^ENS[A-Z]{0,3}T_/)  {return  1;}
+    if (  $accession_a =~ /^ENS[A-Z]{0,3}P_/  && !($accession_b =~ /^ENS[A-Z]{0,3}P_/)) {return -1;}
+    if (!($accession_a =~ /^ENS[A-Z]{0,3}P_/) &&   $accession_b =~ /^ENS[A-Z]{0,3}P_/)  {return  1;}
+    if (  $accession_a =~ /^ENS[A-Z]{0,3}G_/  && !($accession_b =~ /^ENS[A-Z]{0,3}G_/)) {return -1;}
+    if (!($accession_a =~ /^ENS[A-Z]{0,3}G_/) &&   $accession_b =~ /^ENS[A-Z]{0,3}G_/)  {return  1;}
+
+
     # non-NG genomic annotations are often flat out *WRONG* -- *SO WRONG*
     #  like, WTF? kind of wrong...
     $value_a = $value_b = 0;
@@ -514,6 +557,7 @@ sub compare_accession
     $value_b = ($type_b =~ /genomic/);
     if ($value_a > $value_b) { return -1; }
     if ($value_b > $value_a) { return  1; }
+
 
     # presence of annotation
     $value_a = 0;
@@ -527,23 +571,25 @@ sub compare_accession
         $value_b = 1;
     }
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
+
 
     # absence of pseudogene
     $value_a = 0;
-    if ($hash_a{type} =~ /pseudo/i ||
+    if ($type_a        =~ /pseudo/i ||
         $description_a =~ /pseudogene/i)
     {
         $value_a = 1;
     }
     $value_b = 0;
-    if ($hash_b{type} =~ /pseudo/i ||
+    if ($type_b        =~ /pseudo/i ||
         $description_b =~ /pseudogene/i)
     {
         $value_b = 1;
     }
     if ($value_a < $value_b) {return -1;}
-    if ($value_a > $value_b) {return 1;}
+    if ($value_a > $value_b) {return  1;}
+
 
     # absence of hyphen (fusions, anti-sense transcripts, etc.)
     $value_a = 0;
@@ -557,7 +603,8 @@ sub compare_accession
         $value_b = 1;
     }
     if ($value_a < $value_b) {return -1;}
-    if ($value_a > $value_b) {return 1;}
+    if ($value_a > $value_b) {return  1;}
+
 
     # protein-coding in type
     $value_a = $value_b = 0;
@@ -606,6 +653,7 @@ sub compare_accession
     if ($value_a > $value_b) { return -1; }
     if ($value_b > $value_a) { return  1; }
 
+
     # other in type
     $value_a = $value_b = 0;
     $value_a = ($type_a =~ /other/);
@@ -645,26 +693,42 @@ sub compare_accession
     if ($value_a < $value_b) { return -1; }
     if ($value_b < $value_a) { return  1; }
 
+    
+    # alphabetical by symbol
+    if ($symbol_a lt $symbol_b) {return -1;}
+    if ($symbol_a gt $symbol_b) {return  1;}
 
-    # absence of hyphen (fusions, anti-sense transcripts, etc.)
+
+    # absence of fragment
     $value_a = 0;
-    if ($symbol_a =~ /\-/)
+    if ($description_a =~ /\(fragment\)/i)
     {
         $value_a = 1;
     }
     $value_b = 0;
-    if ($symbol_b =~ /\-/)
+    if ($description_b =~ /\(fragment\)/i)
     {
         $value_b = 1;
     }
     if ($value_a < $value_b) {return -1;}
-    if ($value_a > $value_b) {return 1;}
+    if ($value_a > $value_b) {return  1;}
 
 
-    # alphabetical
-    if ($symbol_a lt $symbol_b) {return -1;}
-    if ($symbol_a gt $symbol_b) {return 1;}
+    # absence of isoform
+    $value_a = 0;
+    if ($description_a =~ /\bIsoform\b/i)
+    {
+        $value_a = 1;
+    }
+    $value_b = 0;
+    if ($description_b =~ /\bIsoform\b/i)
+    {
+        $value_b = 1;
+    }
+    if ($value_a < $value_b) {return -1;}
+    if ($value_a > $value_b) {return  1;}
     
+
     # annotation length, after filtering out unuseful stuff
     $temp_a = filter_description_accession_symbol($description_a,
                                                   $accession_a, $symbol_a);
@@ -696,8 +760,9 @@ sub compare_accession
         }
     }
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
     
+
     # presence of similarity terms
     $value_a = 0;
     if ($description_a =~ /-like\b/ ||
@@ -716,7 +781,8 @@ sub compare_accession
         $value_b = 1;
     }
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
+
 
     # presence of domain terms
     $value_a = 0;
@@ -738,7 +804,8 @@ sub compare_accession
         $value_b = 1;
     }
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
+
 
     # presence of family terms
     $value_a = 0;
@@ -760,47 +827,69 @@ sub compare_accession
         $value_b = 1;
     }
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
     
+
     # description, alphabetical
     if (lc($description_a) lt lc($description_b)) {return -1;}
-    if (lc($description_a) gt lc($description_b)) {return 1;}
+    if (lc($description_a) gt lc($description_b)) {return  1;}
     
+
     # shorter symbol is better
     $value_a = length $symbol_a;
     $value_b = length $symbol_b;
     if ($value_a < $value_b) {return -1;}
-    if ($value_a > $value_b) {return 1;}
+    if ($value_a > $value_b) {return  1;}
     
+
     # presence of alias
     $value_a = 0;
-    if ($hash_a{alias} =~ /[A-Za-z0-9]/)
+    if (defined($hash_a{alias}) &&
+        $hash_a{alias} =~ /[A-Za-z0-9]/)
     {
         $value_a = 1;
     }
     $value_b = 0;
-    if ($hash_b{alias} =~ /[A-Za-z0-9]/)
+    if (defined($hash_b{alias}) &&
+        $hash_b{alias} =~ /[A-Za-z0-9]/)
     {
         $value_b = 1;
     }
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
+
 
     # sketchiness of alias
     $value_a = score_symbol_sketchiness($value_a);
     $value_b = score_symbol_sketchiness($value_b);
     if ($value_a > $value_b) {return -1;}
-    if ($value_a < $value_b) {return 1;}
+    if ($value_a < $value_b) {return  1;}
     
+
     # alias, alphabetical
     $value_a = $hash_a{alias};
     $value_b = $hash_b{alias};
-    if (lc($value_a) lt lc($value_a)) {return -1;}
-    if (lc($value_a) gt lc($value_b)) {return 1;}
+    if (defined($value_a) && defined($value_b))
+    {
+        if (lc($value_a) lt lc($value_a)) {return -1;}
+        if (lc($value_a) gt lc($value_b)) {return  1;}
+    }
     
-    # uniprot first
-    if ($accession_a =~ /_/ && !($accession_b =~ /_/)) {return -1;}
-    if ($accession_b =~ /_/ && !($accession_a =~ /_/)) {return  1;}
+
+    # sp|tr _SPECIES accession
+    $value_a = 0;
+    if ($accession_a =~ /\b[^_]{3,}_[^_]{3,}\b/)
+    {
+        $value_a = 1;
+    }
+    $value_b = 0;
+    if ($accession_b =~ /\b[^_]{3,}_[^_]{3,}\b/)
+    {
+        $value_b = 1;
+    }
+    if ($value_a > $value_b) {return -1;}
+    if ($value_a < $value_b) {return  1;}
+
 
     # accession, alphabetical
     return ($accession_a cmp $accession_b);
