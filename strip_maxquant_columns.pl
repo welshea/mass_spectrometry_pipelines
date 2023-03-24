@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-03-34:  remove Spectral Count and MaxLFQ columns from FragPipe files
 # 2021-07-22:  add re-capitalization code from reformat_modification_sites.pl
 # 2020-06-15:  fix broken TMT handling introduced in heavy/light changes
 # 2020-04-07:  remove even more SILAC-related summary columns and ratios
@@ -102,7 +103,13 @@ for ($col = 0; $col < @header_col_array; $col++)
 {
     $field = $header_col_array[$col];
     
-    if ($field =~ /^[A-Z] Count$/i)
+    if ($field =~ /^[A-Z]\s+Count$/i)
+    {
+        $col_to_remove_hash{$col} = 1;
+    }
+    
+    # FragPipe Spectral Count
+    if ($field =~ /\S+\s+Spectral Count$/i)
     {
         $col_to_remove_hash{$col} = 1;
     }
@@ -173,6 +180,11 @@ for ($col = 0; $col < @header_col_array; $col++)
         $col_to_remove_hash{$col} = 1;
     }
     if ($field =~ /^LFQ intensity \w+/i)
+    {
+        $col_to_remove_hash{$col} = 1;
+    }
+    # FragPipe MaxLFQ
+    if ($field =~ /\S+\s+MaxLFQ(\sIntensity)*$/i)
     {
         $col_to_remove_hash{$col} = 1;
     }
