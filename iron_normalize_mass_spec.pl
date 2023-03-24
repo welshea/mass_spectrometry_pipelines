@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-03-24:  add preliminary FragPipe support
 # 2023-01-11:  rescale normalized rows so log2 normalized mean == log2 raw mean
 # 2022-12-09:  change |& to 2>&1| to fix Ubuntu/Debian sh --> dash
 # 2022-04-26:  add --iron-untilt to usage statement (no longer experimental)
@@ -336,6 +337,25 @@ sub read_in_data_file
       }
     }
 
+    # still didn't find any, maybe it is FragPipe " Intensity$" headers
+    if ($num_samples == 0)
+    {
+        for ($i = 0; $i < @array; $i++)
+        {
+            $field = $array[$i];
+
+            $count = 0;
+            if ($field =~ /\s+Intensity$/i &&
+                !($field =~ /\s+MaxLFQ\s+Intensity$/i))
+            {
+                $sample_to_file_col_hash{$field} = $i;
+                $sample_array[$num_samples++] = $field;
+                
+                $intensity_at_end_flag = 1;
+            }
+        }
+    }
+
     $num_header_cols = @array;
     $header_line = join "\t", @array;
 
@@ -423,6 +443,12 @@ sub iron_samples
         # strip Intensity from the beginning
         $sample = $sample_array[$i];
         $sample =~ s/^Intensity\s+//i;
+
+        # strip Intensity from the emd
+        if ($intensity_at_end_flag)
+        {
+            $sample =~ s/\s+Intensity$//i;
+        }
         
         # strip mzMine stuff
         $sample =~ s/\.mzX?ML[^.]+$//i;
@@ -700,6 +726,12 @@ sub output_final_data
             {
                 $sample =~ s/^Intensity\s+//i;
             }
+            
+            # strip Intensity from end
+            elsif ($intensity_at_end_flag)
+            {
+                $sample =~ s/\s+Intensity$//i;
+            }
 
             # strip mzMine stuff, add IRON
             elsif ($sample =~ / Peak height$/i ||
@@ -929,6 +961,9 @@ $scales_output_name = sprintf "%s_scaling_factors.txt", $scales_output_name;
 
 $iron_input_name  = sprintf "temp_iron_input_%s.txt", $process_id;
 $iron_output_name = sprintf "temp_iron_output_%s.txt", $process_id;
+
+# set if samples have Intensity at the end of the column headers
+$intensity_at_end_flag = 0;
 
 read_in_data_file($filename);
 store_condensed_data();
