@@ -46,7 +46,7 @@ for ($i = 0; $i < @ARGV; $i++)
 {
     $field = $ARGV[$i];
     
-    if ($field =~ /^-/)
+    if ($field =~ /^--/)
     {
         if ($field =~ /^--keep-all-cols/)
         {
@@ -73,7 +73,7 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $min_values = $field;
             
-            if (!is_number($min_value))
+            if (!is_number($min_values))
             {
                 printf STDERR "ABORT -- non-numeric minimum number of values per each\n";
             
