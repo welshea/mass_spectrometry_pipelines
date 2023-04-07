@@ -1,7 +1,8 @@
 #!/usr/bin/perl -w
 
-# 2022-04-07  fix ENS* sort order
-# 2022-03-17  better sorting of isoforms, fragments, Ensembl accessions
+# 2023-04-07  add equivalent accessions (RefSeq, ENSP, etc.) to output
+# 2023-04-07  fix ENS* sort order
+# 2023-03-17  better sorting of isoforms, fragments, Ensembl accessions
 # 2022-12-23  add in additional annotation columns at beginning, if present
 # 2022-08-03  Has_Contaminant_Flag, All_Reverse_Flag now [0,1] instead of [0-3]
 # 2021-08-30  move amino acid column, insert new position column
@@ -1706,9 +1707,30 @@ sub print_probeid_annotation
     }
     @accession_pruned_array =
         sort compare_accession keys %accession_pruned_hash;
-    if (@accession_pruned_array)
+
+    # tack on additional accessions annotated as equivalent
+    # must keep these separate, for the modification site reordering below
+    @accession_less_pruned_array = @accession_pruned_array;
+    $count_pruned                = @accession_pruned_array;
+    foreach $accession (keys %seen_accession_protein_hash)
     {
-        $accession_pruned_str = join ' ', @accession_pruned_array;
+        if (defined($seen_accession_hash{$accession}) ||
+            defined($accession_annotation_hash{$accession}))
+        {
+            if (!defined($accession_pruned_hash{$accession}))
+            {
+                $accession_less_pruned_array[$count_pruned++] = $accession;
+
+                $accession_pruned_hash{$accession} = 1;
+            }
+        }
+    }
+
+
+    # this is just for printing, so use the less pruned array
+    if (@accession_less_pruned_array)
+    {
+        $accession_pruned_str = join ' ', @accession_less_pruned_array;
     }
 
 
