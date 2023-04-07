@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-04-07  fix ENS* sort order
 # 2022-03-17  better sorting of isoforms, fragments, Ensembl accessions
 # 2022-12-23  add in additional annotation columns at beginning, if present
 # 2022-08-03  Has_Contaminant_Flag, All_Reverse_Flag now [0,1] instead of [0-3]
@@ -542,12 +543,12 @@ sub compare_accession
 
 
     # Ensembl accessions
-    if (  $accession_a =~ /^ENS[A-Z]{0,3}T_/  && !($accession_b =~ /^ENS[A-Z]{0,3}T_/)) {return -1;}
-    if (!($accession_a =~ /^ENS[A-Z]{0,3}T_/) &&   $accession_b =~ /^ENS[A-Z]{0,3}T_/)  {return  1;}
-    if (  $accession_a =~ /^ENS[A-Z]{0,3}P_/  && !($accession_b =~ /^ENS[A-Z]{0,3}P_/)) {return -1;}
-    if (!($accession_a =~ /^ENS[A-Z]{0,3}P_/) &&   $accession_b =~ /^ENS[A-Z]{0,3}P_/)  {return  1;}
-    if (  $accession_a =~ /^ENS[A-Z]{0,3}G_/  && !($accession_b =~ /^ENS[A-Z]{0,3}G_/)) {return -1;}
-    if (!($accession_a =~ /^ENS[A-Z]{0,3}G_/) &&   $accession_b =~ /^ENS[A-Z]{0,3}G_/)  {return  1;}
+    if (  $accession_a =~ /^ENS[A-Z]{0,3}T/  && !($accession_b =~ /^ENS[A-Z]{0,3}T/)) {return -1;}
+    if (!($accession_a =~ /^ENS[A-Z]{0,3}T/) &&   $accession_b =~ /^ENS[A-Z]{0,3}T/)  {return  1;}
+    if (  $accession_a =~ /^ENS[A-Z]{0,3}P/  && !($accession_b =~ /^ENS[A-Z]{0,3}P/)) {return -1;}
+    if (!($accession_a =~ /^ENS[A-Z]{0,3}P/) &&   $accession_b =~ /^ENS[A-Z]{0,3}P/)  {return  1;}
+    if (  $accession_a =~ /^ENS[A-Z]{0,3}G/  && !($accession_b =~ /^ENS[A-Z]{0,3}G/)) {return -1;}
+    if (!($accession_a =~ /^ENS[A-Z]{0,3}G/) &&   $accession_b =~ /^ENS[A-Z]{0,3}G/)  {return  1;}
 
 
     # non-NG genomic annotations are often flat out *WRONG* -- *SO WRONG*
