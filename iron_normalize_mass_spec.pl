@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-04-10:  support --boost and --last-ch flags
 # 2023-03-24:  add preliminary FragPipe support
 # 2023-01-11:  rescale normalized rows so log2 normalized mean == log2 raw mean
 # 2022-12-09:  change |& to 2>&1| to fix Ubuntu/Debian sh --> dash
@@ -491,6 +492,10 @@ sub iron_samples
     {
         $median_sample = $force_ref_sample;
     }
+    elsif ($boost_flag)
+    {
+        $median_sample = $sample_array[$num_samples - 1];
+    }
     else
     {
         $exclusions_string = '';
@@ -855,6 +860,7 @@ $unlog2_flag             = 0;   # unlog2 the input data
 $no_log2_flag            = 0;   # do not log2 the output data
 $norm_none_flag          = 0;   # do not normalize the data at all
 $iron_untilt_flag        = 0;   # --rnaseq flag
+$boost_flag              = 0;   # assume last sample is boosting channel
 $global_metabolomics_flag = 0;
 
 
@@ -910,6 +916,11 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $iron_untilt_flag = 1;
         }
+        elsif ($field =~ /^--boost$/ ||
+               $field =~ /^--last-ch$/)
+        {
+            $boost_flag = 1;
+        }
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -947,6 +958,9 @@ if ($syntax_error_flag || $num_files == 0)
     printf STDERR "    --no-log2                     output unlogged abundances\n";
     printf STDERR "    --norm-none                   disable normalization\n";
     printf STDERR "    --unlog2                      exponentiate input data, pow(2, value)\n";
+    printf STDERR "\n";
+    printf STDERR "    --boost                       use last sample for normalization\n";
+    printf STDERR "    --last-ch                     use last sample for normalization\n";
 
     exit(1);
 }
