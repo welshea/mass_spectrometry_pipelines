@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2022-06-11:  pass --boost and --last-ch flags to iron_normalize_mass_spec.pl
 # 2022-06-11:  add --iron-auto-ch to auto-pick each ref channel per-plex
 # 2022-04-06:  add --iron-untilt to address rare dynamic range compression
 # 2022-02-03:  bugfix: honor auto-detected species
@@ -423,11 +424,16 @@ $pipeline_ibaq_str .= sprintf "\nrm \"%s%s\"",
 $options_str = '';
 if ($no_iron_flag)
 {
-    $options_str = '--norm-none';
+    $options_str  = '--norm-none';
 }
 if ($iron_untilt_flag)
 {
-    $options_str = '--iron-untilt';
+    $options_str  = '--iron-untilt';
+}
+if ($boost_flag)
+{
+    $options_str .=  ' --boost';
+    $options_str  =~ s/^\s+//;
 }
 $pipeline_norm_str = sprintf "%s %s \"%s%s\" \\\n  > \"%s%s\"",
     'iron_normalize_mass_spec.pl',
