@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2023-04-10: respect --boost flag when injection replicates are detected
 # 2022-11-21: add support for multiple Proteome Discoverer plexes
 # 2022-11-21: remove first level of enclosing double quotes from fields
 # 2022-08-17: support TMT-18
@@ -549,6 +550,12 @@ if ($tmt_flag && ($boost_flag || $py_flag))
 if ($tmt_flag && $injection_plex_flag)
 {
     $tmt_channel = 'auto';
+    
+    if ($boost_flag)
+    {
+        $tmt_channel = 'TMT-' .
+                       $channel_map_table[$max_channel+1][$max_channel]
+    }
 }
 
 if ($ibaq_flag)
