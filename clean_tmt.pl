@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-04-13: sort columns by injection replicate before channel
 # 2022-12-16: plex + label zero-padding + sorting, need not start with "Plex"
 # 2022-11-22: zero-pad Plex numbers in large experiments
 # 2022-11-22: sort samples into plex + label order
@@ -94,6 +95,8 @@ sub cmp_renamed_header_cols
     my $ch_b        = '';
     my $ch_a_digits = '';
     my $ch_b_digits = '';
+    my $run_a       = '';
+    my $run_b       = '';
 
     # may contain a _run1 or _run2 after the plex
     if ($header_a =~ /([0-9]+).*_TMT-([0-9CN]+)$/)
@@ -126,7 +129,21 @@ sub cmp_renamed_header_cols
     # sort samples by plex
     if ($plex_a < $plex_b) { return -1; }
     if ($plex_a > $plex_b) { return  1; }
-
+    
+    # sort samples by injection replicate
+    if ($header_a =~ /_run([0-9]+)_/)
+    {
+        $run_a = $1;
+    }
+    if ($header_b =~ /_run([0-9]+)_/)
+    {
+        $run_b = $1;
+    }
+    if ($run_a eq '' && $run_b ne '') { return -1; }
+    if ($run_b eq '' && $run_a ne '') { return  1; }
+    if ($run_a       <  $run_b)       { return -1; }
+    if ($run_a       >  $run_b)       { return  1; }
+    
     # sort samples by channel
     if ($ch_a_digits < $ch_b_digits) { return -1; }
     if ($ch_a_digits > $ch_b_digits) { return  1; }
