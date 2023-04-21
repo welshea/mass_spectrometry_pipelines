@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-04-21:  rename p[ and n[ samples to pos[ and neg[
 # 2023-01-17:  protect ] or ) immediately following the short name
 # 2022-06-16:  better handling of () and {} near pos/neg in sample names
 # 2022-06-16:  better handling of [] near pos/neg in sample names
@@ -223,6 +224,57 @@ sub read_in_file
     {
         $global_row_id_str = 'row ID';
     }
+    
+
+    # flags for renaming n[ and p[ to pos[ and neg[
+    $temp_saw_pos_neg_flag = 0;
+
+    # check for absense of regular pos/neg sample names
+    for ($col = 0; $col < @header_col_array; $col++)
+    {
+        $field = $header_col_array[$col];
+
+        if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+            $field =~ /[^A-Za-z0-9](pos|neg)$/i ||
+            $field =~ /^(pos|neg)[^A-Za-z0-9]/)
+        {
+            # which columns should be actual sample data
+            if ($field =~ /^IRON /i ||
+                $field =~ /([^A-Za-z0-9]*(Height|Area)[^A-Za-z0-9]*)/i)
+            {
+                $temp_saw_pos_neg_flag = 1;
+                last;
+            }
+        }
+    }
+    # rename p[ or n[ to pos[ or neg[
+    if ($temp_saw_pos_neg_flag == 0)
+    {
+        for ($col = 0; $col < @header_col_array; $col++)
+        {
+            $field = $header_col_array[$col];
+
+            if ($field =~ /^(?:IRON\s+)[p|n]\[/)
+            {
+                # which columns should be actual sample data
+                if ($field =~ /^IRON /i ||
+                    $field =~ /([^A-Za-z0-9]*(Height|Area)[^A-Za-z0-9]*)/i)
+                {
+                    $header_col_array[$col] =~ s/^(IRON\s+)p/$1pos/;
+                    $header_col_array[$col] =~ s/^(IRON\s+)n/$1neg/;
+
+                    # book keeping for back-naming later
+                    $temp_str = $header_col_array[$col];
+                    $temp_str =~ s/^(IRON\s+)//;
+                    $field    =~ s/^(IRON\s+)//;
+                    $renamed_to_orig_hash{$temp_str} = $field;
+
+                    #printf STDERR "Renaming %s to %s\n",
+                    #    $field, $header_col_array[$col];
+                }
+            }
+        }
+    }
 
     # categorize columns
     for ($col = 0; $col < @header_col_array; $col++)
@@ -231,7 +283,8 @@ sub read_in_file
 
         if ($field =~ /^IRON /i ||
             $field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
-            $field =~ /(pos|neg)$/i)
+            $field =~ /[^A-Za-z0-9](pos|neg)$/i ||
+            $field =~ /^(pos|neg)[^A-Za-z0-9]/)
         {
             $cols_to_merge_hash{$col} = $field;
 
@@ -261,14 +314,16 @@ sub read_in_file
         # ^pos _pos_ _pos$
         #
         if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
-              $tomerge =~ s/pos$//i))
+              $tomerge =~ s/([^A-Za-z0-9])pos$/$1/i ||
+              $tomerge =~ s/^pos([^A-Za-z0-9])/$1/i))
         {
             $all_pos_start_flag = 0;
             $count_non_pos++;
         }
 
         if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
-              $tomerge =~ s/neg$//i))
+              $tomerge =~ s/([^A-Za-z0-9])neg$/$1/i ||
+              $tomerge =~ s/^neg([^A-Za-z0-9])/$1/i))
         {
             $all_neg_start_flag = 0;
             $count_non_neg++;
@@ -373,8 +428,11 @@ sub read_in_file
             # strip pos/neg from sample name
             if ($all_pos_start_flag)
             {
-                $tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i;
-                $tomerge =~ s/pos$//i;
+                if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
+                      $tomerge =~ s/([^A-Za-z0-9])pos$/$1/i))
+                {
+                      $tomerge =~ s/^pos([^A-Za-z0-9])/$1/i;
+                }
 
                 # clean up underscores, etc.
                 $tomerge =~ s/[_ ]+/_/g;
@@ -385,8 +443,11 @@ sub read_in_file
             }
             elsif ($all_neg_start_flag)
             {
-                $tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i;
-                $tomerge =~ s/neg$//i;
+                if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
+                      $tomerge =~ s/([^A-Za-z0-9])neg$/$1/i))
+                {
+                      $tomerge =~ s/^neg([^A-Za-z0-9])/$1/i;
+                }
 
                 # clean up underscores, etc.
                 $tomerge =~ s/[_ ]+/_/g;
@@ -1047,6 +1108,16 @@ foreach $header (@actual_sample_lc_array)
     if ($count_neg_matches)
     {
         $neg_tomerge = $neg_tomerge_matches[0];
+    }
+    
+    # rename pos[ and neg[ to match original scaling factor files
+    if (defined($renamed_to_orig_hash{$pos_tomerge}))
+    {
+        $pos_tomerge = $renamed_to_orig_hash{$pos_tomerge};
+    }
+    if (defined($renamed_to_orig_hash{$neg_tomerge}))
+    {
+        $neg_tomerge = $renamed_to_orig_hash{$neg_tomerge};
     }
     
     ## strip inserted pos/neg so that they match original scaling factor files
