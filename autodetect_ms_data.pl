@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2023-04-28: default to 1st instead of last channel pool for non-pY
 # 2023-04-10: respect --boost flag when injection replicates are detected
 # 2022-11-21: add support for multiple Proteome Discoverer plexes
 # 2022-11-21: remove first level of enclosing double quotes from fields
@@ -98,6 +99,7 @@ $refseq_flag     = 0;
 $mod_flag        = 0;
 $psty_flag       = 0;
 $py_flag         = 0;
+$first_flag      = 0;
 $boost_flag      = 0;
 $tmt_flag        = 0;
 $multi_plex_flag = 0;
@@ -115,6 +117,12 @@ for ($i = 0; $i < @ARGV; $i++)
             $field =~ /^--last-ch$/)
         {
             $boost_flag = 1;
+            $first_flag = 0;
+        }
+        if ($field =~ /^--first-ch$/)
+        {
+            $first_flag = 1;
+            $boost_flag = 0;
         }
         else
         {
@@ -538,14 +546,23 @@ if ($tmt_flag)
 {
     $tmt_channel = 'auto';
 }
+# default to last-ch for cross-plex normalization
 if ($tmt_flag && $multi_plex_flag)
 {
     $tmt_channel = 'TMT-' .
-                   $channel_map_table[$max_channel+1][0]
+                   $channel_map_table[$max_channel+1][$max_channel]
 }
+# pY should always have the boosting channel last
 if ($tmt_flag && ($boost_flag || $py_flag))
 {
     $tmt_channel = 'TMT-' . $channel_map_table[$max_channel+1][$max_channel]
+}
+# use first channel if requested
+# override pY, --boost or --last-ch
+if ($tmt_flag && $first_flag)
+{
+    $tmt_channel = 'TMT-' .
+                   $channel_map_table[$max_channel+1][0]
 }
 if ($tmt_flag && $injection_plex_flag)
 {
@@ -555,6 +572,14 @@ if ($tmt_flag && $injection_plex_flag)
     {
         $tmt_channel = 'TMT-' .
                        $channel_map_table[$max_channel+1][$max_channel]
+    }
+
+    # use first channel if requested
+    # override pY, --boost or --last-ch
+    if ($first_flag)
+    {
+        $tmt_channel = 'TMT-' .
+                       $channel_map_table[$max_channel+1][0]
     }
 }
 
