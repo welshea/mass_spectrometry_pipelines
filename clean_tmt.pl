@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-05-03: sort Plex#-run# correctly, not just Plex#_run# correctly
 # 2023-04-26: bugfix injection replicate sorting w/o injection replicates
 # 2023-04-13: sort columns by injection replicate before channel
 # 2022-12-16: plex + label zero-padding + sorting, need not start with "Plex"
@@ -132,11 +133,11 @@ sub cmp_renamed_header_cols
     if ($plex_a > $plex_b) { return  1; }
     
     # sort samples by injection replicate
-    if ($header_a =~ /_run([0-9]+)_/)
+    if ($header_a =~ /[^A-Za-z0-9]run([0-9]+)_/)
     {
         $run_a = $1;
     }
-    if ($header_b =~ /_run([0-9]+)_/)
+    if ($header_b =~ /[^A-Za-z0-9]run([0-9]+)_/)
     {
         $run_b = $1;
     }
