@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-04-28:  add --first-ch flag
 # 2022-06-11:  pass --boost and --last-ch flags to iron_normalize_mass_spec.pl
 # 2022-06-11:  add --iron-auto-ch to auto-pick each ref channel per-plex
 # 2022-04-06:  add --iron-untilt to address rare dynamic range compression
@@ -26,6 +27,7 @@ use File::Basename;
 
 $input_filename    = '';
 $num_non_options   = 0;
+$first_flag        = 0;
 $boost_flag        = 0;
 $no_debatch_flag   = 0;
 $no_iron_flag      = 0;
@@ -49,6 +51,13 @@ for ($i = 0; $i < @ARGV; $i++)
             $field =~ /^--last-ch$/)
         {
             $boost_flag = 1;
+            $first_flag = 0;
+        }
+
+        if ($field =~ /^--first-ch$/)
+        {
+            $first_flag = 1;
+            $boost_flag = 0;
         }
 
         elsif ($field =~ /^--no-debatch$/)
@@ -162,6 +171,7 @@ if ($syntax_error_flag)
     print STDERR "  Options:\n";
     print STDERR "    --boost         use highest channel for normalization\n";
     print STDERR "    --last-ch       use highest channel for normalization\n";
+    print STDERR "    --first-ch      use lowest  channel for normalization\n";
     print STDERR "\n";
     print STDERR "    --iron          apply IRON normalization (default)\n";
     print STDERR "    --iron-auto-ch  auto-pick different reference channel per-plex\n";
@@ -216,6 +226,13 @@ if (!defined($autodetect_filename))
     if ($boost_flag)
     {
         $cmd_str = sprintf "%s --boost \"%s\" \"%s\"",
+            'autodetect_ms_data.pl',
+            $input_filename,
+            $species;
+    }
+    elsif ($first_flag)
+    {
+        $cmd_str = sprintf "%s --first-ch \"%s\" \"%s\"",
             'autodetect_ms_data.pl',
             $input_filename,
             $species;
@@ -433,6 +450,11 @@ if ($iron_untilt_flag)
 if ($boost_flag)
 {
     $options_str .=  ' --boost';
+    $options_str  =~ s/^\s+//;
+}
+if ($first_flag)
+{
+    $options_str .=  ' --first-ch';
     $options_str  =~ s/^\s+//;
 }
 $pipeline_norm_str = sprintf "%s %s \"%s%s\" \\\n  > \"%s%s\"",
