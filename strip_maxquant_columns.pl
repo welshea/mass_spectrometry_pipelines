@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2023-05-18:  replace fields that are purely semicolons with blanks
+# 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-03-34:  remove Spectral Count and MaxLFQ columns from FragPipe files
 # 2021-07-22:  add re-capitalization code from reformat_modification_sites.pl
 # 2020-06-15:  fix broken TMT handling introduced in heavy/light changes
@@ -15,6 +17,11 @@ open INFILE, "$filename" or die "can't open $filename\n";
 # header line
 $line = <INFILE>;
 $line =~ s/[\r\n]+//g;
+
+# remove UTF-8 byte order mark, since it causes many problems
+# remove some other BOM I've observed in the wild
+$line =~ s/(^\xEF\xBB\xBF|^\xEF\x3E\x3E\xBF)//;
+
 @array = split /\t/, $line;
 for ($i = 0; $i < @array; $i++)
 {
@@ -465,6 +472,12 @@ while(defined($line=<INFILE>))
 #            $field =~ s/sp\|[^\|\;\,]+\|([^\|\;\,]+)/$1/g;
 #            $field =~ s/ENSEMBL:([A-Za-z0-9-\.]+)/$1/ig;
 #            $field =~ s/REFSEQ:([A-Za-z0-9\.]+)/$1/ig;
+        }
+        
+        # replace fields containing only semicolons with blanks
+        if ($field =~ /^;+$/)
+        {
+            $field = "";
         }
         
     
