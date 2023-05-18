@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-04-28: default to 1st instead of last channel pool for non-pY
 # 2023-04-10: respect --boost flag when injection replicates are detected
 # 2022-11-21: add support for multiple Proteome Discoverer plexes
@@ -177,6 +178,11 @@ open INFILE, "$filename" or die "can't open input file $filename\n";
 $line = <INFILE>;
 $line =~ s/[\r\n]+//g;
 #$line =~ s/\"//g;
+
+# remove UTF-8 byte order mark, since it causes many problems
+# remove some other BOM I've observed in the wild
+$line =~ s/(^\xEF\xBB\xBF|^\xEF\x3E\x3E\xBF)//;
+
 
 @header_array = split /\t/, $line;
 
