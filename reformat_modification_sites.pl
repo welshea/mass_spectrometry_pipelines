@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2022-05-06:  support missing Positions Within Proteins column (old MaxQuant)
 # 2021-10-28:  add support for Biotin-HPDP
 # 2021-08-30:  deal with missing accessions/positions in various fields
@@ -447,6 +448,11 @@ while(defined($line=<INFILE>))
 # header line
 $line =~ s/[\r\n]+//;
 $line =~ s/\"//g;
+
+# remove UTF-8 byte order mark, since it causes many problems
+# remove some other BOM I've observed in the wild
+$line =~ s/(^\xEF\xBB\xBF|^\xEF\x3E\x3E\xBF)//;
+
 @array = split /\t/, $line;
 for ($i = 0; $i < @array; $i++)
 {
