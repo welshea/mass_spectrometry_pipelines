@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-04-07  add equivalent accessions (RefSeq, ENSP, etc.) to output
 # 2023-04-07  fix ENS* sort order
 # 2023-03-17  better sorting of isoforms, fragments, Ensembl accessions
@@ -1989,6 +1990,11 @@ open DATA, "$data_filename" or die "can't open $data_filename";
 # accession annotation header line
 $line = <ANNOTATION>;
 $line =~ s/[\r\n]+//;
+
+# remove UTF-8 byte order mark, since it causes many problems
+# remove some other BOM I've observed in the wild
+$line =~ s/(^\xEF\xBB\xBF|^\xEF\x3E\x3E\xBF)//;
+
 @array = split /\s+/, $line;
 for ($i = 0; $i < @array; $i++)
 {
