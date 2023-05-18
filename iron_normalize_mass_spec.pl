@@ -3,6 +3,8 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
+# 2023-04-18:  support --first-ch flag
 # 2023-04-10:  support --boost and --last-ch flags
 # 2023-03-24:  add preliminary FragPipe support
 # 2023-01-11:  rescale normalized rows so log2 normalized mean == log2 raw mean
@@ -121,6 +123,10 @@ sub read_in_data_file
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
     $line =~ s/\"//g;
+
+    # remove UTF-8 byte order mark, since it causes many problems
+    # remove some other BOM I've observed in the wild
+    $line =~ s/(^\xEF\xBB\xBF|^\xEF\x3E\x3E\xBF)//;
 
     @array = split /\t/, $line, -1;
     for ($i = 0; $i < @array; $i++)
@@ -496,6 +502,10 @@ sub iron_samples
     {
         $median_sample = $sample_array[$num_samples - 1];
     }
+    elsif ($first_flag)
+    {
+        $median_sample = $sample_array[0];
+    }
     else
     {
         $exclusions_string = '';
@@ -861,6 +871,7 @@ $no_log2_flag            = 0;   # do not log2 the output data
 $norm_none_flag          = 0;   # do not normalize the data at all
 $iron_untilt_flag        = 0;   # --rnaseq flag
 $boost_flag              = 0;   # assume last sample is boosting channel
+$first_flag              = 0;   # assume first sample is pool
 $global_metabolomics_flag = 0;
 
 
@@ -920,6 +931,12 @@ for ($i = 0; $i < @ARGV; $i++)
                $field =~ /^--last-ch$/)
         {
             $boost_flag = 1;
+            $first_flag = 0;
+        }
+        elsif ($field =~ /^--first-ch$/)
+        {
+            $first_flag = 1;
+            $boost_flag = 0;
         }
         else
         {
@@ -959,8 +976,9 @@ if ($syntax_error_flag || $num_files == 0)
     printf STDERR "    --norm-none                   disable normalization\n";
     printf STDERR "    --unlog2                      exponentiate input data, pow(2, value)\n";
     printf STDERR "\n";
-    printf STDERR "    --boost                       use last sample for normalization\n";
-    printf STDERR "    --last-ch                     use last sample for normalization\n";
+    printf STDERR "    --boost                       use last  sample for normalization\n";
+    printf STDERR "    --last-ch                     use last  sample for normalization\n";
+    printf STDERR "    --first-ch                    use first sample for normalization\n";
 
     exit(1);
 }
