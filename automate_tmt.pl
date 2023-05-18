@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2022-12-09: change |& to 2>&1| to fix Ubuntu/Debian sh --> dash
 # 2022-07-08: better handling of 126C default when no pool specified
 # 2022-04-26: add --iron-untilt to usage statement (no longer experimental)
@@ -144,6 +145,10 @@ sub read_in_data_file
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
     $line =~ s/\"//;
+
+    # remove UTF-8 byte order mark, since it causes many problems
+    # remove some other BOM I've observed in the wild
+    $line =~ s/(^\xEF\xBB\xBF|^\xEF\x3E\x3E\xBF)//;
 
     # do NOT strip off trailing empty fields !!
     @array = split /\t/, $line, -1;
