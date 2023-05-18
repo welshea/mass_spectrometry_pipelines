@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2023-05-18: handle missing data at end of MaxQuant 2.4 lines
+# 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-05-03: sort Plex#-run# correctly, not just Plex#_run# correctly
 # 2023-04-26: bugfix injection replicate sorting w/o injection replicates
 # 2023-04-13: sort columns by injection replicate before channel
@@ -276,6 +278,11 @@ open INFILE, "$infile" or die "can't open $infile\n";
 # read in header line
 $line = <INFILE>;
 $line =~ s/[\r\n]+//g;
+
+# remove UTF-8 byte order mark, since it causes many problems
+# remove some other BOM I've observed in the wild
+$line =~ s/(^\xEF\xBB\xBF|^\xEF\x3E\x3E\xBF)//;
+
 
 @array = split /\t/, $line;
 
@@ -1336,9 +1343,17 @@ while(defined($line=<INFILE>))
     {
         $col = $header_col_new_order_array[$i];
 
+        # MaxQuant 2.4 can leave off values at the end of the line
+        # check for this and blank them out.
+        $field = $array[$col];
+        if (!defined($field))
+        {
+            $field = "";
+        }
+
         if (!defined($strip_col_flags{$col}))
         {
-            printf "\t%s", $array[$col];
+            printf "\t%s", $field;
         }
     }
     printf "\n";
