@@ -3,6 +3,9 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-05-25:  refactor how stripping sample names is handled
+# 2023-05-25:  improved pos/neg detection from merge_metabolomics_pos_neg.pl
+# 2023-05-25:  support alternative lipidomics sample headers
 # 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-04-18:  support --first-ch flag
 # 2023-04-10:  support --boost and --last-ch flags
@@ -275,8 +278,8 @@ sub read_in_data_file
         # check for lipidomics abundances
         if ($field =~ / Peak height$/i ||
             $field =~ / Peak area$/i ||
-            $field =~ /^Height,/i ||
-            $field =~ /^Area,/i)
+            $field =~ /^(Area|Height),/i ||
+            $field =~ /^(Area|Height)\[.*\]$/i)
         {
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
@@ -330,11 +333,16 @@ sub read_in_data_file
       for ($i = 0; $i < @array; $i++)
       {
         $field = $array[$i];
-
-        $count = 0;
+        
+        # skip LipidSearch Rt columns, since they can contain pos/neg
+        if ($field =~ /^Rt\[/)
+        {
+            next;
+        }
 
         if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
-            $field =~ /(pos|neg)$/i)
+            $field =~ /[^A-Za-z0-9](pos|neg)[0-9]{0,1}(?:\]*)$/i ||
+            $field =~ /^(pos|neg)[^A-Za-z0-9]/)
         {
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
@@ -351,7 +359,6 @@ sub read_in_data_file
         {
             $field = $array[$i];
 
-            $count = 0;
             if ($field =~ /\s+Intensity$/i &&
                 !($field =~ /\s+MaxLFQ\s+Intensity$/i))
             {
@@ -362,6 +369,63 @@ sub read_in_data_file
             }
         }
     }
+    
+    # strip header stuff from sample names
+    @sample_strip_array = @sample_array;
+    if ($strip_sample_names_flag && $num_samples)
+    {
+        for ($i = 0; $i < $num_samples; $i++)
+        {
+            $sample = $sample_array[$i];
+            
+            # strip Intensity from beginning
+            if ($sample =~ /^Intensity\s+/)
+            {
+                $sample =~ s/^Intensity\s+//i;
+            }
+            
+            # strip Intensity from end
+            elsif ($intensity_at_end_flag)
+            {
+                $sample =~ s/\s+Intensity$//i;
+            }
+
+            # strip mzMine stuff, add IRON
+            elsif ($sample =~ / Peak height$/i ||
+                   $sample =~ / Peak area$/i)
+            {
+                $sample =~ s/\.mzX?ML[^.]+$//i;
+                $sample =~ s/ Peak \S+$//i;
+                
+            }
+            
+            # strip lipidomics stuff
+            elsif ($sample =~ /^Height,/i ||
+                   $sample =~ /^Area,/i)
+            {
+                $sample =~ s/^(Area|Height),\s*//i;
+            }
+            elsif ($sample =~ /^(?:Area|Height)\[(.*)\]$/i)
+            {
+                $sample =~ s/^(?:Area|Height)\[(.*)\]$/$1/i;
+            }
+
+            # strip Skyline stuff
+            elsif ($sample =~ / Total Area$/i)
+            {
+                $sample =~ s/ Total Area$//i;
+            }
+
+            # strip Proteome Discoverer stuff
+            elsif ($sample =~ /^Abundances \(Grouped\):\s*/i)
+            {
+                $sample =~ s/^Abundances \(Grouped\):\s*//i;
+            }
+            
+            $sample_strip_array[$i] = $sample;
+        }
+    }
+
 
     $num_header_cols = @array;
     $header_line = join "\t", @array;
@@ -448,7 +512,7 @@ sub iron_samples
     for ($i = 0; $i < $num_samples; $i++)
     {
         # strip Intensity from the beginning
-        $sample = $sample_array[$i];
+        $sample = $sample_strip_array[$i];
         $sample =~ s/^Intensity\s+//i;
 
         # strip Intensity from the emd
@@ -500,11 +564,11 @@ sub iron_samples
     }
     elsif ($boost_flag)
     {
-        $median_sample = $sample_array[$num_samples - 1];
+        $median_sample = $sample_strip_array[$num_samples - 1];
     }
     elsif ($first_flag)
     {
-        $median_sample = $sample_array[0];
+        $median_sample = $sample_strip_array[0];
     }
     else
     {
@@ -732,61 +796,13 @@ sub output_final_data
     # print header for new samples
     for ($i = 0; $i < $num_samples; $i++)
     {
-        $sample = $sample_array[$i];
-        
-        if ($strip_sample_names_flag)
+        $sample = $sample_strip_array[$i];
+
+        # we're going to merge POS and NEG together later
+        # prepend IRON so that it is easy to detect sample columns
+        if ($global_metabolomics_flag)
         {
-            # strip Intensity from beginning
-            if ($sample =~ /^Intensity\s+/)
-            {
-                $sample =~ s/^Intensity\s+//i;
-            }
-            
-            # strip Intensity from end
-            elsif ($intensity_at_end_flag)
-            {
-                $sample =~ s/\s+Intensity$//i;
-            }
-
-            # strip mzMine stuff, add IRON
-            elsif ($sample =~ / Peak height$/i ||
-                   $sample =~ / Peak area$/i)
-            {
-                $sample =~ s/\.mzX?ML[^.]+$//i;
-                $sample =~ s/ Peak \S+$//i;
-                
-            }
-            
-            # strip lipidomics stuff
-            elsif ($sample =~ /^Height,/i ||
-                   $sample =~ /^Area,/i)
-            {
-                $sample =~ s/^(Area|Height),\s*//i;
-            }
-
-            # strip Skyline stuff
-            elsif ($sample =~ / Total Area$/i)
-            {
-                $sample =~ s/ Total Area$//i;
-            }
-
-            # strip Proteome Discoverer stuff
-            elsif ($sample =~ /^Abundances \(Grouped\):\s*/i)
-            {
-                $sample =~ s/^Abundances \(Grouped\):\s*//i;
-            }
-            
-            # TMT data
-#            elsif ($sample =~ /^TMT/)
-#            {
-#            }
-
-            # we're going to merge POS and NEG together later
-            # prepend IRON so that it is easy to detect sample columns
-            if ($global_metabolomics_flag)
-            {
-                $sample = 'IRON ' . $sample;
-            }
+            $sample = 'IRON ' . $sample;
         }
 
         printf "\t%s", $sample;
