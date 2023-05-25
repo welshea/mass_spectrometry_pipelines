@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-05-25:  support pos#/neg# at end of sample name (Flores #4160)
 # 2023-04-21:  rename p[ and n[ samples to pos[ and neg[
 # 2023-01-17:  protect ] or ) immediately following the short name
 # 2022-06-16:  better handling of () and {} near pos/neg in sample names
@@ -235,7 +236,7 @@ sub read_in_file
         $field = $header_col_array[$col];
 
         if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
-            $field =~ /[^A-Za-z0-9](pos|neg)$/i ||
+            $field =~ /[^A-Za-z0-9](pos|neg)[0-9]{0,1}(?:\]*)$/i ||
             $field =~ /^(pos|neg)[^A-Za-z0-9]/)
         {
             # which columns should be actual sample data
@@ -283,7 +284,7 @@ sub read_in_file
 
         if ($field =~ /^IRON /i ||
             $field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
-            $field =~ /[^A-Za-z0-9](pos|neg)$/i ||
+            $field =~ /[^A-Za-z0-9](pos|neg)[0-9]{0,1}(?:\]*)$/i ||
             $field =~ /^(pos|neg)[^A-Za-z0-9]/)
         {
             $cols_to_merge_hash{$col} = $field;
@@ -313,8 +314,9 @@ sub read_in_file
 
         # ^pos _pos_ _pos$
         #
+        # allow samples to end in pos#, such as _pos2
         if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
-              $tomerge =~ s/([^A-Za-z0-9])pos$/$1/i ||
+              $tomerge =~ s/([^A-Za-z0-9])pos[0-9]{0,1}(?:\]*)$/$1/i ||
               $tomerge =~ s/^pos([^A-Za-z0-9])/$1/i))
         {
             $all_pos_start_flag = 0;
@@ -322,7 +324,7 @@ sub read_in_file
         }
 
         if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
-              $tomerge =~ s/([^A-Za-z0-9])neg$/$1/i ||
+              $tomerge =~ s/([^A-Za-z0-9])neg[0-9]{0,1}(?:\]*)$/$1/i ||
               $tomerge =~ s/^neg([^A-Za-z0-9])/$1/i))
         {
             $all_neg_start_flag = 0;
@@ -428,8 +430,8 @@ sub read_in_file
             # strip pos/neg from sample name
             if ($all_pos_start_flag)
             {
-                if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
-                      $tomerge =~ s/([^A-Za-z0-9])pos$/$1/i))
+                if (!($tomerge =~ s/([^A-Za-z0-9])pos[0-9]{0,1}(?:\]*)$/$1/i ||
+                      $tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i))
                 {
                       $tomerge =~ s/^pos([^A-Za-z0-9])/$1/i;
                 }
@@ -443,8 +445,8 @@ sub read_in_file
             }
             elsif ($all_neg_start_flag)
             {
-                if (!($tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i ||
-                      $tomerge =~ s/([^A-Za-z0-9])neg$/$1/i))
+                if (!($tomerge =~ s/([^A-Za-z0-9])neg[0-9]{0,1}(?:\]*)$/$1/i ||
+                      $tomerge =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i))
                 {
                       $tomerge =~ s/^neg([^A-Za-z0-9])/$1/i;
                 }
