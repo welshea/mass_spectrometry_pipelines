@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-05-25:  replace _ with / for LipidSearch summary -> mergedResult mapping
 # 2023-02-13:  attempt to replace non-canonical main with best canonical
 # 2023-02-13:  also warn if tScore headers are detected
 # 2023-02-13:  count [-2H] adducts, warn LipidSearch export may be incorrect
@@ -438,6 +439,10 @@ sub read_in_lipidsearch_summary_file
         $lipid_molec = $array[$lipid_molec_col];
         $base_rt     = $array[$base_rt_col];
         $main_ion    = $array[$main_ion_col];
+
+        # mergedResult.txt uses / instead of _
+        # we'll miss a lot of mappings if we don't replace them
+        $lipid_molec =~ s/_/\//g;
         
         if ($lipid_molec =~ /[A-Za-z0-9]/ &&
             $main_ion    =~ /[A-Za-z]/ &&
