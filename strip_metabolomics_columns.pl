@@ -1,11 +1,11 @@
 #!/usr/bin/perl -w
 
-# 2023-03-01:  correct recent 2022-01 and 2022-02 changelog dates to 2023
+# 2023-05-25:  better handle embedded [] in renamed sample names
 # 2023-02-17:  bugfix mixed (un)identified row names were flagged unidentified
 # 2023-02-13:  warn if tScore headers are detected
-# 2023-02-09:  bugfix false positive D in is_heavy_labeled()
-# 2023-01-13:  allow for numbers following blank sample names
-# 2023-01-13:  accept only blnk as abbreviation for blank, not blk or blak
+# 2022-02-09:  bugfix false positive D in is_heavy_labeled()
+# 2022-01-13:  allow for numbers following blank sample names
+# 2022-01-13:  accept only blnk as abbreviation for blank, not blk or blak
 # 2022-09-15:  add ParentFormula column for LipidSearch adducts
 # 2022-09-14:  conform formulas containing spaces (LipidSearch)
 # 2022-08-11:  improve sample blank detection
@@ -710,7 +710,7 @@ for ($col = 0; $col < @header_col_array; $col++)
 
 
     # rename samples from comment lines in lipidomics data
-    if ($field =~ /\[([^]]+)\]/)
+    if ($field =~ /\[(.*)\]$/)
     {
         $new_name = $sample_rename_hash{$1};
         if (defined($new_name))
