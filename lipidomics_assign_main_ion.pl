@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-05-25:  disabled various isomer group related debug messages
 # 2023-05-25:  replace _ with / for LipidSearch summary -> mergedResult mapping
 # 2023-02-13:  attempt to replace non-canonical main with best canonical
 # 2023-02-13:  also warn if tScore headers are detected
@@ -1127,9 +1128,9 @@ foreach $fattyacid_base (@fattyacid_base_array)
                         $rt_upper_min = $rt_max;
                     }
 
-                    printf STDERR "RT_BETWEEN_GROUPS %s %s %.4f   add to %s: %.4f %s %.4f\n",
-                        $fattyacid_base, $adduct, $rt_avg,
-                        $choice_str, $dist_prev, $choice_cmp, $dist_next;
+                    #printf STDERR "RT_BETWEEN_GROUPS %s %s %.4f   add to %s: %.4f %s %.4f\n",
+                    #    $fattyacid_base, $adduct, $rt_avg,
+                    #    $choice_str, $dist_prev, $choice_cmp, $dist_next;
                 }
             }
             # include current row in previous group
@@ -1219,9 +1220,9 @@ foreach $fattyacid_base (@fattyacid_base_array)
                         $fattyacid_ion = $row_fattyacid_ion_array[$row_main];
                         $rt_avg        = $row_rt_avg_array[$row_main];
 
-                        printf STDERR
-                            "WARNING -- replaced non-canonical:  %s\trt:%06.3f --> %s\n",
-                            $fattyacid_ion, $rt_avg, $adduct_j;
+                        #printf STDERR
+                        #    "WARNING -- replaced non-canonical:  %s\trt:%06.3f --> %s\n",
+                        #    $fattyacid_ion, $rt_avg, $adduct_j;
                             
                         last;
                     }
