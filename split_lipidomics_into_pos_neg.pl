@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2023-05-26:  begin adding LipidMatch support
+# 2023-05-26:  fix %neg_col_hash = () typo, don't think it hurt anything
 # 2023-02-13:  warn if tScore headers are detected
 # 2022-09-15:  handle more mixed +/- adducts
 # 2022-08-04:  default to removing unobservable adducts
@@ -23,26 +25,30 @@ $known_adduct_charge_hash{'+H+ACN'} = 'pos';
 $known_adduct_charge_hash{'+H-H2O'} = 'pos';
 $known_adduct_charge_hash{'+H-NH3'} = 'pos';
 
-$known_adduct_charge_hash{'-H'}     = 'neg';
-$known_adduct_charge_hash{'-2H'}    = 'neg';
-$known_adduct_charge_hash{'-CH3'}   = 'neg';
-$known_adduct_charge_hash{'+Cl'}    = 'neg';
-$known_adduct_charge_hash{'-H-NH3'} = 'neg';
-$known_adduct_charge_hash{'-H-CO2'} = 'neg';
-$known_adduct_charge_hash{'+HCOO'}  = 'neg';
+$known_adduct_charge_hash{'-H'}      = 'neg';
+$known_adduct_charge_hash{'-2H'}     = 'neg';   # -2 charge
+$known_adduct_charge_hash{'-CH3'}    = 'neg';
+$known_adduct_charge_hash{'+Cl'}     = 'neg';
+$known_adduct_charge_hash{'-H-NH3'}  = 'neg';
+$known_adduct_charge_hash{'-H-CO2'}  = 'neg';
+$known_adduct_charge_hash{'+HCOO'}   = 'neg';
+$known_adduct_charge_hash{'+C2H3O2'} = 'neg';
+$known_adduct_charge_hash{'+CH3COO'} = 'neg';
 
 
 # keep only these adducts, filter out the rest
 # any others usually indicate forgetting to deselect them in LipidSearch
-$adduct_observable_hash{'+H'}     = 'pos';
-$adduct_observable_hash{'+NH4'}   = 'pos';
-$adduct_observable_hash{'+Na'}    = 'pos';
-$adduct_observable_hash{'+H-H2O'} = 'pos';
-$adduct_observable_hash{'-H'}     = 'neg';
-$adduct_observable_hash{'+HCOO'}  = 'neg';
-$adduct_observable_hash{'-2H'}    = 'neg';
+$adduct_observable_hash{'+H'}      = 'pos';
+$adduct_observable_hash{'+NH4'}    = 'pos';
+$adduct_observable_hash{'+Na'}     = 'pos';
+$adduct_observable_hash{'+H-H2O'}  = 'pos';
+$adduct_observable_hash{'-H'}      = 'neg';
+$adduct_observable_hash{'+HCOO'}   = 'neg';
+$adduct_observable_hash{'-2H'}     = 'neg';
+$adduct_observable_hash{'+C2H3O2'} = 'neg';
+$adduct_observable_hash{'+CH3COO'} = 'neg';
 
-
+# LipidSearch headers
 $keep_header_hash{'Rej.'} = 1;
 $keep_header_hash{'LipidIon'} = 1;
 $keep_header_hash{'LipidGroup'} = 1;
@@ -55,6 +61,20 @@ $keep_header_hash{'FA4'} = 1;
 $keep_header_hash{'CalcMz'} = 1;
 $keep_header_hash{'IonFormula'} = 1;
 
+# LipidMatch headers
+$keep_header_hash{'Score'} = 1;
+$keep_header_hash{'SeriesType_Identifier'} = 1;
+$keep_header_hash{'Name_or_Class'} = 1;
+$keep_header_hash{'Formula'} = 1;
+$keep_header_hash{'SMILES'} = 1;
+$keep_header_hash{'m/z'} = 1;
+$keep_header_hash{'Retention Time'} = 1;
+$keep_header_hash{'Adduct'} = 1;
+$keep_header_hash{'Unique'} = 1;
+$keep_header_hash{'Score_Description'} = 1;
+$keep_header_hash{'Needs_Validation'} = 1;
+$keep_header_hash{'row.ID'} = 1;
+$keep_header_hash{'row.number.of.detected.peaks'} = 1;
 
 
 sub is_number
@@ -169,6 +189,7 @@ $filename_neg  = 'lipidomics_split_neg.txt';
 
 $all_adducts_flag     = 0;    # default to removing adducts we don't want
 $tscore_detected_flag = 0;    # only present in incorrect exports?
+$lipidmatch_flag      = 0;    # is this a LipidMatch CombinedIDed_FIN file?
 
 
 for ($i = 0; $i < @ARGV; $i++)
@@ -282,6 +303,12 @@ for ($i = 0; $i < @array; $i++)
     if ($field =~ /^tScore/)
     {
        $tscore_detected_flag = 1;
+    }
+    
+    # LipidMatch CombinedIDed_FIN.csv
+    if ($field =~ /SeriesType_Identifier/)
+    {
+        $lipidmatch_flag = 1;
     }
 }
 
@@ -669,7 +696,7 @@ for ($row = 0; $row < $num_rows; $row++)
 
 
 %pos_col_hash = ();
-$neg_col_hash = ();
+%neg_col_hash = ();
 foreach $col (@sample_col_array)
 {
     $num_pos = $col_counts_hash{$col}{pos};
