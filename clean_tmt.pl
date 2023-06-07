@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-07: fix too-short lines resulting in missing data
 # 2023-05-18: handle missing data at end of MaxQuant 2.4 lines
 # 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-05-03: sort Plex#-run# correctly, not just Plex#_run# correctly
@@ -1339,10 +1340,14 @@ while(defined($line=<INFILE>))
       printf "\t%s", '__Other';
     }
     
-    for (; $i < @array; $i++)
+    # Use bounds of original header array, not current line
+    # otherwise, short lines may result in missing output data,
+    # since reading through the re-sorted column order array will
+    # stop too short.
+    for (; $i < @header_array_orig_order; $i++)
     {
         $col = $header_col_new_order_array[$i];
-
+        
         # MaxQuant 2.4 can leave off values at the end of the line
         # check for this and blank them out.
         $field = $array[$col];
