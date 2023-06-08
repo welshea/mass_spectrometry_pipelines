@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-08:  prevent split from truncating lines due to empty end fields
 # 2023-05-18:  replace fields that are purely semicolons with blanks
 # 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-03-34:  remove Spectral Count and MaxLFQ columns from FragPipe files
@@ -445,7 +446,7 @@ while(defined($line=<INFILE>))
 {
     $line =~ s/[\r\n]+//g;
 
-    @array = split /\t/, $line;
+    @array = split /\t/, $line, -1;
 
     $print_flag = 0;
 
