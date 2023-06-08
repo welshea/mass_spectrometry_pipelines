@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-08:  begin adding LipidMatch support
 # 2023-05-25:  better handle embedded [] in renamed sample names
 # 2023-02-17:  bugfix mixed (un)identified row names were flagged unidentified
 # 2023-02-13:  warn if tScore headers are detected
@@ -955,6 +956,12 @@ if (!defined($name_col))
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidMolec'};
+    $lipidsearch_flag = 1;
+}
+if (!defined($name_col))
+{
+    # LipidMatch
+    $name_col = $header_col_hash{'Molecular'};
     $lipidsearch_flag = 1;
 }
 
