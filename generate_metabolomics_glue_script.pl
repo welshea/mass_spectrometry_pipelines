@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-08:  begin adding LipidMatch support
 # 2022-10-10:  add LipidMaps annotation
 # 2022-09-15:  add --no-log2 flag
 # 2022-09-07:  fix typo in blank-based background code
@@ -321,6 +322,7 @@ else
 
 # detect lipidomics data
 $lipidomics_flag = 0;
+$lipidmatch_flag = 0;
 
 # lipidomics data can have comments and blank lines at the top
 # attempt to remove them before retrieving the first line as header line
@@ -334,9 +336,15 @@ elsif ($single_file_mode ne 'pos')
 }
 $result_str = `$cmd_str`;
 if ($result_str =~ /LipidIon/ ||
-    $result_str =~ /FattyAcid/)
+    $result_str =~ /FattyAcid/ ||
+    $result_str =~ /SeriesType_Identifier/)
 {
     $lipidomics_flag = 1;
+    
+    if ($result_str =~ /SeriesType_Identifier/)
+    {
+        $lipidmatch_flag = 1;
+    }
 }
 
 
@@ -508,17 +516,20 @@ if ($lipidomics_flag)
                                  'lipidomics_assign_main_ion.pl',
                                  $ls_summary_filename;
     }
-    else
+    elsif ($lipidmatch_flag == 0)
     {
         $annotate_pipe_str = sprintf " | %s - ",
                                  'lipidomics_assign_main_ion.pl';
     }
     
     # annotate with lipidmaps
-    $annotate_pipe_str .= sprintf " | %s \"%s/%s\" - ",
-                             'annotate_with_lipidmaps.pl',
-                             $script_path,
-                             'lipidmaps_sdf_parsed.txt';
+    if ($lipidmatch_flag == 0)
+    {
+        $annotate_pipe_str .= sprintf " | %s \"%s/%s\" - ",
+                                 'annotate_with_lipidmaps.pl',
+                                 $script_path,
+                                 'lipidmaps_sdf_parsed.txt';
+    }
 }
 # regular metabolomics
 else
