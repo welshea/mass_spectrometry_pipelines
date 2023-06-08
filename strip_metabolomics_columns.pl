@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-08:  improve LipidSearch detection for stripping adducts from formula
 # 2023-06-08:  begin adding LipidMatch support
 # 2023-05-25:  better handle embedded [] in renamed sample names
 # 2023-02-17:  bugfix mixed (un)identified row names were flagged unidentified
@@ -938,31 +939,52 @@ if (!defined($name_col))
 
 # lipidomics
 $lipidsearch_flag = 0;
+$lipidmatch_flag  = 0;
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidIon'};
-    $lipidsearch_flag = 1;
+    
+    if (defined($name_col))
+    {
+        $lipidsearch_flag = 1;
+    }
 }
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidGroup'};
-    $lipidsearch_flag = 1;
+
+    if (defined($name_col))
+    {
+        $lipidsearch_flag = 1;
+    }
 }
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'IonFormula'};
-    $lipidsearch_flag = 1;
+
+    if (defined($name_col))
+    {
+        $lipidsearch_flag = 1;
+    }
 }
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidMolec'};
-    $lipidsearch_flag = 1;
+
+    if (defined($name_col))
+    {
+        $lipidsearch_flag = 1;
+    }
 }
 if (!defined($name_col))
 {
     # LipidMatch
     $name_col = $header_col_hash{'Molecular'};
-    $lipidsearch_flag = 1;
+
+    if (defined($name_col))
+    {
+        $lipidmatch_flag = 1;
+    }
 }
 
 
@@ -1315,7 +1337,8 @@ while(defined($line=<INFILE>))
     
     # remove adduct from formula to yield parent formula
     $formula_parent = '';
-    if (defined($formula_col) && $name =~ /([+-][A-Za-z0-9+-]+)$/)
+    if ($lipidsearch_flag &&
+        defined($formula_col) && $name =~ /([+-][A-Za-z0-9+-]+)$/)
     {
         $adduct = $1;
 
