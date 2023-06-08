@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-08: warn about missing fields if they are encountered
 # 2023-06-07: fix too-short lines resulting in missing data
 # 2023-05-18: handle missing data at end of MaxQuant 2.4 lines
 # 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
@@ -1348,12 +1349,15 @@ while(defined($line=<INFILE>))
     {
         $col = $header_col_new_order_array[$i];
         
-        # MaxQuant 2.4 can leave off values at the end of the line
-        # check for this and blank them out.
         $field = $array[$col];
+        
+        # this shouldn't happen anymore
         if (!defined($field))
         {
             $field = "";
+            
+            printf STDERR "WARNING -- missing field %s on line %d\n",
+                $header_array_orig_order[$col], $row;
         }
 
         if (!defined($strip_col_flags{$col}))
