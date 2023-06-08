@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-08:  remove Formula and SMILES columns from LipidMatch output
 # 2023-06-08:  add more LipidMatch support
 # 2023-05-26:  begin adding LipidMatch support
 # 2023-05-26:  fix %neg_col_hash = () typo, don't think it hurt anything
@@ -66,8 +67,8 @@ $keep_header_hash{'IonFormula'} = 1;
 $keep_header_hash{'Score'} = 1;
 $keep_header_hash{'SeriesType_Identifier'} = 1;
 $keep_header_hash{'Name_or_Class'} = 1;
-$keep_header_hash{'Formula'} = 1;
-$keep_header_hash{'SMILES'} = 1;
+#$keep_header_hash{'Formula'} = 1;       # useless and wrong, always CH2
+#$keep_header_hash{'SMILES'} = 1;        # useless and wrong, always CC
 $keep_header_hash{'m/z'} = 1;
 $keep_header_hash{'Retention Time'} = 1;
 $keep_header_hash{'Adduct'} = 1;
@@ -739,15 +740,6 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
         }
     }
 }
-
-
-
-# DEBUG
-for ($col = 0; $col < $num_header_cols; $col++)
-{
-    printf STDERR "%s\n", $header_col_array[$col];
-}
-
 
 
 $name_col = $header_col_hash{'LipidIon'};
