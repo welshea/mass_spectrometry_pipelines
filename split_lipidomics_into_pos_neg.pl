@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-08:  add more LipidMatch support
 # 2023-05-26:  begin adding LipidMatch support
 # 2023-05-26:  fix %neg_col_hash = () typo, don't think it hurt anything
 # 2023-02-13:  warn if tScore headers are detected
@@ -75,6 +76,22 @@ $keep_header_hash{'Score_Description'} = 1;
 $keep_header_hash{'Needs_Validation'} = 1;
 $keep_header_hash{'row.ID'} = 1;
 $keep_header_hash{'row.number.of.detected.peaks'} = 1;
+$keep_header_hash{'row ID'} = 1;
+$keep_header_hash{'row number of detected peaks'} = 1;
+
+# more LipidMatch headers
+$keep_header_hash{'Class_At_Max_Intensity'} = 1;
+$keep_header_hash{'Adduct_At_Max_Intensity'} = 1;
+$keep_header_hash{'Only_One_Class'} = 1;
+$keep_header_hash{'Num_Frags'} = 1;
+$keep_header_hash{'Molecular'} = 1;
+$keep_header_hash{'Adducts.Confirmed.by.MS.MS'} = 1;
+$keep_header_hash{'nominal mass'} = 1;
+$keep_header_hash{'mass defect'} = 1;
+$keep_header_hash{'[CH2]n_Kendrick_mass'} = 1;
+$keep_header_hash{'[CH2]n_nominal_Kendrick_mass'} = 1;
+$keep_header_hash{'[CH2]n_Kendrick_mass_defect'} = 1;
+$keep_header_hash{'Number_of_F_Fragments'} = 1;
 
 
 sub is_number
@@ -118,6 +135,129 @@ sub is_number
     
     return 0;
 }
+
+
+sub csv2tsv_not_excel
+{
+    my $line = $_[0];
+    my $i;
+    my $n;
+    my @temp_array;
+
+    # placeholder strings unlikely to ever be encountered normally
+    #    my $tab = '___TaBChaR___';
+    #    my $dq  = '___DqUOteS___';
+    #
+    # https://stackoverflow.com/questions/8695118/whats-the-file-group-record-unit-separator-control-characters-and-its-usage#:~:text=30%20%E2%80%93%20RS%20%E2%80%93%20Record%20separator%20Within,units%20in%20the%20ASCII%20definition.
+    # interestingly, Microsoft Word appears to use 1E and 1F as
+    #  non-breaking and optional hyphen
+    #
+    # http://jkorpela.fi/chars/c0.html
+    #
+    # I'm going to use \x1A (substitute) for tab, since it is
+    #  "used in the place of a character that has been found to be invalid
+    #   or in error. SUB is intended to be introduced by automatic means",
+    #   and that is exactly how this function uses it.
+    #
+    # I'll use \x1D for "", since Word may use 1E and 1F internally,
+    #  and who knows if they may ever accidentally show up in exported files,
+    #  plus "group separator" seems somewhat appropriate, given that regular
+    #  double-quotes are used for "grouping".
+    #
+    my $tab = "\x1A";    # (substitute)      need single char for split regex
+    my $dq  = "\x1D";    # (group separator) need single char for split regex
+    
+    # remove null characters, since I've only seen them randomly introduced
+    #  during NTFS glitches; "Null characters may be inserted into or removed
+    #  from a stream of data without affecting the information content of that
+    #  stream."
+    $line =~ s/\x00//g;
+    
+    # remove UTF8 byte order mark, since it corrupts the first field
+    # also remove some weird corruption of the UTF8 byte order mark (??)
+    #
+    # $line =~ s/^\xEF\xBB\xBF//;      # actual BOM
+    # $line =~ s/^\xEF\x3E\x3E\xBF//;  # corrupted BOM I have seen in the wild
+    $line =~ s/^(\xEF\xBB\xBF|\xEF\x3E\x3E\xBF)//;
+
+    # replace any (incredibly unlikely) instances of $dq with $tab
+    $line =~ s/$dq/$tab/g;
+    
+    # replace embedded tabs with placeholder string, to deal with better later
+    $line =~ s/\t/$tab/g;
+    
+    # HACK -- handle internal \r and \n the same way we handle tabs
+    $line =~ s/[\r\n]+(?!$)/$tab/g;
+    
+    # further escape ""
+    $line =~ s/""/$dq/g;
+
+    # only apply slow tab expansion to lines still containing quotes
+    if ($line =~ /"/)
+    {
+        # convert commas only if they are not within double quotes
+        # incrementing $i within array access for minor speed increase
+        #   requires initializing things to -2
+        @temp_array = split /((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))/, $line;
+        $n = @temp_array - 2;
+        for ($i = -2; $i < $n;)
+        {
+            $temp_array[$i += 2] =~ tr/,/\t/;
+        }
+        $line = join '', @temp_array;
+        
+        # slightly faster than split loop on rows with many quoted fields,
+        #  but *much* slower on lines containing very few quoted fields
+        # use split loop instead
+        #
+        # /e to evaluate code to handle different capture cases correctly
+        #$line =~ s/(,?)((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))|(,)/defined($3) ? "\t" : ((defined($1) && $1 ne '') ? "\t$2" : $2)/ge;
+    }
+    else
+    {
+        $line =~ tr/,/\t/;
+    }
+
+    # unescape ""
+    $line =~ s/$dq/""/g;
+
+    # finish dealing with embedded tabs
+    # remove tabs entirely, preserving surrounding whitespace
+    $line =~ s/(\s|^)($tab)+/$1/g;
+    $line =~ s/($tab)+(\s|$)/$2/g;
+    # replace remaining tabs with spaces so text doesn't abutt together
+    $line =~ s/($tab)+/ /g;
+
+    # Special case "" in a field by itself.
+    #
+    # This generally results from lazily-coded csv writers that enclose
+    #  every single field in "", even empty fields, whether they need them
+    #  or not.
+    #
+    # \K requires Perl >= v5.10.0 (2007-12-18)
+    #   (?: *)\K is faster than replacing ( *) with $1
+    $line =~ s/(?:(?<=\t)|^)(?: *)\K""( *)(?=\t)/$1/g;  # start|tabs "" tabs
+    $line =~    s/(?<=\t)(?: *)\K""( *)(?=\t|$)/$1/g;   # tabs  "" tabs|end
+    $line =~          s/^(?: *)\K""( *)$/$1/g;          # start "" end
+
+    # strip enclosing double-quotes, preserve leading/trailing spaces
+    #
+    # \K requires Perl >= v5.10.0 (2007-12-18)
+    #   (?: *)\K is faster than replacing ( *) with $1
+    #
+    #$line =~ s/(?:(?<=\t)|^)(?: *)\K"([^\t]+)"( *)(?=\t|[\r\n]*$)/$1$2/g;
+
+    # remove enclosing spaces, to support space-justified quoted fields
+    #   ( *) might be faster without () grouping, but left in for clarity
+    $line =~ s/(?:(?<=\t)|^)( *)"([^\t]+)"( *)(?=\t|[\r\n]*$)/$2/g;
+
+    # unescape escaped double-quotes
+    $line =~ s/""/"/g;
+
+    
+    return $line;
+}
+
 
 sub reformat_sci
 {
@@ -244,6 +384,14 @@ open OUTFILE_POS, ">$filename_pos" or die "can't open output $filename_pos\n";
 open OUTFILE_NEG, ">$filename_neg" or die "can't open output $filename_neg\n";
 
 
+# use filename extension to determine whether it is tsv or csv
+$delimiter_type = 'tsv';
+if ($filename =~ /\.csv$/i)
+{
+    $delimiter_type = 'csv';
+}
+
+
 # skip down to first line that has anything on it
 # lipidomics data has this issues sometimes
 %sample_rename_hash = ();
@@ -282,9 +430,12 @@ while($line=<INFILE>)
 
 
 # header line
+if ($delimiter_type eq 'csv') { $line = csv2tsv_not_excel($line); }
 $line =~ s/[\r\n]+//g;
 $line =~ s/\"//g;
 @array = split /\t/, $line;    # skip empty headers at and
+
+# clean up fields, detect file type
 for ($i = 0; $i < @array; $i++)
 {
     $array[$i] =~ s/^\s+//;
@@ -294,8 +445,64 @@ for ($i = 0; $i < @array; $i++)
     # clean up sample names
     $array[$i] =~ s/^_+//;
     $array[$i] =~ s/_+$//;
-    
+
     $field = $array[$i];
+
+    # LipidMatch CombinedIDed_FIN.csv
+    if ($field =~ /SeriesType_Identifier/)
+    {
+        $lipidmatch_flag = 1;
+    }
+}
+
+
+for ($i = 0; $i < @array; $i++)
+{
+    # handle LipidMatch strangeness
+    if ($lipidmatch_flag)
+    {
+        # strip pos/neg from sample names,
+        # since only one is given, but not the other
+        #
+        # FIXME -- does not currently handle p[ and n[
+        # FIXME -- currently not sufficiently pos/neg paranoid
+
+        $field = $array[$i];
+        $field_orig = $field;
+        
+        # strip pos from sample name
+        if (!($field =~ s/([^A-Za-z0-9])pos[0-9]{0,1}(?:\]*)$/$1/i ||
+              $field =~ s/(^|[^\]\)\}A-Za-z0-9]+)pos([^\[\(\{A-Za-z0-9]+|$)/$2/i))
+        {
+            $field =~ s/^pos([^A-Za-z0-9])/$1/i;
+        }
+
+        # strip neg from sample name if no pos was stripped
+        if ($field eq $field_orig)
+        {
+            if (!($field =~ s/([^A-Za-z0-9])neg[0-9]{0,1}(?:\]*)$/$1/i ||
+                 $field =~ s/(^|[^\]\)\}A-Za-z0-9]+)neg([^\[\(\{A-Za-z0-9]+|$)/$2/i))
+            {
+                $field =~ s/^neg([^A-Za-z0-9])/$1/i;
+            }
+        }
+
+        # clean up underscores, etc.
+        $field =~ s/[_ ]+/_/g;
+        $field =~ s/\-+/\-/g;
+        $field =~ s/^[_ -]//;
+        $field =~ s/[_ -]$//;
+        
+        $array[$i] = $field;
+
+
+        # replace . with spaces
+        $array[$i] =~ s/\./ /g;
+    }
+    
+
+    $field = $array[$i];
+    
     $header_col_hash{$field} = $i;
     $header_col_array[$i] = $field;
 
@@ -304,7 +511,6 @@ for ($i = 0; $i < @array; $i++)
     {
        $tscore_detected_flag = 1;
     }
-    
     # LipidMatch CombinedIDed_FIN.csv
     if ($field =~ /SeriesType_Identifier/)
     {
@@ -345,8 +551,8 @@ for ($col = 0; $col < @header_col_array; $col++)
     $field = $header_col_array[$col];
 
     # strip mzXML from sample names
-    $field =~ s/\.mzX?ML( Peak \S+)$/$1/i;
-    $field =~ s/\.cdf( Peak \S+)$/$1/i;
+    $field =~ s/[. ]mzX?ML( Peak \S+)$/$1/i;
+    $field =~ s/[. ]cdf( Peak \S+)$/$1/i;
 
     if ($field =~ / Peak (\S+)$/i)
     {
@@ -536,8 +742,22 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
 
 
 
+# DEBUG
+for ($col = 0; $col < $num_header_cols; $col++)
+{
+    printf STDERR "%s\n", $header_col_array[$col];
+}
+
+
+
 $name_col = $header_col_hash{'LipidIon'};
 
+# LipidMatch
+if (!defined($name_col))
+{
+    $name_col = $header_col_hash{'Molecular'};
+}
+$adduct_col = $header_col_hash{'Adduct'};
 
 
 $first_abundance_col = 9E99;
@@ -597,6 +817,8 @@ if (!defined($name_col))
 $row = 0;
 while(defined($line=<INFILE>))
 {
+    if ($delimiter_type eq 'csv') { $line = csv2tsv_not_excel($line); }
+
     $line =~ s/[\r\n]+//g;
     $line =~ s/\"//g;
 
@@ -653,10 +875,20 @@ for ($row = 0; $row < $num_rows; $row++)
     $pos_neg    = '';
     $adduct_str = '';
 
-    if ($lipid_ion =~ /([+-][A-Za-z0-9+-]+)$/)
+
+    if (defined($adduct_col))
+    {
+        $adduct_str = $row_data_array[$row][$adduct_col];
+    }
+    elsif ($lipid_ion =~ /([+-][A-Za-z0-9+-]+)$/)
     {
         $adduct_str = $1;
     }
+    
+    # strip []charge from adducts, since LipidSearch doesn't have them
+    $adduct_str_orig = $adduct_str;
+    $adduct_str      =~ s/\[M(.*)\][0-9]*[+-]/$1/;
+
 
     # skip adducts that shouldn't be observed
     if ($all_adducts_flag == 0 &&
@@ -672,6 +904,24 @@ for ($row = 0; $row < $num_rows; $row++)
     {
         $pos_neg = $known_adduct_charge_hash{$adduct_str};
         $pos_neg_row_hash{$row} = $pos_neg;
+    }
+    
+    # unknown adduct charge, see if the charge is in the file
+    if ($pos_neg eq '')
+    {
+        $charge = $adduct_str_orig;
+        $charge =~ s/\[M(.*)\][0-9]*([+-])/$2/;
+        
+        if ($charge eq '+')
+        {
+            $pos_neg                = 'pos';
+            $pos_neg_row_hash{$row} = $pos_neg;
+        }
+        if ($charge eq '-')
+        {
+            $pos_neg                = 'neg';
+            $pos_neg_row_hash{$row} = $pos_neg;
+        }
     }
     
     # count pos/neg for each sample
@@ -888,14 +1138,16 @@ for ($col = 0; $col < @header_col_array; $col++)
     $header = $header_col_array[$col];
 
     if (defined($keep_header_hash{$header}) ||
-        defined($pos_col_hash{$col}))
+        defined($pos_col_hash{$col}) ||
+        ($lipidmatch_flag && defined($keep_col_hash{$col})))
     {
         if ($header_pos ne '') { $header_pos .= "\t"; }
         $header_pos .= $header;
     }
 
     if (defined($keep_header_hash{$header}) ||
-        defined($neg_col_hash{$col}))
+        defined($neg_col_hash{$col}) ||
+        ($lipidmatch_flag && defined($keep_col_hash{$col})))
     {
         if ($header_neg ne '') { $header_neg .= "\t"; }
         $header_neg .= $header;
@@ -921,14 +1173,16 @@ for ($row = 0; $row < $num_rows; $row++)
         $field  = $row_data_array[$row][$col];
     
         if (defined($keep_header_hash{$header}) ||
-            defined($pos_col_hash{$col}))
+            defined($pos_col_hash{$col}) ||
+            ($lipidmatch_flag && defined($keep_col_hash{$col})))
         {
             if ($line_pos ne '') { $line_pos .= "\t"; }
             $line_pos .= $field;
         }
 
         if (defined($keep_header_hash{$header}) ||
-            defined($neg_col_hash{$col}))
+            defined($neg_col_hash{$col}) ||
+            ($lipidmatch_flag && defined($keep_col_hash{$col})))
         {
             if ($line_neg ne '') { $line_neg .= "\t"; }
             $line_neg .= $field;
@@ -939,14 +1193,18 @@ for ($row = 0; $row < $num_rows; $row++)
     $lipid_ion  = $row_data_array[$row][$name_col];
     $adduct_str = '';
 
-    if ($lipid_ion =~ /(\+[A-Za-z0-9-]+)$/)
+
+    if (defined($adduct_col))
+    {
+        $adduct_str = $row_data_array[$row][$adduct_col];
+    }
+    elsif ($lipid_ion =~ /([+-][A-Za-z0-9+-]+)$/)
     {
         $adduct_str = $1;
     }
-    elsif ($lipid_ion =~ /(\-[A-Za-z0-9-]+)$/)
-    {
-        $adduct_str = $1;
-    }
+
+    # strip []charge from adducts, since LipidSearch doesn't have them
+    $adduct_str =~ s/\[M(.*)\][0-9]*[+-]/$1/;
 
 
     # skip adducts that shouldn't be observed
