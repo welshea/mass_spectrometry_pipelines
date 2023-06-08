@@ -10,6 +10,7 @@
 # columns.
 
 
+# 2023-06-08:  begin adding LipidMatch support
 # 2023-02-13:  improved missing LipidGroup fallback
 # 2023-02-13:  less-good fallback if LipidGroup column is missing from data
 
@@ -232,6 +233,12 @@ for ($i = 0; $i < @array; $i++)
 $data_name_col    = $data_header_col_hash{'Lipid'};
 $data_formula_col = $data_header_col_hash{'ParentFormula'};
 $data_lgroup_col  = $data_header_col_hash{'LipidGroup'};
+
+if (!defined($data_name_col))
+{
+    # LipidMatch
+    $data_name_col = $data_header_col_hash{'Molecular'};
+}
 
 if (!defined($data_name_col))
 {
