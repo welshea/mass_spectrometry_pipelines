@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-09:  more LipidMatch column header fixes
 # 2023-06-08:  remove Formula and SMILES columns from LipidMatch output
 # 2023-06-08:  add more LipidMatch support
 # 2023-05-26:  begin adding LipidMatch support
@@ -487,14 +488,17 @@ for ($i = 0; $i < @array; $i++)
                 $field =~ s/^neg([^A-Za-z0-9])/$1/i;
             }
         }
-
-        # clean up underscores, etc.
-        $field =~ s/[_ ]+/_/g;
-        $field =~ s/\-+/\-/g;
-        $field =~ s/^[_ -]//;
-        $field =~ s/[_ -]$//;
         
-        $array[$i] = $field;
+        if ($field ne $field_orig)
+        {
+            # clean up underscores, etc.
+            $field =~ s/[_ ]+/_/g;
+            $field =~ s/\-+/\-/g;
+            $field =~ s/^[_ -]//;
+            $field =~ s/[_ -]$//;
+
+            $array[$i] = $field;
+        }
 
 
         # replace . with spaces
