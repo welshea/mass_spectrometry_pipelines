@@ -293,7 +293,8 @@ while(defined($line=<DATA>))
     $data_row_line_array[$row] = $line_new;
     
     $name      = $array[$data_name_col];
-    #$name_orig = $name;
+    $name_orig = '';    # shut up perl -W
+    $name_orig = $name;
     
     $formula = '';
     if (defined($data_formula_col))
@@ -313,14 +314,14 @@ while(defined($line=<DATA>))
         $lgroup = $array[$data_lgroup_col];
     }
 
-    # conform abbreviations
-    $lgroup =~ s/^AcCar*\(/CAR\(/;       # Acyl carnitine
+    # conform class part of names
+    $lgroup =~ s/^AcCar{0,1}\(/CAR\(/; # Acyl carnitine
+    $name   =~ s/^AcCar{0,1}\(/CAR\(/; # Acyl carnitine
     $lgroup =~ s/^ChE\(/CE\(/;         # Cholesterol esters
-    $lgroup =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
-    $lgroup =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
-    $name   =~ s/^AcCa\(/CAR\(/;       # Acyl carnitine
     $name   =~ s/^ChE\(/CE\(/;         # Cholesterol esters
+    $lgroup =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
     $name   =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
+    $lgroup =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
     $name   =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
     
     # LipidMatch
@@ -436,7 +437,7 @@ while(defined($line=<DATA>))
         # remove any ions that may be there
         $lgroup_conformed =~ s/[+-][A-Za-z0-9+-]+//g;
         $name_conformed   =~ s/[+-][A-Za-z0-9+-]+//g;
-        
+
         # check abbreviations
         if ($num_hits == 0 &&
             defined($abbrev_lmid_hash{$lgroup_conformed}) &&
