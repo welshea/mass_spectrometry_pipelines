@@ -292,7 +292,8 @@ while(defined($line=<DATA>))
     $line_new = join "\t", @array;
     $data_row_line_array[$row] = $line_new;
     
-    $name    = $array[$data_name_col];
+    $name      = $array[$data_name_col];
+    #$name_orig = $name;
     
     $formula = '';
     if (defined($data_formula_col))
@@ -331,10 +332,17 @@ while(defined($line=<DATA>))
     $name   =~ s/^SPLASH_//;            # another source of matching?
     
     # LipidMatch
-    # strip un-nested oxidized stuff, should cover most things
+    # strip additional groups off
     if ($name =~ s/^Ox([A-Z]+)/$1/)
     {
-        $name =~ s/([0-9])\([A-Za-z0-9]+\)\)$/$1\)/;
+        $name     =~ s/([0-9])\(([A-Za-z0-9()]+)\)\)$/$1\)/;
+        
+        ## We'll need to store this for if/when we subtract it
+        ## later from the full forumla, for formula-based matching
+        #$ox_group = $2;
+        
+        #printf STDERR "FOOBAR\t%s\t%s\t%s\n",
+        #    $ox_group, $name, $name_orig;
     }
 
     $name_lc = lc $name;
