@@ -10,6 +10,7 @@
 # columns.
 
 
+# 2023-06-09:  improve LipidMatch support
 # 2023-06-08:  begin adding LipidMatch support
 # 2023-02-13:  improved missing LipidGroup fallback
 # 2023-02-13:  less-good fallback if LipidGroup column is missing from data
@@ -19,6 +20,9 @@ $lmaps_header_names_col_hash{'NAME'}            = -1;
 $lmaps_header_names_col_hash{'SYSTEMATIC_NAME'} = -1;
 $lmaps_header_names_col_hash{'ABBREVIATION'}    = -1;
 $lmaps_header_names_col_hash{'SYNONYMS'}        = -1;
+
+
+$lipidmatch_flag = 0;
 
 
 $lipidmaps_filename = shift;
@@ -144,7 +148,7 @@ while(defined($line=<LIPIDMAPS>))
                 # strip inner (...) lists with numbers/letters
                 # strip (O-, (P-
                 # LipidSearch doesn't go into this much detail
-                if (1)
+                if ($lipidmatch_flag == 0)
                 {
                     if ($name_lc =~ m/^([^(]+\([^(]+:)(.*)\)$/)
                     {
@@ -225,14 +229,26 @@ for ($i = 0; $i < @array; $i++)
     
     if ($array[$i] =~ /[A-Za-z0-9]/)
     {
+        # LipidMatch CombinedIDed_FIN.csv
+        if ($array[$i] =~ /SeriesType_Identifier/)
+        {
+            $lipidmatch_flag = 1;
+        }
+
         $data_header_col_hash{$array[$i]} = $i;
         $data_header_col_array[$i]        = $array[$i];
     }
 }
 
 $data_name_col    = $data_header_col_hash{'Lipid'};
-$data_formula_col = $data_header_col_hash{'ParentFormula'};
 $data_lgroup_col  = $data_header_col_hash{'LipidGroup'};
+
+# Formula is useless and wrong (always CH2) in LipidMatch output
+# Including it causes all potential matches to fail the formula check
+if ($lipidmatch_flag == 0)
+{
+    $data_formula_col = $data_header_col_hash{'ParentFormula'};
+}
 
 if (!defined($data_name_col))
 {
@@ -247,13 +263,13 @@ if (!defined($data_name_col))
 
     exit(2);
 }
-if (!defined($data_formula_col))
-{
-    printf STDERR "ABORT -- ParentFormula column not found in file %s\n",
-        $data_filename;
-
-    exit(2);
-}
+#if (!defined($data_formula_col))
+#{
+#    printf STDERR "ABORT -- ParentFormula column not found in file %s\n",
+#        $data_filename;
+#
+#    exit(2);
+#}
 if (!defined($data_lgroup_col))
 {
     printf STDERR "WARNING -- missing LipidGroup col; LipidMaps annotation may suffer\n";
@@ -277,8 +293,18 @@ while(defined($line=<DATA>))
     $data_row_line_array[$row] = $line_new;
     
     $name    = $array[$data_name_col];
-    $name_lc = lc $name;
-    $formula = $array[$data_formula_col];
+    
+    $formula = '';
+    if (defined($data_formula_col))
+    {
+        $formula = $array[$data_formula_col];
+    }
+    
+    # sanity check, make sure LipidMatch nonsense hasn't made it through
+    if ($formula eq 'CH2')
+    {
+        $formula = '';
+    }
     
     $lgroup  = '';
     if (defined($data_lgroup_col))
@@ -286,8 +312,32 @@ while(defined($line=<DATA>))
         $lgroup = $array[$data_lgroup_col];
     }
 
-    # remove any ions that may be there
-    $name_lc =~ s/[+-][A-Za-z0-9+-]+//g;
+    # conform abbreviations
+    $lgroup =~ s/^AcCar*\(/CAR\(/;       # Acyl carnitine
+    $lgroup =~ s/^ChE\(/CE\(/;         # Cholesterol esters
+    $lgroup =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
+    $lgroup =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
+    $name   =~ s/^AcCa\(/CAR\(/;       # Acyl carnitine
+    $name   =~ s/^ChE\(/CE\(/;         # Cholesterol esters
+    $name   =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
+    $name   =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
+    
+    # LipidMatch
+    # some have inconsistent capitalization
+    $name   =~ s/^Plasm(a|e)nyl-//i;    # ether already denoted by O- or P-
+    $name   =~ s/^Cer-N[A-Z]+\(/Cer\(/;    # -extra isn't needed
+    $name   =~ s/^HexCer-N[A-Z]+\(/HexCer\(/;    # -extra isn't needed
+    $name   =~ s/^Sulfatide/SHexCer/;   # Sulfatide is SHexCer
+    $name   =~ s/^SPLASH_//;            # another source of matching?
+    
+    # LipidMatch
+    # strip un-nested oxidized stuff, should cover most things
+    if ($name =~ s/^Ox([A-Z]+)/$1/)
+    {
+        $name =~ s/([0-9])\([A-Za-z0-9]+\)\)$/$1\)/;
+    }
+
+    $name_lc = lc $name;
 
     # replace underscores with slashes for name mapping
     $name_lc_orig  = $name_lc;
@@ -300,12 +350,14 @@ while(defined($line=<DATA>))
 
     # name lookup, original, generally with underscores
     if (defined($name_lc_lmid_hash{$name_lc_orig}) &&
-        defined($formula_lmid_hash{$formula}))
+        ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
     {
+
         @temp_array = keys %{$name_lc_lmid_hash{$name_lc_orig}};
         foreach $lm_id (@temp_array)
         {
-            if (defined($formula_lmid_hash{$formula}{$lm_id}))
+            if ($lipidmatch_flag ||
+                defined($formula_lmid_hash{$formula}{$lm_id}))
             {
                 $match_type             = '01_strict';
                 $lmid_hits_hash{$lm_id} = $match_type;
@@ -321,13 +373,14 @@ while(defined($line=<DATA>))
     if ($num_hits == 0)
     {
         if (defined($name_lc_lmid_hash{$name_lc_slash}) &&
-            defined($formula_lmid_hash{$formula}))
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
         {
             @temp_array = keys %{$name_lc_lmid_hash{$name_lc_slash}};
             foreach $lm_id (@temp_array)
             {
                 if (!defined($lmid_hits_hash{$lm_id}) &&
-                    defined($formula_lmid_hash{$formula}{$lm_id}))
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
                     $match_type             = '02_relaxed';
                     $lmid_hits_hash{$lm_id} = $match_type;
@@ -371,32 +424,23 @@ while(defined($line=<DATA>))
             
             $name_conformed = $first . $inner . ')';
         }
-        
+
         # remove any ions that may be there
         $lgroup_conformed =~ s/[+-][A-Za-z0-9+-]+//g;
         $name_conformed   =~ s/[+-][A-Za-z0-9+-]+//g;
         
-        # conform abbreviations
-        $lgroup_conformed =~ s/^AcCa\(/CAR\(/;       # Acyl carnitine
-        $lgroup_conformed =~ s/^ChE\(/CE\(/;         # Cholesterol esters
-        $lgroup_conformed =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
-        $lgroup_conformed =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
-        $name_conformed   =~ s/^AcCa\(/CAR\(/;       # Acyl carnitine
-        $name_conformed   =~ s/^ChE\(/CE\(/;         # Cholesterol esters
-        $name_conformed   =~ s/^Hex1(?![0-9])/Hex/;  # 1 is left off
-        $name_conformed   =~ s/^SPH\(/SPB\(/;        # Sphingoid bases
-        
         # check abbreviations
         if ($num_hits == 0 &&
             defined($abbrev_lmid_hash{$lgroup_conformed}) &&
-            defined($formula_lmid_hash{$formula}))
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
         {
             @temp_array = keys %{$abbrev_lmid_hash{$lgroup_conformed}};
             foreach $lm_id (@temp_array)
             {
                 # must match formula as well
                 if (!defined($lmid_hits_hash{$lm_id}) &&
-                    defined($formula_lmid_hash{$formula}{$lm_id}))
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
                     $match_type             = '03a_lipidgroup';
                     $lmid_hits_hash{$lm_id} = $match_type;
@@ -407,14 +451,15 @@ while(defined($line=<DATA>))
         # fallback to lipid name
         if ($num_hits == 0 &&
             defined($abbrev_lmid_hash{$name_conformed}) &&
-            defined($formula_lmid_hash{$formula}))
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
         {
             @temp_array = keys %{$abbrev_lmid_hash{$name_conformed}};
             foreach $lm_id (@temp_array)
             {
                 # must match formula as well
                 if (!defined($lmid_hits_hash{$lm_id}) &&
-                    defined($formula_lmid_hash{$formula}{$lm_id}))
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
                     $match_type             = '03b_lipid';
                     $lmid_hits_hash{$lm_id} = $match_type;
@@ -427,14 +472,15 @@ while(defined($line=<DATA>))
         $lgroup_conformed_lc = lc $lgroup_conformed;
         if ($num_hits == 0 &&
             defined($name_lc_lmid_hash{$lgroup_conformed_lc}) &&
-            defined($formula_lmid_hash{$formula}))
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
         {
             @temp_array = keys %{$name_lc_lmid_hash{$lgroup_conformed_lc}};
             foreach $lm_id (@temp_array)
             {
                 # must match formula as well
                 if (!defined($lmid_hits_hash{$lm_id}) &&
-                    defined($formula_lmid_hash{$formula}{$lm_id}))
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
                     $match_type             = '03c_lipidgroup';
                     $lmid_hits_hash{$lm_id} = $match_type;
@@ -446,16 +492,17 @@ while(defined($line=<DATA>))
         $name_conformed_lc = lc $name_conformed;
         if ($num_hits == 0 &&
             defined($name_lc_lmid_hash{$name_conformed_lc}) &&
-            defined($formula_lmid_hash{$formula}))
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
         {
             @temp_array = keys %{$name_lc_lmid_hash{$name_conformed_lc}};
             foreach $lm_id (@temp_array)
             {
                 # must match formula as well
                 if (!defined($lmid_hits_hash{$lm_id}) &&
-                    defined($formula_lmid_hash{$formula}{$lm_id}))
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03c_lipidgroup';
+                    $match_type             = '03c_lipid';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -464,7 +511,7 @@ while(defined($line=<DATA>))
     }
     
     # formula lookup, must share class with abbreviation
-    if (1 && $num_hits == 0)
+    if (1 && $num_hits == 0 && $lipidmatch_flag == 0)
     {
         if (defined($formula_lmid_hash{$formula}))
         {
@@ -516,7 +563,7 @@ while(defined($line=<DATA>))
 
     # formula lookup, no sanity checking
     # these look like poor matches to me, disable them
-    if (0 && $num_hits == 0)
+    if (0 && $num_hits == 0 && $lipidmatch_flag == 0)
     {
         if (defined($formula_lmid_hash{$formula}))
         {
