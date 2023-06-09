@@ -10,6 +10,7 @@
 # columns.
 
 
+# 2023-06-09:  include conformed LipidMaps abbreviations in regular matching
 # 2023-06-09:  improve LipidMatch support
 # 2023-06-08:  begin adding LipidMatch support
 # 2023-02-13:  improved missing LipidGroup fallback
@@ -197,6 +198,10 @@ while(defined($line=<LIPIDMAPS>))
         $abbrev .= ')';
         
         $abbrev_lmid_hash{$abbrev}{$lm_id} = 1;
+
+        # store conformed abbreviation as a regular lookup as well
+        $abbrev_lc = lc $abbrev;
+        $name_lc_lmid_hash{$abbrev_lc}{$lm_id} = 1;
     }
 
     # store all annotation fields by LM_ID
