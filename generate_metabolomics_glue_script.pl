@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-09:  reenable LipidMaps annotation for LipidMatch
 # 2023-06-08:  begin adding LipidMatch support
 # 2022-10-10:  add LipidMaps annotation
 # 2022-09-15:  add --no-log2 flag
@@ -522,8 +523,10 @@ if ($lipidomics_flag)
                                  'lipidomics_assign_main_ion.pl';
     }
     
-    # annotate with lipidmaps
-    if ($lipidmatch_flag == 0)
+    # annotate with LipidMaps
+    #
+    # works OK with LipidMatch now
+    if (1 || $lipidmatch_flag == 0)
     {
         $annotate_pipe_str .= sprintf " | %s \"%s/%s\" - ",
                                  'annotate_with_lipidmaps.pl',
