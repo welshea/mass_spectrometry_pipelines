@@ -10,6 +10,7 @@
 # columns.
 
 
+# 2023-06-12:  more improvements to LipidMatch support
 # 2023-06-09:  include conformed LipidMaps abbreviations in regular matching
 # 2023-06-09:  improve LipidMatch support
 # 2023-06-08:  begin adding LipidMatch support
@@ -149,7 +150,7 @@ while(defined($line=<LIPIDMAPS>))
                 # strip inner (...) lists with numbers/letters
                 # strip (O-, (P-
                 # LipidSearch doesn't go into this much detail
-                if ($lipidmatch_flag == 0)
+                if (1)
                 {
                     if ($name_lc =~ m/^([^(]+\([^(]+:)(.*)\)$/)
                     {
@@ -350,6 +351,27 @@ while(defined($line=<DATA>))
         #printf STDERR "FOOBAR\t%s\t%s\t%s\n",
         #    $ox_group, $name, $name_orig;
     }
+    
+    # strip inner (...) lists with numbers/letters
+    # strip (O-, (P-
+    # LipidSearch doesn't go into this much detail,
+    # but LipidSearch at least uses O-
+    if ($name =~ m/^([^(]+\([^(]+:)(.*)\)$/)
+    {
+        $first = $1;
+        $inner = $2;
+
+        # strip inner (...)
+        if ($inner =~ /\(/)
+        {
+            $inner =~ s/\(([0-9]+[A-Za-z],*)+\)//g;
+            $name = $first . $inner . ')';
+        }
+
+        # strip (O-, (P-
+        $name =~ s/\([OP]-/\(/ig;
+    }
+
 
     $name_lc = lc $name;
 
@@ -407,17 +429,12 @@ while(defined($line=<DATA>))
         }
     }
     
-    # LipidGroup / ABBREVIATION lookup
-    # we'll use the lipid group conforming for formula sanity checking later
+    # more string stripping/conforming for futher lookups
     if ($num_hits == 0)
     {
         # conform LipidGroup to what we expect from conformed abbrev
         $lgroup_conformed = $lgroup;
         $name_conformed   = $name;
-
-        # replace underscores with slashes for name mapping
-        $lgroup_conformed =~ tr/_/\//;
-        $name_conformed   =~ tr/_/\//;
 
         # strip lowercase letters from in front/behind numbers
         if ($lgroup =~ m/^([^(]+\()(.*)\)/)
@@ -443,6 +460,17 @@ while(defined($line=<DATA>))
         $lgroup_conformed =~ s/[+-][A-Za-z0-9+-]+//g;
         $name_conformed   =~ s/[+-][A-Za-z0-9+-]+//g;
 
+        # replace underscores with slashes for name mapping
+        $lgroup_conformed_slash = $lgroup_conformed;
+        $name_conformed_slash   = $name_conformed;
+        $lgroup_conformed_slash =~ tr/_/\//;
+        $name_conformed_slash   =~ tr/_/\//;
+    }
+    
+    # LipidGroup / ABBREVIATION lookup
+    # we'll use the lipid group conforming for formula sanity checking later
+    if ($num_hits == 0)
+    {
         # check abbreviations
         if ($num_hits == 0 &&
             defined($abbrev_lmid_hash{$lgroup_conformed}) &&
@@ -509,6 +537,90 @@ while(defined($line=<DATA>))
             ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
         {
             @temp_array = keys %{$name_lc_lmid_hash{$name_conformed_lc}};
+            foreach $lm_id (@temp_array)
+            {
+                # must match formula as well
+                if (!defined($lmid_hits_hash{$lm_id}) &&
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
+                {
+                    $match_type             = '03c_lipid';
+                    $lmid_hits_hash{$lm_id} = $match_type;
+                    $num_hits++;
+                }
+            }
+        }
+    }
+
+    # same as above, but with slashes replaced
+    if ($num_hits == 0)
+    {
+        # check abbreviations
+        if ($num_hits == 0 &&
+            defined($abbrev_lmid_hash{$lgroup_conformed_slash}) &&
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
+        {
+            @temp_array = keys %{$abbrev_lmid_hash{$lgroup_conformed_slash}};
+            foreach $lm_id (@temp_array)
+            {
+                # must match formula as well
+                if (!defined($lmid_hits_hash{$lm_id}) &&
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
+                {
+                    $match_type             = '03d_lipidgroup';
+                    $lmid_hits_hash{$lm_id} = $match_type;
+                    $num_hits++;
+                }
+            }
+        }
+        # fallback to lipid name
+        if ($num_hits == 0 &&
+            defined($abbrev_lmid_hash{$name_conformed_slash}) &&
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
+        {
+            @temp_array = keys %{$abbrev_lmid_hash{$name_conformed_slash}};
+            foreach $lm_id (@temp_array)
+            {
+                # must match formula as well
+                if (!defined($lmid_hits_hash{$lm_id}) &&
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
+                {
+                    $match_type             = '03e_lipid';
+                    $lmid_hits_hash{$lm_id} = $match_type;
+                    $num_hits++;
+                }
+            }
+        }
+
+        # also check synonyms, names, etc.
+        $lgroup_conformed_slash_lc = lc $lgroup_conformed_slash;
+        if ($num_hits == 0 &&
+            defined($name_lc_lmid_hash{$lgroup_conformed_slash_lc}) &&
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
+        {
+            @temp_array = keys %{$name_lc_lmid_hash{$lgroup_conformed_slash_lc}};
+            foreach $lm_id (@temp_array)
+            {
+                # must match formula as well
+                if (!defined($lmid_hits_hash{$lm_id}) &&
+                    ($lipidmatch_flag ||
+                     defined($formula_lmid_hash{$formula}{$lm_id})))
+                {
+                    $match_type             = '03f_lipidgroup';
+                    $lmid_hits_hash{$lm_id} = $match_type;
+                    $num_hits++;
+                }
+            }
+        }
+        # fallback to lipid name
+        $name_conformed_slash_lc = lc $name_conformed_slash;
+        if ($num_hits == 0 &&
+            defined($name_lc_lmid_hash{$name_conformed_slash_lc}) &&
+            ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
+        {
+            @temp_array = keys %{$name_lc_lmid_hash{$name_conformed_slash_lc}};
             foreach $lm_id (@temp_array)
             {
                 # must match formula as well
