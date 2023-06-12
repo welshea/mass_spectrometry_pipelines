@@ -184,6 +184,15 @@ while(defined($line=<LIPIDMAPS>))
 
                     $name_lc_lmid_hash{$abbrev}{$lm_id} = 1;
                 }
+                
+                # genericize HerCer
+                if ($name_lc =~ /^g[a-z]{2}cer\(/)
+                {
+                    $hexcer = $name_lc;
+                    $hexcer =~ s/^g[a-z]{2}cer/hexcer/;
+
+                    $name_lc_lmid_hash{$hexcer}{$lm_id} = 1;
+                }
             }
         }
     }
