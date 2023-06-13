@@ -250,8 +250,8 @@ generate_metabolomics_glue_script.pl
       --discard-unidentified     discard unidentified rows
 
     options which use the MZmine "row number of detected peaks" column:
-      --discard-single-pregap    discard pre gap-filled single-hit rows (default)
-      --keep-single-pregap       keep pre gap-filled single-hit rows
+      --discard-single-pregap    discard pre gap-filled single-hit rows
+      --keep-single-pregap       keep pre gap-filled single-hit rows (NEW default)
 
     Specifying a LipidSearch summary file will use the summary file to add an
     additional pipeline output column to flag rows identified as main ions by
