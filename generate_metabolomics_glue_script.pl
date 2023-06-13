@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-13:  default to not filtering on #peaks pre- gap filling
 # 2023-06-09:  reenable LipidMaps annotation for LipidMatch
 # 2023-06-08:  begin adding LipidMatch support
 # 2022-10-10:  add LipidMaps annotation
@@ -34,7 +35,7 @@ use File::Spec;
 use File::Basename;
 
 
-$keep_single_pregap_flag   = 0;
+$keep_single_pregap_flag   = 1;
 $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
 $scale_heavy_flag          = 0;    # control normalization of heavy rows
@@ -214,8 +215,8 @@ if ($syntax_error_flag ||
     printf STDERR "    --discard-unidentified     discard unidentified rows\n";
     printf STDERR "\n";
     printf STDERR "  options which use the MZmine \"row number of detected peaks\" column:\n";
-    printf STDERR "    --discard-single-pregap    discard pre gap-filled single-hit rows (default)\n";
-    printf STDERR "    --keep-single-pregap       keep pre gap-filled single-hit rows\n";
+    printf STDERR "    --discard-single-pregap    discard pre gap-filled single-hit rows\n";
+    printf STDERR "    --keep-single-pregap       keep pre gap-filled single-hit rows (NEW default)\n";
     printf STDERR "\n";
     printf STDERR "  Specifying a LipidSearch summary file will use the summary file to add an\n";
     printf STDERR "  additional pipeline output column to flag rows identified as main ions by\n";
