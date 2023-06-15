@@ -10,6 +10,8 @@
 # columns.
 
 
+# 2023-06-15:  move OxClas(...(group)) stripping to less-strict matches
+# 2023-06-15:  more matches by fixing typo in less-strict matching
 # 2023-06-12:  more improvements to LipidMatch support
 # 2023-06-09:  include conformed LipidMaps abbreviations in regular matching
 # 2023-06-09:  improve LipidMatch support
@@ -160,7 +162,7 @@ while(defined($line=<LIPIDMAPS>))
                         # strip inner (...)
                         if ($inner =~ /\(/)
                         {
-                            $inner =~ s/\(([0-9]+[a-z],*)+\)//g;
+                            $inner =~ s/\(([0-9]+[z],*)+\)//g;
                             $name_lc = $first . $inner . ')';
                         }
                         
@@ -348,17 +350,11 @@ while(defined($line=<DATA>))
     $name   =~ s/^SPLASH_//;            # another source of matching?
     
     # LipidMatch
-    # strip additional groups off
+    # strip additional groups off later
+    $ox_flag = 0;
     if ($name =~ s/^Ox([A-Z]+)/$1/)
     {
-        $name     =~ s/([0-9])\(([A-Za-z0-9()]+)\)\)$/$1\)/;
-        
-        ## We'll need to store this for if/when we subtract it
-        ## later from the full forumla, for formula-based matching
-        #$ox_group = $2;
-        
-        #printf STDERR "FOOBAR\t%s\t%s\t%s\n",
-        #    $ox_group, $name, $name_orig;
+        $ox_flag = 1;
     }
     
     # strip inner (...) lists with numbers/letters
@@ -373,7 +369,7 @@ while(defined($line=<DATA>))
         # strip inner (...)
         if ($inner =~ /\(/)
         {
-            $inner =~ s/\(([0-9]+[A-Za-z],*)+\)//g;
+            $inner =~ s/\(([0-9]+[Zz],*)+\)//g;
             $name = $first . $inner . ')';
         }
 
@@ -397,7 +393,6 @@ while(defined($line=<DATA>))
     if (defined($name_lc_lmid_hash{$name_lc_orig}) &&
         ($lipidmatch_flag || defined($formula_lmid_hash{$formula})))
     {
-
         @temp_array = keys %{$name_lc_lmid_hash{$name_lc_orig}};
         foreach $lm_id (@temp_array)
         {
@@ -445,8 +440,18 @@ while(defined($line=<DATA>))
         $lgroup_conformed = $lgroup;
         $name_conformed   = $name;
 
+        # more thorough (group) stripping than was done earlier
+        if ($ox_flag)
+        {
+            $name_conformed =~ s/([0-9])\(([A-Za-z0-9()]+)\)\)$/$1\)/;
+
+            ## We'll need to store this for if/when we subtract it
+            ## later from the full forumla, for formula-based matching
+            #$ox_group = $2;
+        }
+
         # strip lowercase letters from in front/behind numbers
-        if ($lgroup =~ m/^([^(]+\()(.*)\)/)
+        if ($lgroup_conformed =~ m/^([^(]+\()(.*)\)/)
         {
             $first = $1;
             $inner = $2;
@@ -455,7 +460,7 @@ while(defined($line=<DATA>))
             
             $lgroup_conformed = $first . $inner . ')';
         }
-        if ($name =~ m/^([^(]+\()(.*)\)/)
+        if ($name_conformed =~ m/^([^(]+\()(.*)\)/)
         {
             $first = $1;
             $inner = $2;
