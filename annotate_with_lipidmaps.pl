@@ -10,6 +10,7 @@
 # columns.
 
 
+# 2023-06-15:  more informative MatchTypes
 # 2023-06-15:  move OxClas(...(group)) stripping to less-strict matches
 # 2023-06-15:  more matches by fixing typo in less-strict matching
 # 2023-06-12:  more improvements to LipidMatch support
@@ -422,7 +423,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '02_relaxed';
+                    $match_type             = '02_relax';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
 
@@ -498,7 +499,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03a_lipidgroup';
+                    $match_type             = '03a_abbrev';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -517,7 +518,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03b_lipid';
+                    $match_type             = '03b_abbrev';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -538,7 +539,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03c_lipidgroup';
+                    $match_type             = '03c_abbrev';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -558,7 +559,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03c_lipid';
+                    $match_type             = '03d_strip';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -582,7 +583,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03d_lipidgroup';
+                    $match_type             = '03e_relaxabbrev';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -601,7 +602,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03e_lipid';
+                    $match_type             = '03f_relaxabbrev';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -622,7 +623,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03f_lipidgroup';
+                    $match_type             = '03g_relaxabbrev';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
@@ -642,7 +643,7 @@ while(defined($line=<DATA>))
                     ($lipidmatch_flag ||
                      defined($formula_lmid_hash{$formula}{$lm_id})))
                 {
-                    $match_type             = '03c_lipid';
+                    $match_type             = '03h_relaxstrip';
                     $lmid_hits_hash{$lm_id} = $match_type;
                     $num_hits++;
                 }
