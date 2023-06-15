@@ -411,5 +411,5 @@ foreach $entry_row (@entry_row_array)
 @array = sort keys %key_with_slash_hash;
 foreach $key (@array)
 {
-    printf STDERR "Substitute / with ; column\t%s\n", $key;
+    printf STDERR "Substitute / with ; column:\t%s\n", $key;
 }
