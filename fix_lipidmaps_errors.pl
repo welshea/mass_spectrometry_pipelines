@@ -4,6 +4,9 @@
 # since Excel will have done some problematic escapes of ", etc.
 
 
+# 2023-06-15:  more strict Class() name detection
+# 2023-06-15:  detect and fix more errors
+# 2023-06-15:  output detected errors to file instead of STDERR
 # 2023-06-14:  initial release
 
 
@@ -22,17 +25,15 @@ sub fix_some_parentheses
     my $ok_flag;
     my $i;
 
-    # example entry with extra ) at end
-    #    MGDG(18:4;O/16:4;O))
-    #
-    # lots of entries missing terminal )
-    #    GlcCer(d16:1(4E)(15Me)/20:0(2OH)
-    #
-    if ($name_orig =~ /^([A-Za-z\(][-A-Za-z0-9 \(\)]*[A-Za-z0-9])(\([^\(\)]+:.*[_\/]*){1,3}$/)
+
+    $message = '';
+
+    # looks like Class(x:y...) nomenclature
+    if ($name_orig =~ /^([A-Za-z\(][-A-Za-z0-9 \(\)]*[A-Za-z0-9 ])(\([^:\(\)]*[0-9]+[^:\(\)]*:[^:_\/]*[0-9]+.*[_\/]*){1,3}$/)
     {
         $class     = $1;
         $not_class = $2;
-        
+
         $count_open  = $class =~ tr/\(//;    # empty // means no replacement
         $count_close = $class =~ tr/\)//;
 
@@ -51,8 +52,7 @@ sub fix_some_parentheses
             if ($count_close && $count_open == 0 &&
                 $class =~ /^(KDN|Neu5Ac)\)GD1a/)
             {
-                $class =~ s/^(KDN|Neu5Ac)/\(KDN,Neu5Ac/;
-                
+                $class   =~ s/^(KDN|Neu5Ac)/\(KDN,Neu5Ac/;
                 $message = 'missing either KDN or Neu5Ac in (KDN,Neu5Ac)GD1a';
             }
         }
@@ -81,8 +81,7 @@ sub fix_some_parentheses
                     if (!($not_class =~ /\)$/))
                     {
                         $not_class .= ')';
-
-                        $message = 'missing terminal ) entirely';
+                        $message    = 'missing terminal ) entirely';
                     }
                 
                     # insert missing ) before closing ]
@@ -93,8 +92,7 @@ sub fix_some_parentheses
                     elsif ($not_class =~ /(\([^\(\)\[\]]+)\]/)
                     {
                         $not_class =~ s/(\([^\(\)\[\]]+)\]/$1\)\]/;
-
-                        $message = 'missing ) before ] in (x,y]';
+                        $message   = 'missing ) before ] in (x,y]';
                     }
                     
                     # delete extra ( in 3((
@@ -102,18 +100,18 @@ sub fix_some_parentheses
                     elsif ($not_class =~ /\((\([^\(\)]+\)[_\/:])/)
                     {
                         $not_class =~ s/\((\([^\(\)]+\)[_\/:])/$1/;
-
-                        $message = 'extra ( in x((...)';
+                        $message   = 'extra ( in x((...)';
                     }
 
                     # each part is OK, just need a closing ) added
                     elsif ($not_class =~ /^\(/)
                     {
-                        @part_array    = split /[:_\/]/, $not_class;
+                        # store delimiters in array as well
+                        @part_array    = split /([:_\/])/, $not_class;
                         $part_array[0] =~ s/^\(//;
                         
                         $ok_flag = 1;
-                        for ($i = 0; $i < @part_array; $i++)
+                        for ($i = 0; $i < @part_array; $i += 2)
                         {
                             $count_open2  = $part_array[$i] =~ tr/\(//;
                             $count_close2 = $part_array[$i] =~ tr/\)//;
@@ -121,6 +119,19 @@ sub fix_some_parentheses
                             if ($count_open2 != $count_close2)
                             {
                                 $ok_flag = 0;
+                                
+                                # see if we can fix it here
+                                #    MGDG (16:3(7Z,10Z,13Z/12-oxo-PDA)
+                                #
+                                if (!($part_array[$i] =~ /\)$/))
+                                {
+                                    $part_array[0]   = '(' . $part_array[0];
+                                    $part_array[$i] .= ')';
+                                    
+                                    $not_class = join "", @part_array;
+                                    $message   = 'missing non-terminal )';
+                                }
+                                
                                 last;
                             }
                         }
@@ -128,8 +139,7 @@ sub fix_some_parentheses
                         if ($ok_flag)
                         {
                             $not_class .= ')';
-
-                            $message = 'missing additional terminal )';
+                            $message    = 'missing additional terminal )';
                         }
                     }
                 }
@@ -149,7 +159,7 @@ sub fix_some_parentheses
                     # fix ME capitalization typo while we're at it
                     $not_class =~ s/\b([0-9])+ME\b/$1Me/g;
 
-                    $message = 'missing opening ( after :x';
+                    $message   = 'missing opening ( after :x';
                 }
 
                 # (t18:0) shouldn't have () around it
@@ -158,8 +168,7 @@ sub fix_some_parentheses
                 elsif ($not_class =~ /^(\([mdt][0-9]+:[0-9]+)\)/)
                 {
                     $not_class =~ s/^(\([mdt][0-9]+:[0-9]+)\)/$1/;
-
-                    $message = ') in (...) that should not be enclosed';
+                    $message   = ') in (...) that should not be enclosed';
                 }
 
                 # strip extra ) at end
@@ -175,14 +184,42 @@ sub fix_some_parentheses
                 }
             }
         }
-        
+
+
+        # remove trailing spaces from class
+        $class    =~ s/ +$//g;
+        $name_new = $class . $not_class;
+
+        # return space-corrected string if no other errors detected
+        #
+        #    Anandamide (...)
+        #    hexacosanoyl-CoA (N-C26:0CoA)
+        #
+        # Most Anandamide has a space, only one synonym does not.
+        # I'm not sure if these should be fixed or not, as other databases
+        # all have a space.
+        #
+        # For now, leave disabled.
+        #
+        if (0 &&
+            $unmatched_flag == 0 &&
+            $message eq '' &&
+            $name_orig ne $name_new &&
+            $name_new =~ /\)$/)
+        {
+            $message = 'tailing spaces after class';
+
+            printf STDERR "Potential spacing issue?\t%s\n", $name_orig;
+            
+            return $name_new;
+        }
+
+
         # we had unmatched parentheses somewhere
         if ($unmatched_flag)
         {
-            $name_new = $class . $not_class;
-            
             # fixed it with a rule, return corrected string
-            if ($name_new ne $name_orig)
+            if ($name_new ne $name_orig && $message ne '')
             {
                 return $name_new;
             }
@@ -191,6 +228,22 @@ sub fix_some_parentheses
             {
                 $message = 'UNCORRECTED';
             }
+        }
+    }
+    # check for unmatched parentheses in other strings as well
+    else
+    {
+        $count_open  = $name_orig =~ tr/\(//;    # empty // means no replacement
+        $count_close = $name_orig =~ tr/\)//;
+
+        # unmatched parantheses in class
+        $unmatched_flag = 0;
+        if ($count_open != $count_close)
+        {
+            $unmatched_flag = 1;
+            $message        = 'UNCORRECTED';
+
+            #printf STDERR "TYPOPARENS\t%s\n", $name_orig;
         }
     }
     
@@ -272,12 +325,14 @@ if (@lmaps_header_names_array == 0)
 }
 
 
+# open file for printing types of errors and corrections
+open ERROROUT, ">lipidmaps_detected_errors.txt";
+printf ERROROUT "%s\t%s\t%s\t%s\t%s\n",
+    'LM_ID', 'Field', 'TypeOfError', 'Original', 'Corrected';
+
 
 # print header line
 print "$line\n";
-
-printf STDERR "%s\t%s\t%s\t%s\t%s\n",
-    'LM_ID', 'Field', 'TypeOfError', 'Original', 'Corrected';
 
 # print the rest of the file, correcting parentheses as we go
 while(defined($line=<LIPIDMAPS>))
@@ -317,7 +372,7 @@ while(defined($line=<LIPIDMAPS>))
                 
                 if ($message ne '')
                 {
-                    printf STDERR "%s\t%s\t%s\t%s\t%s\n",
+                    printf ERROROUT "%s\t%s\t%s\t%s\t%s\n",
                         $lm_id, $lmaps_header_col_array[$col],
                         $message,
                         $name_orig, $name_new;
