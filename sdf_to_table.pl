@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-15:  detect and correct Cer(x; y/...) space after semicolon
 # 2022-10-10:  initial commit to git
 
 
@@ -112,6 +113,9 @@ while(defined($line=<INFILE>))
             
             while(defined($line=<INFILE>) && $line =~ /\S/)
             {
+                $line      =~ s/[\r\n]+//g;
+                $line_orig = $line;
+            
                 # sigh, the usual crap happens in LIPID MAPS too...
                 $line =~ s/^;*\s+;+//;
                 $line =~ s/;*\s+;*$//;
@@ -123,6 +127,21 @@ while(defined($line=<INFILE>))
                     
                     $key_with_slash_hash{$key} = 1;
                 }
+                
+                
+                # Correct for obvious spacing errors after ;
+                #
+                # Otherwise, it splits into two partial strings,
+                # just like on the LipidMaps website (also errors).
+                #
+                if ($line =~ s/(\([^\(\)]+;)\s+([^\(\)]+:[^\(\)]+\/)/$1$2/)
+                {
+                    printf STDERR "SPACING_ERROR:\t%s\n",
+                        $line_orig;
+                    printf STDERR "SPACING_FIXED:\t%s\n",
+                        $line;
+                }
+                
                 
                 $table_hash{$entry_row}{$key}{$line} = 1;
 
