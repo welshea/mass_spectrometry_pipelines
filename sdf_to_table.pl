@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-19:  print LM_ID in corrected semicolon spacing debug messages
 # 2023-06-15:  detect and correct Cer(x; y/...) space after semicolon
 # 2022-10-10:  initial commit to git
 
@@ -85,6 +86,7 @@ open INFILE, "$filename" or die "ABORT -- cannot open file $filename\n";
 $row       = 0;
 $entry_row = 0;
 $key_rank  = 0;
+$lm_id     = '';
 while(defined($line=<INFILE>))
 {
     $line =~ s/[\r\n]+//g;
@@ -103,6 +105,7 @@ while(defined($line=<INFILE>))
         $seen_entry_row_hash{$entry_row} = 1;
 
         $key_rank = 1;
+        $lm_id = '';
     }
     
     if ($c eq '>')
@@ -136,12 +139,18 @@ while(defined($line=<INFILE>))
                 #
                 if ($line =~ s/(\([^\(\)]+;)\s+([^\(\)]+:[^\(\)]+\/)/$1$2/)
                 {
-                    printf STDERR "SPACING_ERROR:\t%s\n",
-                        $line_orig;
-                    printf STDERR "SPACING_FIXED:\t%s\n",
-                        $line;
+                    printf STDERR "SPACING_ERROR:\t%s\t%s\n",
+                        $lm_id, $line_orig;
+                    printf STDERR "SPACING_FIXED:\t%s\t%s\n",
+                        $lm_id, $line;
                 }
                 
+                
+                # store current LM_ID for debug printing
+                if ($key eq 'LM_ID')
+                {
+                    $lm_id = $line;
+                }
                 
                 $table_hash{$entry_row}{$key}{$line} = 1;
 
