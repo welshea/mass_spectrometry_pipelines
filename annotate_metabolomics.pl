@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2023-06-27:  fix divide by zero error on unmatched rows
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-03-01:  correct recent 2022-02 changelog dates to 2023
 # 2023-02-20:  get auto-trash bad MZMine matching working on mappings again
@@ -2993,9 +2994,17 @@ while(defined($line=<DATA>))
 
                 foreach $row (@matched_row_array)
                 {
-                    $ppm = 1000000 *
-                           abs(($annotation_hash{$row}{mz} - $mz) /
-                               $annotation_hash{$row}{mz});
+                    # don't calculate PPM on unmatched placeholder row
+                    if ($row != $bad_row_id)
+                    {
+                        $ppm = 1000000 *
+                               abs(($annotation_hash{$row}{mz} - $mz) /
+                                   $annotation_hash{$row}{mz});
+                    }
+                    else
+                    {
+                        $ppm = 0;
+                    }
 
                     if ($ppm > $mz_trash_ppm)
                     {
