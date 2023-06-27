@@ -1,9 +1,56 @@
 #!/usr/bin/perl -w
 
+
+# 2023-06-27:  update is_number() to not treat NaNs as numbers
+
+
 sub is_number
 {
-    return $_[0] =~ /^([+-]?)(?=[0-9]|\.[0-9])[0-9]*(\.[0-9]*)?([Ee]([+-]?[0-9]+))?$/;
+    # use what Perl thinks is a number first
+    # this is purely for speed, since the more complicated REGEX below should
+    #  correctly handle all numeric cases
+    if (looks_like_number($_[0]))
+    {
+        # Perl treats infinities as numbers, Excel does not.
+        #
+        # Perl treats NaN or NaNs, and various mixed caps, as numbers.
+        # Weird that not-a-number is a number... but it is so that
+        # it can do things like nan + 1 = nan, so I guess it makes sense
+        #
+        if ($_[0] =~ /^[-+]*(Inf|NaN)/i)
+        {
+            return 0;
+        }
+        
+        return 1;
+    }
+
+    # optional + or - sign at beginning
+    # then require either:
+    #  a number followed by optional comma stuff, then optional decimal stuff
+    #  mandatory decimal, followed by optional digits
+    # then optional exponent stuff
+    #
+    # Perl cannot handle American comma separators within long numbers.
+    # Excel does, so we have to check for it.
+    # Excel doesn't handle European dot separators, at least not when it is
+    #  set to the US locale (my test environment).  I am going to leave this
+    #  unsupported for now.
+    #
+    if ($_[0] =~ /^([-+]?)([0-9]+(,[0-9]{3,})*\.?[0-9]*|\.[0-9]*)([Ee]([-+]?[0-9]+))?$/)
+    {
+        # current REGEX can treat '.' as a number, check for that
+        if ($_[0] eq '.')
+        {
+            return 0;
+        }
+        
+        return 1;
+    }
+    
+    return 0;
 }
+
 
 # choose longest field, then highest in regular sort order
 sub compare_fields
