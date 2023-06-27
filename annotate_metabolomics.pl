@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2023-06-27:  ignore [M...] ... adduct of ... identifications
 # 2023-06-27:  fix divide by zero error on unmatched rows
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-03-01:  correct recent 2022-02 changelog dates to 2023
@@ -2005,6 +2006,7 @@ while(defined($line=<DATA>))
     $has_not_trash_mz_flag = 0;
     $has_bad_mz_flag       = 0;
     $has_good_mz_flag      = 0;
+    $name_not_adduct_flag  = 0;
 
 
     # scan for match(es) in annotation database
@@ -2108,6 +2110,14 @@ while(defined($line=<DATA>))
 
         foreach $name_oc (@name_array)
         {
+            # skip [M+X] ... adduct of ...
+            if ($name_oc =~ /^\[M[+-][^\]]+\].*m\/z.*adduct.*m\/z/i)
+            {
+                next;
+            }
+
+            $name_not_adduct_flag = 1;
+
             $match_flag = 0;
             $match_type = '9X';    # 9: unmatched
 
@@ -3230,10 +3240,17 @@ while(defined($line=<DATA>))
 
 
             # no matches found for this row
-            # report match type of 9X
             if ($name =~ /\S/ && $match_type_str eq '')
             {
-                $match_type_str = '9X';
+                # report match type of 9X
+                if ($name_not_adduct_flag)
+                {
+                    $match_type_str = '9X';
+                }
+                else
+                {
+                    $match_type_str = '';
+                }
             }
 
 
