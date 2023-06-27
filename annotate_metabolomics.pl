@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-03-01:  correct recent 2022-02 changelog dates to 2023
 # 2023-02-20:  get auto-trash bad MZMine matching working on mappings again
 # 2023-02-17:  get auto-trash bad MZMine matches working again
@@ -106,6 +107,7 @@ $align_method = 'overlap';
 $bad_row_id      = 9E99;
 $lipidomics_flag = 0;
 
+
 sub is_number
 {
     # use what Perl thinks is a number first
@@ -113,8 +115,13 @@ sub is_number
     #  correctly handle all numeric cases
     if (looks_like_number($_[0]))
     {
-        # Perl treats infinities as numbers, Excel does not
-        if ($_[0] =~ /^[-+]*inf/)
+        # Perl treats infinities as numbers, Excel does not.
+        #
+        # Perl treats NaN or NaNs, and various mixed caps, as numbers.
+        # Weird that not-a-number is a number... but it is so that
+        # it can do things like nan + 1 = nan, so I guess it makes sense
+        #
+        if ($_[0] =~ /^[-+]*(Inf|NaN)/i)
         {
             return 0;
         }
