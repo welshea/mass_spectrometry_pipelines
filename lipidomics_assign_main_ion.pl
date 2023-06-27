@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-05-26:  more _ vs / inconsistency within LipidSearch
 # 2023-05-25:  disabled various isomer group related debug messages
 # 2023-05-25:  replace _ with / for LipidSearch summary -> mergedResult mapping
@@ -178,8 +179,13 @@ sub is_number
     #  correctly handle all numeric cases
     if (looks_like_number($_[0]))
     {
-        # Perl treats infinities as numbers, Excel does not
-        if ($_[0] =~ /^[-+]*inf/)
+        # Perl treats infinities as numbers, Excel does not.
+        #
+        # Perl treats NaN or NaNs, and various mixed caps, as numbers.
+        # Weird that not-a-number is a number... but it is so that
+        # it can do things like nan + 1 = nan, so I guess it makes sense
+        #
+        if ($_[0] =~ /^[-+]*(Inf|NaN)/i)
         {
             return 0;
         }
@@ -212,6 +218,7 @@ sub is_number
     
     return 0;
 }
+
 
 sub reformat_sci
 {
