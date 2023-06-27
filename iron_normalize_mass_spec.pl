@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-05-25:  refactor how stripping sample names is handled
 # 2023-05-25:  improved pos/neg detection from merge_metabolomics_pos_neg.pl
 # 2023-05-25:  support alternative lipidomics sample headers
@@ -44,13 +45,21 @@ use File::Basename;
 
 # we assume that there can be no more than 2 pools per plex
 
+
 sub is_number
 {
     # use what Perl thinks is a number first
+    # this is purely for speed, since the more complicated REGEX below should
+    #  correctly handle all numeric cases
     if (looks_like_number($_[0]))
     {
-        # Perl treats infinities as numbers, Excel does not
-        if ($_[0] =~ /^[+-]*inf/)
+        # Perl treats infinities as numbers, Excel does not.
+        #
+        # Perl treats NaN or NaNs, and various mixed caps, as numbers.
+        # Weird that not-a-number is a number... but it is so that
+        # it can do things like nan + 1 = nan, so I guess it makes sense
+        #
+        if ($_[0] =~ /^[-+]*(Inf|NaN)/i)
         {
             return 0;
         }
@@ -58,13 +67,30 @@ sub is_number
         return 1;
     }
 
+    # optional + or - sign at beginning
+    # then require either:
+    #  a number followed by optional comma stuff, then optional decimal stuff
+    #  mandatory decimal, followed by optional digits
+    # then optional exponent stuff
+    #
     # Perl cannot handle American comma separators within long numbers.
     # Excel does, so we have to check for it.
     # Excel doesn't handle European dot separators, at least not when it is
     #  set to the US locale (my test environment).  I am going to leave this
     #  unsupported for now.
     #
-    # return ($_[0] =~ /^([+-]?)[0-9]+(,\d\d\d)*([Ee]([+-]?[0-9]+))?$/);
+    if ($_[0] =~ /^([-+]?)([0-9]+(,[0-9]{3,})*\.?[0-9]*|\.[0-9]*)([Ee]([-+]?[0-9]+))?$/)
+    {
+        # current REGEX can treat '.' as a number, check for that
+        if ($_[0] eq '.')
+        {
+            return 0;
+        }
+        
+        return 1;
+    }
+    
+    return 0;
 }
 
 
