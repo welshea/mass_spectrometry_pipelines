@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-05-25:  support pos#/neg# at end of sample name (Flores #4160)
 # 2023-04-21:  rename p[ and n[ samples to pos[ and neg[
 # 2023-01-17:  protect ] or ) immediately following the short name
@@ -50,6 +51,7 @@ use Scalar::Util qw(looks_like_number);
 use File::Basename;
 use POSIX;
 
+
 sub is_number
 {
     # use what Perl thinks is a number first
@@ -57,8 +59,13 @@ sub is_number
     #  correctly handle all numeric cases
     if (looks_like_number($_[0]))
     {
-        # Perl treats infinities as numbers, Excel does not
-        if ($_[0] =~ /^[-+]*inf/)
+        # Perl treats infinities as numbers, Excel does not.
+        #
+        # Perl treats NaN or NaNs, and various mixed caps, as numbers.
+        # Weird that not-a-number is a number... but it is so that
+        # it can do things like nan + 1 = nan, so I guess it makes sense
+        #
+        if ($_[0] =~ /^[-+]*(Inf|NaN)/i)
         {
             return 0;
         }
@@ -91,6 +98,7 @@ sub is_number
     
     return 0;
 }
+
 
 sub reformat_sci
 {
