@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2023-06-27:  add 3C/3D match types, any m/z to alternative names
 # 2023-06-27:  ignore [M...] ... adduct of ... identifications
 # 2023-06-27:  fix divide by zero error on unmatched rows
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
@@ -2602,6 +2603,143 @@ while(defined($line=<DATA>))
                                     $ppm,
                                     $name_delim,
                                     $annotation_hash{$row}{name},
+                            }
+                        }
+                        $matched_row_hash{$row} = 1;
+                        $matched_row_type_hash{$row}{$match_type} = 1;
+                    }
+                    # no longer tied
+                    else
+                    {
+                        last;
+                    }
+                }
+            }
+
+            # try the old names, in case we are looking at old data
+            # 3C/3D: conformed old name, original + pos/neg m/z
+            if ($match_flag == 0 && defined($annotation_name_orig_col))
+            {
+                %candidate_name_hash = ();
+                %temp_row_score_hash = ();
+                @candidate_row_array = ();
+
+                # score each row
+                foreach $row (@row_all_array)
+                {
+                    # sanity check the formulas
+                    # skip rows that have wrong numbers of non-hydrogens
+                    #
+                    $fsanity_db = $annotation_hash{$row}{fsanity};
+                    if ($fsanity ne '' && $fsanity_db ne '' &&
+                        $fsanity ne $fsanity_db)
+                    {
+                        next;
+                    }
+
+                    $name_db           = $annotation_hash{$row}{name_orig};
+                    $name_db_lc        = lc $name_db;
+                    $name_db_conformed = $conformed_name_hash{$name_db};
+                
+                    if ($name_lc_conformed eq $name_db_conformed)
+                    {
+                        $frac_id = 0;
+                        $score =
+                            score_substring_mismatch($name_lc,
+                                                     $name_db_lc,
+                                                     $align_method,
+                                                     \$frac_id);
+
+                        $candidate_name_hash{$name_db_lc} = 1;
+
+                        $temp_row_score_hash{$row} = $score;
+                    }
+                }
+                
+                @candidate_row_array =
+                    sort cmp_conformed_rows keys %temp_row_score_hash;
+                @temp_name_array     = keys %candidate_name_hash;
+
+                # only 1 good candidate in database, should be right?
+                if (@temp_name_array == 1)
+                {
+                    $match_type = '3C';
+                }
+                # less certain, since there are multiple candidates
+                else
+                {
+                    $match_type = '3D';
+                }
+
+                # keep highest score (and ties) as matches
+                if (@candidate_row_array)
+                {
+                    $best_row      = $candidate_row_array[0];
+                    $best_score    = $temp_row_score_hash{$best_row};
+                    $best_count    = $annotation_hash{$best_row}{col_count};
+                    $best_has_kegg = $annotation_hash{$best_row}{kegg};
+                    if (defined($best_has_kegg) && $best_has_kegg ne '')
+                    {
+                        $best_has_kegg = 1;
+                    }
+                    else
+                    {
+                        $best_has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($best_has_kegg &&
+                        $annotation_hash{$best_row}{kegg_map} ne '')
+                    {
+                        $best_has_kegg = 2;
+                    }
+                }
+                foreach $row (@candidate_row_array)
+                {
+                    $score    = $temp_row_score_hash{$row};
+                    $count    = $annotation_hash{$row}{col_count};
+                    $has_kegg = $annotation_hash{$row}{kegg};
+                    if (defined($has_kegg) && $has_kegg ne '')
+                    {
+                        $has_kegg = 1;
+                    }
+                    else
+                    {
+                        $has_kegg = 0;
+                    }
+                    # kegg id is part of a pathway map
+                    if ($has_kegg &&
+                        $annotation_hash{$row}{kegg_map} ne '')
+                    {
+                        $has_kegg = 2;
+                    }
+                    
+                    if ($has_kegg == $best_has_kegg &&
+                        $count    == $best_count &&
+                        $score    == $best_score)
+                    {
+                        $match_flag = 1;
+                        $bad_mz_row_hash{$row} = 1;
+                        
+                        # store each row only once per row
+                        if (!defined($matched_row_hash{$row}))
+                        {
+                            $matched_row_array[$num_matches]  = $row;
+                            $matched_type_array[$num_matches] = $match_type;
+                            $num_matches++;
+
+                            $ppm = 1000000 *
+                                   abs(($annotation_hash{$row}{mz} - $mz)
+                                        / $annotation_hash{$row}{mz});
+
+                            if ($annotation_hash{$row}{mz} < 99999)
+                            {
+                                printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
+                                    $first_field,
+                                    $mz,
+                                    $annotation_hash{$row}{mz},
+                                    $ppm,
+                                    $name_delim,
+                                    $annotation_hash{$row}{name_orig},
                             }
                         }
                         $matched_row_hash{$row} = 1;
