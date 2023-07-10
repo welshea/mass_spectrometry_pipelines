@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2023-07-10:  add --iron-ref=sample reference sample override flag
+# 2023-07-10:  respect autodetect TMT_Channel when only a single plex
+# 2023-07-10:  support space-delimited autodetect input
 # 2023-04-28:  add --first-ch flag
 # 2022-06-11:  pass --boost and --last-ch flags to iron_normalize_mass_spec.pl
 # 2022-06-11:  add --iron-auto-ch to auto-pick each ref channel per-plex
@@ -31,6 +34,7 @@ $first_flag        = 0;
 $boost_flag        = 0;
 $no_debatch_flag   = 0;
 $no_iron_flag      = 0;
+$iron_ref_sample   = '';
 $comp_pool_flag                 = 0;    # use comp pool instead of real pool
 $comp_pool_exclude_flag         = 0;
 $comp_pool_exclude_filename     = '';
@@ -114,7 +118,13 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--iron-auto-ch$/)
         {
             $auto_single_variable_pool_flag = 1;
+            $iron_ref_sample = '';
             $no_debatch_flag = 1;
+        }
+        elsif ($field =~ /^--iron-ref=(.*)/)
+        {
+            $iron_ref_sample = $1;
+            $auto_single_variable_pool_flag = 0;
         }
         else
         {
@@ -169,21 +179,22 @@ if ($syntax_error_flag)
     print STDERR "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
     print STDERR "\n";
     print STDERR "  Options:\n";
-    print STDERR "    --boost         use highest channel for normalization\n";
-    print STDERR "    --last-ch       use highest channel for normalization\n";
-    print STDERR "    --first-ch      use lowest  channel for normalization\n";
+    print STDERR "    --boost            use highest channel for normalization\n";
+    print STDERR "    --last-ch          use highest channel for normalization\n";
+    print STDERR "    --first-ch         use lowest  channel for normalization\n";
+    print STDERR "    --iron-ref=sample  use \"sample\" name for normalization\n";
     print STDERR "\n";
-    print STDERR "    --iron          apply IRON normalization (default)\n";
-    print STDERR "    --iron-auto-ch  auto-pick different reference channel per-plex\n";
-    print STDERR "                    *** forces --no-debatch ***\n";
-    print STDERR "    --iron-untilt   account for relative dynamic range\n";
-    print STDERR "    --no-iron       disable IRON normalization\n";
+    print STDERR "    --iron             apply IRON normalization (default)\n";
+    print STDERR "    --iron-auto-ch     auto-pick different reference channel per-plex\n";
+    print STDERR "                       *** forces --no-debatch ***\n";
+    print STDERR "    --iron-untilt      account for relative dynamic range\n";
+    print STDERR "    --no-iron          disable IRON normalization\n";
     print STDERR "\n";
-    print STDERR "    --debatch       cross-plex de-batch TMT data (default)\n";
-    print STDERR "    --no-debatch    disable cross-plex de-batching\n";
+    print STDERR "    --debatch          cross-plex de-batch TMT data (default)\n";
+    print STDERR "    --no-debatch       disable cross-plex de-batching\n";
     print STDERR "\n";
-    print STDERR "    --comp-pool     average all plex channels for cross-plex de-batching\n";
-    print STDERR "    --no-comp-pool  use reference channel for de-batching (default)\n";
+    print STDERR "    --comp-pool        average all plex channels for cross-plex de-batching\n";
+    print STDERR "    --no-comp-pool     use reference channel for de-batching (default)\n";
     print STDERR "    --comp-pool-exclusions-dark\n";
     print STDERR "                       auto-excludes dark samples from computational pool\n";
     print STDERR "    --comp-pool-exclusions-boost\n";
@@ -256,7 +267,7 @@ $autodetect_output = `$cmd_str`;
 foreach $line (@autodetect_line_array)
 {
     $line =~ s/[\r\n]//g;
-    
+
     @array = split /\t/, $line;
     
     if (@array == 2)
@@ -264,6 +275,18 @@ foreach $line (@autodetect_line_array)
         $key   = $array[0];
         $value = $array[1];
         
+        # don't support mixing and matching space and tab-delimited per line
+        if (!($key =~ /\s/))
+        {
+            $autodetect_hash{$key} = $value;
+        }
+    }
+    # copy/paste from terminal expands tabs into spaces
+    elsif ($line =~ /^([^ \t]+)\s+([^\t]+)$/)
+    {
+        $key   = $1;
+        $value = $2;
+
         $autodetect_hash{$key} = $value;
     }
 }
@@ -274,6 +297,11 @@ if ($auto_single_variable_pool_flag)
 {
     $autodetect_hash{TMT_Channel} = "auto";
 }
+if ($iron_ref_sample ne '')
+{
+    $autodetect_hash{TMT_Channel} = $iron_ref_sample;
+}
+
 
 @autodetect_key_array = sort keys %autodetect_hash;
 
@@ -457,11 +485,31 @@ if ($first_flag)
     $options_str .=  ' --first-ch';
     $options_str  =~ s/^\s+//;
 }
+
 $pipeline_norm_str = sprintf "%s %s \"%s%s\" \\\n  > \"%s%s\"",
     'iron_normalize_mass_spec.pl',
     $options_str,
     $output_root_name, '_orig_intensity.txt',
     $output_root_name, '_iron_log2_intensity.txt';
+
+
+# set reference channel first by what's autodetected
+# then, override with --iron-ref=sample
+$temp_ref_sample = '';
+if (defined($autodetect_hash{TMT_Channel}) &&
+    $autodetect_hash{TMT_Channel} ne 'auto')
+{
+    $temp_ref_sample = $autodetect_hash{TMT_Channel};
+}
+if ($iron_ref_sample ne '')
+{
+    $temp_ref_sample = $iron_ref_sample;
+}
+if ($temp_ref_sample ne '')
+{
+    $pipeline_norm_str .= " \"$temp_ref_sample\"";
+}
+
 
 if (defined($autodetect_hash{TMT}) &&
             $autodetect_hash{TMT} ne 'no')
