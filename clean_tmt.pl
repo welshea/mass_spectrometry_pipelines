@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-07-31: disable removal of oxidation site columns
 # 2023-06-08: warn about missing fields if they are encountered
 # 2023-06-07: fix too-short lines resulting in missing data
 # 2023-05-18: handle missing data at end of MaxQuant 2.4 lines
@@ -752,10 +753,10 @@ foreach $header (keys %header_to_col_hash)
     {
         $strip_col_flags{$header_to_col_hash{$header}} = 1;
     }
-    if ($header =~ /^Oxidation \(M\) site/i)
-    {
-        $strip_col_flags{$header_to_col_hash{$header}} = 1;
-    }
+    #if ($header =~ /^Oxidation \(M\) site/i)
+    #{
+    #    $strip_col_flags{$header_to_col_hash{$header}} = 1;
+    #}
     if ($header =~ /^Occupancy/i)
     {
         $strip_col_flags{$header_to_col_hash{$header}} = 1;
