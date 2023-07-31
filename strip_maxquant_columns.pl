@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-07-31:  disable removal of oxidation site columns
 # 2023-06-08:  prevent split from truncating lines due to empty end fields
 # 2023-05-18:  replace fields that are purely semicolons with blanks
 # 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
@@ -224,14 +225,15 @@ for ($col = 0; $col < @header_col_array; $col++)
     {
         $col_to_remove_hash{$col} = 1;
     }
-    if ($field =~ /^Oxidation \(M\) site IDs$/i)
-    {
-        $col_to_remove_hash{$col} = 1;
-    }
-    if ($field =~ /^Oxidation \(M\) site positions$/i)
-    {
-        $col_to_remove_hash{$col} = 1;
-    }
+    ## *very* rarely asked for by investigators
+    #if ($field =~ /^Oxidation \(M\) site IDs$/i)
+    #{
+    #    $col_to_remove_hash{$col} = 1;
+    #}
+    #if ($field =~ /^Oxidation \(M\) site positions$/i)
+    #{
+    #    $col_to_remove_hash{$col} = 1;
+    #}
     if ($field =~ /^Reporter intensity count \d+/)
     {
         $col_to_remove_hash{$col} = 1;
