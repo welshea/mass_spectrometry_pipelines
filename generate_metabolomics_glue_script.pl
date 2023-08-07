@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-07:  change --norm-none to --no-iron for consistency with other .pl
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-06-13:  default to not filtering on #peaks pre- gap filling
 # 2023-06-09:  reenable LipidMaps annotation for LipidMatch
@@ -41,7 +42,7 @@ $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
 $scale_heavy_flag          = 0;    # control normalization of heavy rows
 $mz_tol_ppm                = '';   # '' means no --ppm argument specified
-$norm_none_flag            = 0;    # disable normalization
+$no_iron_flag              = 0;    # disable normalization
 $no_log2_flag              = 0;    # do not log2 transform the data
 
 $syntax_error_flag         = 0;
@@ -136,9 +137,9 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $scale_heavy_flag = 0;
         }
-        elsif ($field =~ /^--norm-none$/)
+        elsif ($field =~ /^--no-iron$/)
         {
-            $norm_none_flag = 1;
+            $no_iron_flag = 1;
         }
         elsif ($field =~ /^--no-log2$/)
         {
@@ -213,8 +214,8 @@ if ($syntax_error_flag ||
     printf STDERR "Options:\n";
     printf STDERR "    --heavy-spikein            heavy rows are spikeins, leave unscaled (default)\n";
     printf STDERR "    --heavy-tracer             heavy rows are biological, normalize them\n";
+    printf STDERR "    --no-iron                  disable normalization; use on targeted panels\n";
     printf STDERR "    --no-log2                  disable log2 transform of output data\n";
-    printf STDERR "    --norm-none                disable normalization; use on targeted panels\n";
     printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
     printf STDERR "\n";
     printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
@@ -453,10 +454,10 @@ $cmd_str_strip_neg = sprintf "%s \"%s\" | %s%s - \"%s\" \"%s\" > \"%s\"",
                          $neg_cleaned_filename;
 
 $norm_extra_options_str = '';
-if ($norm_none_flag)
+if ($no_iron_flag)
 {
     # disable normalization
-    $norm_extra_options_str = '--norm-none';
+    $norm_extra_options_str = '--no-iron';
 }
 if ($no_log2_flag)
 {
