@@ -3,6 +3,8 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-08-07:  --iron-untilt overrides --no-iron flag if specified afterwards
+# 2023-08-07:  change --norm-none to --no-iron for consistency with other .pl
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-05-25:  refactor how stripping sample names is handled
 # 2023-05-25:  improved pos/neg detection from merge_metabolomics_pos_neg.pl
@@ -687,9 +689,9 @@ sub iron_samples
 
     # we didn't actually want to normalize the data, we only iron'd it to
     # get the scaling factors
-    if ($norm_none_flag)
+    if ($no_iron_flag)
     {
-        printf STDERR "--norm-none; overwriting iron output with unnormalized data\n";
+        printf STDERR "--no-iron; overwriting iron output with unnormalized data\n";
     
         $cmd_string = sprintf "iron_generic --proteomics --norm-none \"%s\" -o \"%s\"",
             $iron_input_name, $iron_output_name;
@@ -910,7 +912,7 @@ $bg_flag                 = 0;
 $strip_sample_names_flag = 1;
 $unlog2_flag             = 0;   # unlog2 the input data
 $no_log2_flag            = 0;   # do not log2 the output data
-$norm_none_flag          = 0;   # do not normalize the data at all
+$no_iron_flag            = 0;   # do not normalize the data at all
 $iron_untilt_flag        = 0;   # --rnaseq flag
 $boost_flag              = 0;   # assume last sample is boosting channel
 $first_flag              = 0;   # assume first sample is pool
@@ -961,13 +963,14 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $unlog2_flag = 1;
         }
-        elsif ($field =~ /^--norm-none$/)
+        elsif ($field =~ /^--no-iron$/)
         {
-            $norm_none_flag = 1;
+            $no_iron_flag = 1;
         }
         elsif ($field =~ /^--iron-untilt$/)
         {
             $iron_untilt_flag = 1;
+            $no_iron_flag = 0;
         }
         elsif ($field =~ /^--boost$/ ||
                $field =~ /^--last-ch$/)
@@ -1015,7 +1018,7 @@ if ($syntax_error_flag || $num_files == 0)
     printf STDERR "    --log2                        output log2 abundances [default]\n";
     printf STDERR "    --no-strip-sample-names       keep original full sample headers\n";
     printf STDERR "    --no-log2                     output unlogged abundances\n";
-    printf STDERR "    --norm-none                   disable normalization\n";
+    printf STDERR "    --no-iron                     disable normalization\n";
     printf STDERR "    --unlog2                      exponentiate input data, pow(2, value)\n";
     printf STDERR "\n";
     printf STDERR "    --boost                       use last  sample for normalization\n";
