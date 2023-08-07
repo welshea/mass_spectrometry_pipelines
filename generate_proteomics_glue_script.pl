@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-07:  support iron_normalize_mass_spec.pl --no-iron flag change
 # 2023-07-10:  add --iron-ref=sample reference sample override flag
 # 2023-07-10:  respect autodetect TMT_Channel when only a single plex
 # 2023-07-10:  support space-delimited autodetect input
@@ -469,7 +470,7 @@ $pipeline_ibaq_str .= sprintf "\nrm \"%s%s\"",
 $options_str = '';
 if ($no_iron_flag)
 {
-    $options_str  = '--norm-none';
+    $options_str  = '--no-iron';
 }
 if ($iron_untilt_flag)
 {
