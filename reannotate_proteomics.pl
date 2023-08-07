@@ -1,7 +1,9 @@
 #!/usr/bin/perl -w
 
-# 2023-06-27:  update is_number() to not treat NaNs as numbers
-# 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
+# 2023-08-07  more support for ENST-based FragPipe proteogenomics
+# 2023-08-03  add support for ENST-based Gencode proteogenomics annotation
+# 2023-06-27  update is_number() to not treat NaNs as numbers
+# 2023-05-18  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-04-07  add equivalent accessions (RefSeq, ENSP, etc.) to output
 # 2023-04-07  fix ENS* sort order
 # 2023-03-17  better sorting of isoforms, fragments, Ensembl accessions
@@ -2036,6 +2038,26 @@ $accession_type_col              = $accession_header_hash{'Type'};
 $accession_location_col          = $accession_header_hash{'Location'};
 $accession_description_col       = $accession_header_hash{'Description'};
 
+
+# support merged Gencode ENST annotation
+$map_with_additional_columns_flag = 0;
+if ($line =~ /^ensembl_transcript_id/ &&
+    $line =~ /type_transcript/)
+{
+    $accession_accession_col         = $accession_header_hash{'ensembl_transcript_id'};
+    $accession_accession_rna_col     = $accession_header_hash{'ensembl_transcript_id'};
+    $accession_accession_protein_col = $accession_header_hash{'protein_id'};
+    $accession_gene_id_col           = $accession_header_hash{'entrez_gene_id'};
+    $accession_symbol_col            = $accession_header_hash{'symbol'};
+    $accession_alias_col             = $accession_header_hash{'alias'};
+    $accession_type_col              = $accession_header_hash{'type_gene'};
+    $accession_location_col          = $accession_header_hash{'location'};
+    $accession_description_col       = $accession_header_hash{'description'};
+
+    $map_with_additional_columns_flag = 1;
+}
+
+
 if (!defined($accession_accession_col))
 {
     printf STDERR "ABORT -- missing accession Accession column\n";
@@ -2117,7 +2139,7 @@ foreach $col (@annotation_extra_col_array)
 while(defined($line=<ANNOTATION>))
 {
     $line =~ s/[\r\n]+//;
-    @array = split /\t/, $line;
+    @array = split /\t/, $line, -1;   # don't auto-strip empty descriptions...
     for ($i = 0; $i < @array; $i++)
     {
         $array[$i] =~ s/^\s+//;
@@ -2174,6 +2196,43 @@ while(defined($line=<ANNOTATION>))
     $accession_annotation_hash{$accession}{type}              = $type;
     $accession_annotation_hash{$accession}{location}          = $location;
     $accession_annotation_hash{$accession}{description}       = $description;
+
+    # store RNA/Protein lookups as well, in case we need them
+    if ($map_with_additional_columns_flag)
+    {
+      @accession_array = split /\|/, $accession_rna;
+      foreach $accession_temp (@accession_array)
+      {
+        if ($accession_temp =~ /[A-Za-z0-9]/ &&
+            !($accession_temp =~ /^N\/*A$/i))
+        {
+          $accession_annotation_hash{$accession_temp}{accession_rna}     = $accession_rna;
+          $accession_annotation_hash{$accession_temp}{accession_protein} = $accession_protein;
+          $accession_annotation_hash{$accession_temp}{gene_id}           = $gene_id;
+          $accession_annotation_hash{$accession_temp}{symbol}            = $symbol;
+          $accession_annotation_hash{$accession_temp}{alias}             = $alias;
+          $accession_annotation_hash{$accession_temp}{type}              = $type;
+          $accession_annotation_hash{$accession_temp}{location}          = $location;
+          $accession_annotation_hash{$accession_temp}{description}       = $description;
+        }
+      }
+      @accession_array = split /\|/, $accession_protein;
+      foreach $accession_temp (@accession_array)
+      {
+        if ($accession_temp =~ /[A-Za-z0-9]/ &&
+            !($accession_temp =~ /^N\/*A$/i))
+        {
+          $accession_annotation_hash{$accession_temp}{accession_rna}     = $accession_rna;
+          $accession_annotation_hash{$accession_temp}{accession_protein} = $accession_protein;
+          $accession_annotation_hash{$accession_temp}{gene_id}           = $gene_id;
+          $accession_annotation_hash{$accession_temp}{symbol}            = $symbol;
+          $accession_annotation_hash{$accession_temp}{alias}             = $alias;
+          $accession_annotation_hash{$accession_temp}{type}              = $type;
+          $accession_annotation_hash{$accession_temp}{location}          = $location;
+          $accession_annotation_hash{$accession_temp}{description}       = $description;
+        }
+      }
+    }
     
     # store extra annotation, by col
     # if we store by col, we don't need to worry about header collisions
@@ -2233,7 +2292,6 @@ for ($i = 0; $i < @array; $i++)
         
         if ($field =~ /^Accession/i ||
             $field =~ /^Proteins_/i ||
-            $field eq 'Proteins' ||
             $field =~ /^Uniprot_/i ||
             $field eq 'Uniprot' ||
             $field eq 'prey_ac' ||
@@ -2241,9 +2299,9 @@ for ($i = 0; $i < @array; $i++)
             $field =~ /^Leading\s*Protein/i ||
             $field =~ /Leading razor protein/i ||
             $field =~ /\bprotein ids\b/i ||
-            $field =~ /^Protein IDs$/i ||
             $field =~ /^Majority Protein IDs$/i ||
-            $field =~ /^Parent Protein$/i)
+            $field =~ /^Parent Protein$/i ||
+            $field =~ /^Mapped Proteins$/i)
         {
             $accession_col_array[$num_accession_cols++] = $i;
         }
@@ -2432,6 +2490,19 @@ while(defined($line=<DATA>))
         for ($i = 0; $i < @accession_array; $i++)
         {
             $accession = $accession_array[$i];
+            
+            # some non-standard accessions use periods as delimiters
+            @temp_array = $accession =~ /\./g;
+            if (@temp_array == 1)
+            {
+                $accession =~ s/\.\S+//g;
+            }
+            
+            # detect and deal with proteogenomics ENSTs
+            if ($accession =~ /chr[A-Za-z0-9]_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
+            {
+                $accession = $1;
+            }
 
             # remove FASTA junk
             # strangely, \b> does NOT match at the beginnig of the string !!
