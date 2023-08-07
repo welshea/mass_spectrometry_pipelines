@@ -7,7 +7,8 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
-# 2023-06-27:  update is_number() to not treat NaNs as numbers
+# 2023-08-07: --iron-untilt overrides --no-iron flag if specified afterwards
+# 2023-06-27: update is_number() to not treat NaNs as numbers
 # 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2022-12-09: change |& to 2>&1| to fix Ubuntu/Debian sh --> dash
 # 2022-07-08: better handling of 126C default when no pool specified
@@ -1689,6 +1690,7 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--iron-untilt$/)
         {
             $iron_untilt_flag = 1;
+            $no_iron_flag     = 0;
         }
         else
         {
