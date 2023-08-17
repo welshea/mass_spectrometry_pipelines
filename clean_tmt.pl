@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-17: properly sort sample names containing text before Plex
 # 2023-07-31: disable removal of oxidation site columns
 # 2023-06-08: warn about missing fields if they are encountered
 # 2023-06-07: fix too-short lines resulting in missing data
@@ -94,33 +95,63 @@ sub compare_accession
 
 sub cmp_renamed_header_cols
 {
-    my $header_a    = $header_array_orig_order[$a];
-    my $header_b    = $header_array_orig_order[$b];
-    my $plex_a      = '';
-    my $plex_b      = '';
-    my $ch_a        = '';
-    my $ch_b        = '';
-    my $ch_a_digits = '';
-    my $ch_b_digits = '';
-    my $run_a       = '';
-    my $run_b       = '';
+    my $header_a      = $header_array_orig_order[$a];
+    my $header_b      = $header_array_orig_order[$b];
+
+    my $plex_a        = '';
+    my $plex_b        = '';
+    my $plex_a_prefix = '';
+    my $plex_b_prefix = '';
+    my $plex_a_num    = '';
+    my $plex_b_num    = '';
+
+    my $ch_a          = '';
+    my $ch_b          = '';
+    my $ch_a_digits   = '';
+    my $ch_b_digits   = '';
+
+    my $run_a         = '';
+    my $run_b         = '';
+
 
     # may contain a _run1 or _run2 after the plex
-    if ($header_a =~ /([0-9]+).*_TMT-([0-9CN]+)$/)
+    if ($header_a =~ /(.*)_TMT-([0-9CN]+)$/)
     {
         $plex_a = $1;
         $ch_a   = $2;
 
         $ch_a_digits = $ch_a;
         $ch_a_digits =~ s/[^0-9]//g;
+
+        if ($plex_a =~ /(.*Plex)*([0-9]+)/i)
+        {
+            $plex_a_prefix = $1;
+            $plex_a_num    = $2;
+            
+            if (!defined($plex_a_prefix))
+            {
+                $plex_a_prefix = '';
+            }
+        }
     }
-    if ($header_b =~ /([0-9]+).*_TMT-([0-9CN]+)$/)
+    if ($header_b =~ /(.*)_TMT-([0-9CN]+)$/)
     {
         $plex_b = $1;
         $ch_b   = $2;
 
         $ch_b_digits = $ch_b;
         $ch_b_digits =~ s/[^0-9]//g;
+
+        if ($plex_b =~ /(.*Plex)*([0-9]+)/i)
+        {
+            $plex_b_prefix = $1;
+            $plex_b_num    = $2;
+            
+            if (!defined($plex_b_prefix))
+            {
+                $plex_b_prefix = '';
+            }
+        }
     }
 
     # sort non-samples by original order
@@ -132,10 +163,20 @@ sub cmp_renamed_header_cols
     # put samples last
     if ($plex_a ne '' && $plex_b eq '') { return  1; }
     if ($plex_a eq '' && $plex_b ne '') { return -1; }
+
+    # sort samples by plex prefix
+    if ($plex_a_prefix ne '' && $plex_b_prefix ne '')
+    {
+        if ($plex_a_prefix lt $plex_b_prefix) { return -1; }
+        if ($plex_a_prefix gt $plex_b_prefix) { return  1; }
+    }
     
-    # sort samples by plex
-    if ($plex_a < $plex_b) { return -1; }
-    if ($plex_a > $plex_b) { return  1; }
+    # sort samples by plex number
+    if ($plex_a_num ne '' && $plex_b_num ne '')
+    {
+        if ($plex_a_num < $plex_b_num) { return -1; }
+        if ($plex_a_num > $plex_b_num) { return  1; }
+    }
     
     # sort samples by injection replicate
     if ($header_a =~ /[^A-Za-z0-9]run([0-9]+)_/)
