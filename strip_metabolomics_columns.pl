@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-18:  new (D#) rule for matching heavy label text at end of name
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-06-08:  improve LipidSearch detection for stripping adducts from formula
 # 2023-06-08:  begin adding LipidMatch support
@@ -254,6 +255,10 @@ sub reformat_sci
 sub is_heavy_labeled
 {
     my $string = $_[0];
+
+    # potentially problematic heavy-labeled standards:
+    #    N-Acetyl-L-aspartic acid-2,3,3-d3
+    #    N-Acetyl-L-aspartic 2,3,3-d3 acid
     
     if ($string =~ /\([^()]*\b13C[0-9]*\b[^()]*\)/) { return 1; }
     if ($string =~ /\([^()]*\b14N[0-9]*\b[^()]*\)/) { return 1; }
@@ -264,6 +269,10 @@ sub is_heavy_labeled
     if ($string =~ /\b14N[0-9]+\b/) { return 1; }
     if ($string =~ /[)-]D[0-9]+\b/) { return 1; }
     if ($string =~ /\bBOC\b/)       { return 1; }
+
+    # (D#) at the end, such as Cortisone (D7), Creatinine (D3)
+    # also check for acid at end, in case we have names similar to "-d3 acid"
+    if ($string =~ /\(D[0-9]+\)([, ]*acid)*$/) { return 1; }
     
     return 0;
 }
