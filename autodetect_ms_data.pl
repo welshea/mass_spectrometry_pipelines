@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2023-08-22: replace RefSeq field with RefDB field; guess DB searched against
 # 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-04-28: default to 1st instead of last channel pool for non-pY
 # 2023-04-10: respect --boost flag when injection replicates are detected
@@ -96,7 +97,6 @@ $channel_map_table[18][17] = '135N';	# 135N
 
 $intensity_flag  = 0;
 $ibaq_flag       = 0;
-$refseq_flag     = 0;
 $mod_flag        = 0;
 $psty_flag       = 0;
 $py_flag         = 0;
@@ -161,7 +161,7 @@ if ($syntax_error_flag)
     printf "\n";
     printf "  Output:\n";
     printf "    Modification  [yes/no]         does the data contain modification sites\n";
-    printf "    RefSeq        [yes/no]         is the data mainly matched against RefSeqs\n";
+    printf "    RefDB         [RefSeq/etc.]    database we think it was matched against\n";
     printf "    TMT           [single/multi/injection]\n";
     printf "                                   1 plex, >=2 plexes, >=2 all injection reps\n";
     printf "    TMT_Channel   [auto/TMT-????]  reference channel for IRON normalization\n";
@@ -483,8 +483,12 @@ while(defined($line=<INFILE>))
 
 @accession_array = sort keys %accession_hash;
 
-$non_refseq_count = 0;
-$refseq_count = 0;
+
+$refseq_count     = 0;    # RefSeq
+$swissprot_count  = 0;    # SwissProt
+$chrom_count      = 0;    # parsed Gencode, chr# identifiers
+$other_count      = 0;    # other, assume Uniprot
+
 foreach $accession (@accession_array)
 {
     if ($accession =~ /^NP_/ || $accession =~ /^XP_/ ||
@@ -492,17 +496,42 @@ foreach $accession (@accession_array)
     {
         $refseq_count++;
     }
+    elsif ($accession =~ /_(HUMAN|MOUSE)\b/)
+    {
+        $swissprot_count++;
+    }
+    elsif ($accession =~
+           /chr[A-Za-z0-9]_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
+    {
+        $chrom_count++;
+    }
     else
     {
-        $non_refseq_count++;
+        $other_count++;
     }
     
 #    print "$accession\n";
 }
 
-if ($refseq_count > $non_refseq_count)
+
+$refdb_string              = 'UniProt';
+%db_counts_hash            = ();
+$db_counts_hash{RefSeq}    = $refseq_count;
+$db_counts_hash{SwissProt} = $swissprot_count;
+$db_counts_hash{Uniprot}   = $other_count;
+$db_counts_hash{Gencode}   = $chrom_count;
+
+@db_array = keys %db_counts_hash;
+@db_array = sort {-($db_counts_hash{$a} <=> $db_counts_hash{$b})} @db_array;
+
+$refdb_string = $db_array[0];
+
+# detect proteogenomics, will be mostly UniProt with a few mutant chr
+if ($refdb_string eq 'Uniprot' &&
+    defined($db_counts_hash{Gencode}) &&
+    $db_counts_hash{Gencode} > 0)
 {
-    $refseq_flag = 1;
+    $refdb_string = 'Gencode';
 }
 
 
@@ -627,8 +656,7 @@ if ($injection_plex_flag)
 
 $mod_string = 'no';
 if ($mod_flag) { $mod_string = 'yes'; }
-$refseq_string = 'no';
-if ($refseq_flag) { $refseq_string = 'yes'; }
+
 
 
 # guess species
@@ -669,7 +697,7 @@ else
 
 
 printf "Modification\t%s\n",  $mod_string;
-printf "RefSeq\t%s\n",        $refseq_string;
+printf "RefDB\t%s\n",         $refdb_string;
 printf "TMT\t%s\n",           $tmt_type;
 printf "TMT_Channel\t%s\n",   $tmt_channel;
 printf "Rollup\t%s\n",        $rollup;
