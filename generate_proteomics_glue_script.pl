@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-22:  support Gencode-based proteogenomics annotation
 # 2023-08-22:  bugfix --iron-ref=sample, non-TMT data
 # 2023-08-07:  support iron_normalize_mass_spec.pl --no-iron flag change
 # 2023-07-10:  add --iron-ref=sample reference sample override flag
@@ -350,21 +351,22 @@ if ($species =~ /Human/i) { $human_flag = 1; }
 
 # default to uniprot human annotation
 $annotation_species = 'human';
-$annotation_source  = 'uniprot';
+$annotation_source  = 'UniProt';
 
-$annotation_file  = 'merged_protein_annotations_human.txt';
+$annotation_file    = 'merged_protein_annotations_human.txt';
 
-# use refseq instead
-if (defined($autodetect_hash{RefSeq}) &&
-            $autodetect_hash{RefSeq} eq 'yes')
+if (defined($autodetect_hash{RefDB}))
 {
-    $annotation_source = 'refseq';
+    $annotation_source = $autodetect_hash{RefDB};
     
     # default to human
     $annotation_file   = 'merged_protein_annotations_human.txt';
-    
-    # override with combined IPI + Uniprot + Refseq + some Ensembl
-    $annotation_file   = 'merged_protein_annotations_human.txt';
+
+    # proteogenomics, currently using Gencode v30 h38
+    if ($annotation_source eq 'Gencode')
+    {
+        $annotation_file = 'gencode_v30_h38_merged_enst_annotation.txt';
+    }
 }
 
 # use mouse annotation
@@ -373,14 +375,6 @@ if ($mouse_flag && $human_flag == 0)
     $annotation_species = 'mouse';
 
     # default to uniprot
-    $annotation_file = 'merged_protein_annotations_mouse.txt';
-    
-    if ($annotation_source eq 'refseq')
-    {
-        $annotation_file = 'merged_protein_annotations_mouse.txt';
-    }
-
-    # override with combined IPI + Uniprot + Refseq + some Ensembl
     $annotation_file = 'merged_protein_annotations_mouse.txt';
 }
 
