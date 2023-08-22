@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-22:  bugfix --iron-ref=sample, non-TMT data
 # 2023-08-07:  support iron_normalize_mass_spec.pl --no-iron flag change
 # 2023-07-10:  add --iron-ref=sample reference sample override flag
 # 2023-07-10:  respect autodetect TMT_Channel when only a single plex
@@ -487,18 +488,13 @@ if ($first_flag)
     $options_str  =~ s/^\s+//;
 }
 
-$pipeline_norm_str = sprintf "%s %s \"%s%s\" \\\n  > \"%s%s\"",
-    'iron_normalize_mass_spec.pl',
-    $options_str,
-    $output_root_name, '_orig_intensity.txt',
-    $output_root_name, '_iron_log2_intensity.txt';
-
 
 # set reference channel first by what's autodetected
 # then, override with --iron-ref=sample
 $temp_ref_sample = '';
 if (defined($autodetect_hash{TMT_Channel}) &&
-    $autodetect_hash{TMT_Channel} ne 'auto')
+    $autodetect_hash{TMT_Channel} ne 'auto' &&
+    $autodetect_hash{TMT_Channel} ne 'none')
 {
     $temp_ref_sample = $autodetect_hash{TMT_Channel};
 }
@@ -506,10 +502,16 @@ if ($iron_ref_sample ne '')
 {
     $temp_ref_sample = $iron_ref_sample;
 }
-if ($temp_ref_sample ne '')
-{
-    $pipeline_norm_str .= " \"$temp_ref_sample\"";
-}
+
+
+$pipeline_norm_str = sprintf "%s %s \"%s%s\" \"%s\" \\\n  > \"%s%s\"",
+    'iron_normalize_mass_spec.pl',
+    $options_str,
+    $output_root_name, '_orig_intensity.txt',
+    $temp_ref_sample,
+    $output_root_name, '_iron_log2_intensity.txt';
+
+
 
 
 if (defined($autodetect_hash{TMT}) &&
