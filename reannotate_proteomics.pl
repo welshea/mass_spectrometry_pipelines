@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-23  detect FragPipe reverse sequences
 # 2023-08-23  flag proteogenomics mutant-only peptides
 # 2023-08-23  bugfix proteogeonomics 2-character chromosomes
 # 2023-08-07  more support for ENST-based FragPipe proteogenomics
@@ -2532,24 +2533,6 @@ while(defined($line=<DATA>))
                 $accession =~ s/\.\S+//g;
             }
             
-            # detect and deal with proteogenomics ENSTs
-            # use \bchr, not just chr, to skip rev_chr
-            if ($accession =~ /\bchr[A-Za-z0-9]+_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
-            {
-                $accession   = $1;
-                $mutant_flag = 1;
-            }
-            # check for \bENS, not just ENS,
-            # since FragPipe can have rev_ENSP reverse sequences
-            #
-            # \b counts _ as a word, not a word boundary,
-            # so it does what we want here
-            #
-            elsif ($accession =~ /\bENS[A-Z]{0,3}P[0-9]+/)
-            {
-                $ensp_flag   = 1;
-            }
-
             # remove FASTA junk
             # strangely, \b> does NOT match at the beginnig of the string !!
             #  so, I have to use negative lookbehind instead... perl bug ??
@@ -2574,11 +2557,11 @@ while(defined($line=<DATA>))
             $accession =~ s/^\s+//;
             $accession =~ s/\s+$//;
 
-            # remove REV__
+            # remove REV__, rev_
             $reverse_flag = 0;
-            if ($accession =~ /(?<![A-Za-z0-9])REV__/)
+            if ($accession =~ /(?<![A-Za-z0-9])REV_+/i)
             {
-                $accession =~ s/(?<![A-Za-z0-9])REV__//g;
+                $accession =~ s/(?<![A-Za-z0-9])REV_+//ig;
                 $reverse_flag = 1;
             }
             
@@ -2586,6 +2569,27 @@ while(defined($line=<DATA>))
             if (!($accession =~ /[A-Za-z0-9]/))
             {
                 next;
+            }
+
+
+            # detect and deal with proteogenomics ENSTs
+            # use \bchr, not just chr, to skip rev_chr
+            if ($reverse_flag == 0 &&
+                $accession =~ /\bchr[A-Za-z0-9]+_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
+            {
+                $accession   = $1;
+                $mutant_flag = 1;
+            }
+            # check for \bENS, not just ENS,
+            # since FragPipe can have rev_ENSP reverse sequences
+            #
+            # \b counts _ as a word, not a word boundary,
+            # so it does what we want here
+            #
+            elsif ($reverse_flag == 0 &&
+                   $accession =~ /\bENS[A-Z]{0,3}P[0-9]+/)
+            {
+                $ensp_flag   = 1;
             }
 
             
