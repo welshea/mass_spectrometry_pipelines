@@ -2,6 +2,8 @@
 
 # Changelog:
 #
+# 2023-08-23: add Ensembl accessions detection
+# 2023-08-23: bugfix proteogeonomics 2-character chromosomes
 # 2023-08-22: replace RefSeq field with RefDB field; guess DB searched against
 # 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2023-04-28: default to 1st instead of last channel pool for non-pY
@@ -486,7 +488,8 @@ while(defined($line=<INFILE>))
 
 $refseq_count     = 0;    # RefSeq
 $swissprot_count  = 0;    # SwissProt
-$chrom_count      = 0;    # parsed Gencode, chr# identifiers
+$ensembl_count    = 0;    # ENSP/ENST
+$chrom_count      = 0;    # chr#
 $other_count      = 0;    # other, assume Uniprot
 
 foreach $accession (@accession_array)
@@ -501,9 +504,14 @@ foreach $accession (@accession_array)
         $swissprot_count++;
     }
     elsif ($accession =~
-           /chr[A-Za-z0-9]_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
+           /\bchr[A-Za-z0-9]+_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
     {
         $chrom_count++;
+        $ensembl_count++;
+    }
+    elsif ($accession =~ /\bENS[A-Z]{0,3}[PTG][0-9]+/)
+    {
+        $ensembl_count++;
     }
     else
     {
@@ -519,6 +527,7 @@ $refdb_string              = 'UniProt';
 $db_counts_hash{RefSeq}    = $refseq_count;
 $db_counts_hash{SwissProt} = $swissprot_count;
 $db_counts_hash{Uniprot}   = $other_count;
+$db_counts_hash{Ensembl}   = $ensembl_count;
 $db_counts_hash{Gencode}   = $chrom_count;
 
 @db_array = keys %db_counts_hash;
@@ -526,9 +535,8 @@ $db_counts_hash{Gencode}   = $chrom_count;
 
 $refdb_string = $db_array[0];
 
-# detect proteogenomics, will be mostly UniProt with a few mutant chr
-if ($refdb_string eq 'Uniprot' &&
-    defined($db_counts_hash{Gencode}) &&
+# detect proteogenomics, will be mostly UniProt/Ensembl with a few mutant chr
+if (defined($db_counts_hash{Gencode}) &&
     $db_counts_hash{Gencode} > 0)
 {
     $refdb_string = 'Gencode';
