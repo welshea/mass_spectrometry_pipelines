@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2023-08-23  flag proteogenomics mutant-only peptides
+# 2023-08-23  bugfix proteogeonomics 2-character chromosomes
 # 2023-08-07  more support for ENST-based FragPipe proteogenomics
 # 2023-08-03  add support for ENST-based Gencode proteogenomics annotation
 # 2023-06-27  update is_number() to not treat NaNs as numbers
@@ -1911,6 +1913,22 @@ sub print_probeid_annotation
     $line_new .= "\t$all_reverse";
     $line_new .= "\t$cow_contam";
     $line_new .= "\t$target_species_flag";
+
+    # insert proteogenomics column(s)
+    if ($proteogenomics_flag)
+    {
+        # unique to mutant
+        if ($mutant_flag && $ensp_flag == 0)
+        {
+            $line_new .= "\t" . '1';
+        }
+        # not unique to mutant, leave blank
+        else
+        {
+            $line_new .= "\t" . '0';
+        }
+    }
+
     $line_new .= "\t$accession_pruned_str";
 
     # insert extra annotation fields
@@ -1949,7 +1967,8 @@ sub print_probeid_annotation
 
 # Begin main()
 
-$strip_flag = 0;
+$strip_flag          = 0;
+$proteogenomics_flag = 0;
 
 $num_files = 0;
 for ($i = 0; $i < @ARGV; $i++)
@@ -1961,6 +1980,12 @@ for ($i = 0; $i < @ARGV; $i++)
         if ($field eq '--strip' || $field eq '--prune')
         {
             $strip_flag = 1;
+        }
+        # only the dat content can tell us if it is proteogenomics or not,
+        # so we need a flag to tell us ahead of time for inserting columns
+        elsif ($field eq '--proteogenomics')
+        {
+            $proteogenomics_flag = 1;
         }
         else
         {
@@ -2370,6 +2395,12 @@ printf "\t%s", 'Has_Contaminant_Flag';
 printf "\t%s", 'All_Reverse_Flag';
 printf "\t%s", 'Cow_Contaminant_Flag';
 printf "\t%s", 'Target_Species_Flag';
+
+if ($proteogenomics_flag)
+{
+    printf "\t%s", 'Unique_To_Mutant';
+}
+
 printf "\t%s", 'Accession_Protein';
 
 # insert extra annotation fields
@@ -2441,6 +2472,9 @@ while(defined($line=<DATA>))
     $reverse_orig = 0;
     $contam_orig  = 0;
     
+    $mutant_flag  = 0;
+    $ensp_flag    = 0;
+    
     if (defined($reverse_col))
     {
         if ($array[$reverse_col] eq '+' ||
@@ -2499,9 +2533,21 @@ while(defined($line=<DATA>))
             }
             
             # detect and deal with proteogenomics ENSTs
-            if ($accession =~ /chr[A-Za-z0-9]_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
+            # use \bchr, not just chr, to skip rev_chr
+            if ($accession =~ /\bchr[A-Za-z0-9]+_[0-9]+_[^ ]*(ENS[A-Z]{0,3}[PTG][0-9]+)/)
             {
-                $accession = $1;
+                $accession   = $1;
+                $mutant_flag = 1;
+            }
+            # check for \bENS, not just ENS,
+            # since FragPipe can have rev_ENSP reverse sequences
+            #
+            # \b counts _ as a word, not a word boundary,
+            # so it does what we want here
+            #
+            elsif ($accession =~ /\bENS[A-Z]{0,3}P[0-9]+/)
+            {
+                $ensp_flag   = 1;
             }
 
             # remove FASTA junk
