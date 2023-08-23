@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-23:  flag proteogenomics mutant-only peptides
 # 2023-08-22:  support Gencode-based proteogenomics annotation
 # 2023-08-22:  bugfix --iron-ref=sample, non-TMT data
 # 2023-08-07:  support iron_normalize_mass_spec.pl --no-iron flag change
@@ -353,6 +354,7 @@ if ($species =~ /Human/i) { $human_flag = 1; }
 $annotation_species = 'human';
 $annotation_source  = 'UniProt';
 
+$proteogenomics_str = '';
 $annotation_file    = 'merged_protein_annotations_human.txt';
 
 if (defined($autodetect_hash{RefDB}))
@@ -365,7 +367,8 @@ if (defined($autodetect_hash{RefDB}))
     # proteogenomics, currently using Gencode v30 h38
     if ($annotation_source eq 'Gencode')
     {
-        $annotation_file = 'gencode_v30_h38_merged_enst_annotation.txt';
+        $annotation_file    = 'gencode_v30_h38_merged_enst_annotation.txt';
+        $proteogenomics_str = ' --proteogenomics';
     }
 }
 
@@ -400,8 +403,9 @@ if ($mouse_flag && $human_flag)
 
 
 # run the annotation script
-$pipeline_preprocess_str .= sprintf " \\\n  | %s \"%s/%s\" -",
+$pipeline_preprocess_str .= sprintf " \\\n  | %s%s \"%s/%s\" -",
         'reannotate_proteomics.pl',
+        $proteogenomics_str,
         $script_path, $annotation_file;
 
 
