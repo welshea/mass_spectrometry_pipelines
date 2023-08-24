@@ -27,6 +27,7 @@ $prev_seen_mod_type_hash{'Desthiobiotin-ATP'} = 1;
 $prev_seen_mod_type_hash{'Dethiobiotin-ATP'}  = 1;
 $prev_seen_mod_type_hash{'GlyGly (K)'}        = 1;
 $prev_seen_mod_type_hash{'Lactylation'}       = 1;
+$prev_seen_mod_type_hash{'Lactylation Heavy'} = 1;
 $prev_seen_mod_type_hash{'Oxidation (M)'}     = 1;
 $prev_seen_mod_type_hash{'Phospho (STY)'}     = 1;
 
