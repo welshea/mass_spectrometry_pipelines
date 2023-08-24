@@ -1,11 +1,72 @@
 #!/usr/bin/perl -w
 
-# 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
+# 2023-08-24:  replace hard-coded modification types with auto-detection
+# 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2022-05-06:  support missing Positions Within Proteins column (old MaxQuant)
 # 2021-10-28:  add support for Biotin-HPDP
 # 2021-08-30:  deal with missing accessions/positions in various fields
 
 use POSIX;
+
+
+# Modifications we've seen before:
+#    Acetyl (K)
+#    ATP
+#    Biotin-HPDP
+#    Desthiobiotin-ATP
+#    Dethiobiotin-ATP
+#    GlyGly (K)
+#    Lactylation
+#    Oxidation (M)
+#    Phospho (STY)
+
+$prev_seen_mod_type_hash{'Acetyl (K)'}        = 1;
+$prev_seen_mod_type_hash{'ATP'}               = 1;
+$prev_seen_mod_type_hash{'Biotin-HPDP'}       = 1;
+$prev_seen_mod_type_hash{'Desthiobiotin-ATP'} = 1;
+$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}  = 1;
+$prev_seen_mod_type_hash{'GlyGly (K)'}        = 1;
+$prev_seen_mod_type_hash{'Lactylation'}       = 1;
+$prev_seen_mod_type_hash{'Oxidation (M)'}     = 1;
+$prev_seen_mod_type_hash{'Phospho (STY)'}     = 1;
+
+
+# first letters of previously seen modifications
+foreach $temp_mod_type (sort keys %prev_seen_mod_type_hash)
+{
+    $c = lc substr $temp_mod_type, 0, 1;
+
+    $prev_seen_mod_type_char_hash{$c} = 1;
+}
+
+
+sub cmp_mod_types
+{
+    my $mod_type1 = $a;
+    my $mod_type2 = $b;
+    my $count1    = $mod_type_hash{$a};
+    my $count2    = $mod_type_hash{$b};
+
+    # put oxidation last, since it is usually unimportant
+    if ( ($mod_type1 =~ /^Oxidation/i) &&
+        !($mod_type2 -~ /^Oxidation/i))
+    {
+        return -1;
+    }
+    if (!($mod_type1 =~ /^Oxidation/i) &&
+         ($mod_type2 -~ /^Oxidation/i))
+    {
+        return  1;
+    }
+    
+    # use header counts to help weed out false-positive mod type guesses
+    if ($count1 > $count2) { return -1; }
+    if ($count1 < $count2) { return  1; }
+    
+    # no good way to choose from here on, just sort alphabetically
+    return lc $mod_type1 cmp lc $mod_type2;
+}
+
 
 sub cmp_phospho_probs
 {
@@ -525,17 +586,6 @@ $position_pep_col      = $header1_hash{'Position in Peptide'};
 $window_col            = $header1_hash{'Sequence Window'};
 
 
-# latest MaxQuant often is *blank* in this column, when it should have a number
-# when it *does* have a number, the number is often wrong
-# sometimes the number is different for the different accessions!
-# well crap, now we can't even use that for figuring out how to parse the
-# Phospho (STY) Proabilities correctly...
-#
-#$numSTY_col            = $header1_hash{'Number of Phospho (STY)'};
-
-$probSTY_col           = $header1_hash{'Phospho (STY) Probabilities'};
-$diffSTY_col           = $header1_hash{'Phospho (STY) Score Diffs'};
-
 $reverse_col           = $header1_hash{'Reverse'};
 $contaminant_col       = $header1_hash{'Contaminant'};
 
@@ -564,63 +614,110 @@ foreach $header (sort keys %header1_hash)
 }
 
 
-$modification_type_char = 'p';	# phosphorylation
+# latest MaxQuant often is *blank* in this column, when it should have a number
+# when it *does* have a number, the number is often wrong
+# sometimes the number is different for the different accessions!
+# well crap, now we can't even use that for figuring out how to parse the
+# Phospho (STY) Probabilities correctly...
+#
+#$numSTY_col            = $header1_hash{'Number of Phospho (STY)'};
 
-# might be some other modification
-if (!defined($probSTY_col))
+
+# scan headers for modification type columns
+%mod_type_hash = ();
+$mod_type_char = '';
+
+for ($i = 0; $i < @array; $i++)
 {
-#    $numSTY_col            = $header1_hash{'Number of Oxidation (M)'};
-    $probSTY_col           = $header1_hash{'Oxidation (M) Probabilities'};
-    $diffSTY_col           = $header1_hash{'Oxidation (M) Score Diffs'};
-    $modification_type_char     = 'o';	# oxidation
+    $header = $array[$i];
+    
+    if ($header =~ /(.*)\s+Probabilities$/)
+    {
+        $mod_type = $1;
+        
+        if (!defined($mod_type_hash{$mod_type}))
+        {
+            $mod_type_hash{$mod_type} = 0;
+        }
+        $mod_type_hash{$mod_type} += 1;
+    }
+
+    if ($header =~ /(.*)\s+Score Diffs$/)
+    {
+        $mod_type = $1;
+        
+        if (!defined($mod_type_hash{$mod_type}))
+        {
+            $mod_type_hash{$mod_type} = 0;
+        }
+        $mod_type_hash{$mod_type} += 1;
+    }
 }
-# might be some other modification
-if (!defined($probSTY_col))
+
+@mod_type_array = sort cmp_mod_types keys %mod_type_hash;
+
+if (@mod_type_array == 0)
 {
-#    $numSTY_col            = $header1_hash{'Number of Desthiobiotin-ATP'};
-    $probSTY_col           = $header1_hash{'Desthiobiotin-ATP Probabilities'};
-    $diffSTY_col           = $header1_hash{'Desthiobiotin-ATP Score Diffs'};
-    $modification_type_char     = 'd';	# desthiobiotin
+    die "ABORT -- no modification headers (Score Diffs, Probabilities) found\n";
 }
-# looks like they renamed the column headers for Desthiobiotin yet again...
-if (!defined($probSTY_col))
+
+$mod_types_all_str = join "; ", @mod_type_array;
+if (@mod_type_array > 1)
 {
-    $probSTY_col           = $header1_hash{'ATP Probabilities'};
-    $diffSTY_col           = $header1_hash{'ATP Score diffs'};
-    $modification_type_char     = 'd';	# desthiobiotin
+    printf STDERR "WARNING -- choosing 1st of multiple types:  %s\n",
+        $mod_types_all_str;
 }
-# or it could be a new typo that Maxquant introduced...
-if (!defined($probSTY_col))
+
+$mod_type       = $mod_type_array[0];
+$header_prob    = $mod_type . " Probabilities";
+$header_diffs   = $mod_type . " Score Diffs";
+$probSTY_col    = $header1_hash{$header_prob};
+$diffSTY_col    = $header1_hash{$header_diffs};
+$mod_type_char  = lc substr $mod_type, 0, 1;
+
+# warning for previously unseen modification types
+if (!defined($prev_seen_mod_type_hash{$mod_type}))
 {
-#    $numSTY_col            = $header1_hash{'Number of Dethiobiotin-ATP'};
-    $probSTY_col           = $header1_hash{'Dethiobiotin-ATP Probabilities'};
-    $diffSTY_col           = $header1_hash{'Dethiobiotin-ATP Score Diffs'};
-    $modification_type_char     = 'd';	# desthiobiotin
+    printf STDERR "WARNING -- previously unknown modification type:  %s\n",
+        $mod_type;
+    printf STDERR "WARNING -- contact developer to vet auto-abbreviations\n";
 }
-# might be some other modification
-if (!defined($probSTY_col))
+
+# assume ATP is Desthiobiotin, use 'd' instead of 'a'
+if ($mod_type_char ne 'd' &&
+    $mod_type =~ /(^ATP\b|\bATP$)/)
 {
-#    $numSTY_col            = $header1_hash{'Number of Acetyl (K)'};
-    $probSTY_col           = $header1_hash{'Acetyl (K) Probabilities'};
-    $diffSTY_col           = $header1_hash{'Acetyl (K) Score Diffs'};
-    $modification_type_char     = 'a';	# acetylation
+    $mod_type_char = 'd';
 }
-# might be some other modification
-if (!defined($probSTY_col))
+
+# lowercase 'l' looks too much like capital 'I' in many fonts
+# use something else, so that they aren't confused with Isoleucine
+if ($mod_type_char eq 'l')
 {
-#    $numSTY_col            = $header1_hash{'Number of GlyGly (K)'};
-    $probSTY_col           = $header1_hash{'GlyGly (K) Probabilities'};
-    $diffSTY_col           = $header1_hash{'GlyGly (K) Score Diffs'};
-    $modification_type_char     = 'g';	# glygly
+    # try to pick a letter not used by other types we've seen before
+    # if none found, default to 'x'
+    $mod_type_char = 'x';
+
+    if (1)
+    {
+        $len_mod_type  = length $mod_type;
+        for ($i = 0; $i < $len_mod_type; $i++)
+        {
+            $c = substr lc $mod_type, $i, 1;
+
+            # we've already used this letter for another modification type
+            if ($c ne 'l' && !defined($prev_seen_mod_type_char_hash{$c}))
+            {
+                $mod_type_char = $c;
+                last;
+            }
+        }
+    }
+    
+    printf STDERR "CAUTION -- %s 'l' looks too much like 'I', using '%s' instead\n",
+        $mod_type, $mod_type_char;
 }
-# might be some other modification
-if (!defined($probSTY_col))
-{
-#    $numSTY_col            = $header1_hash{'Number of Biotin-HPDP'};
-    $probSTY_col           = $header1_hash{'Biotin-HPDP Probabilities'};
-    $diffSTY_col           = $header1_hash{'Biotin-HPDP Score Diffs'};
-    $modification_type_char     = 'b';	# biotin
-}
+
 
 #if (!defined($modified_sequence_col))
 #{
@@ -1031,7 +1128,7 @@ while(defined($line=<INFILE>))
     }
 
 
-    $modified_sequence = fix_phosphopeptide($modification_type_char,
+    $modified_sequence = fix_phosphopeptide($mod_type_char,
                                             $position_pep,
                                             $probSTY, $diffSTY,
                                             $positions_chosen);
@@ -1192,22 +1289,18 @@ while(defined($line=<INFILE>))
     $positions_new = join ';', @new_positions_array;
 
     # abbreviations for ModificationID
-    $mod_type = $modification_type_char;
-    $abbrev = 'xx';
-    if ($mod_type eq 'p') { $abbrev = 'ph'; }
-    if ($mod_type eq 'o') { $abbrev = 'ox'; }
-    if ($mod_type eq 'd') { $abbrev = 'de'; }
-    if ($mod_type eq 'g') { $abbrev = 'gl'; }
-    if ($mod_type eq 'a') { $abbrev = 'ac'; }
-    if ($mod_type eq 'b') { $abbrev = 'bh'; }   # Biotin-HPDP
-
-    if    ($mod_type eq 'p') { $mod_type = 'Phosphorylation (STY)'; }
-    elsif ($mod_type eq 'o') { $mod_type = 'Oxidation (M)'; }
-    elsif ($mod_type eq 'd') { $mod_type = 'Desthiobiotin-ATP'; }
-    elsif ($mod_type eq 'g') { $mod_type = 'GlyGly (K)'; }
-    elsif ($mod_type eq 'a') { $mod_type = 'Acetyl (K)'; }
-    elsif ($mod_type eq 'b') { $mod_type = 'Biotin-HPDP'; }
-    else                     { $mod_type = 'Unknown' };
+    # 2-letter abbreviations are still hard-coded
+    # unspported types will fall back to single letter
+    $abbrev = $mod_type_char;
+    if ($mod_type =~ /^Phospho/i)                 { $abbrev = 'ph'; }
+    elsif ($mod_type =~ /^Oxidation/i)               { $abbrev = 'ox'; }
+    elsif ($mod_type =~ /(^Des*thio|^ATP\b|\bATP$)/) { $abbrev = 'de'; }
+    elsif ($mod_type =~ /^Gly/i)                     { $abbrev = 'gl'; }
+    elsif ($mod_type =~ /^Lact/i)                    { $abbrev = 'la'; }
+    elsif ($mod_type =~ /^Acetyl/i)                  { $abbrev = 'ac'; }
+    elsif ($mod_type =~ /^Biotin-H/i)                { $abbrev = 'bh'; }
+    # use first 2 letters
+    else  { $abbrev = lc substr $mod_type, 0, 2; };
 
     $phosphosite_id = sprintf "%s_%s:%s",
         $abbrev, $proteins_new, $positions_new;
