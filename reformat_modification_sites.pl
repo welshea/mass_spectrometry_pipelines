@@ -40,6 +40,10 @@ foreach $temp_mod_type (sort keys %prev_seen_mod_type_hash)
     $prev_seen_mod_type_char_hash{$c} = 1;
 }
 
+# we also use 'c' for Lactylation and Lactylation Heavy
+$prev_seen_mod_type_char_hash{'c'} = 1;
+
+
 
 sub cmp_mod_types
 {
@@ -689,6 +693,12 @@ if ($mod_type_char ne 'd' &&
     $mod_type =~ /(^ATP\b|\bATP$)/)
 {
     $mod_type_char = 'd';
+}
+
+# use 'c' for Lactylation and Lactylation Heavy
+if ($mod_type =~ /^Lactylation/i)
+{
+    $mod_type_char = 'c';
 }
 
 # lowercase 'l' looks too much like capital 'I' in many fonts
