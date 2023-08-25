@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-08-25:  print modification type abbreviations to STDERR
 # 2023-08-24:  replace hard-coded modification types with auto-detection
 # 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
 # 2022-05-06:  support missing Positions Within Proteins column (old MaxQuant)
@@ -729,6 +730,23 @@ if ($mod_type_char eq 'l')
         $mod_type, $mod_type_char;
 }
 
+# abbreviations for ModificationID
+# 2-letter abbreviations are still hard-coded
+# unspported types will fall back to single letter
+$mod_type_abbrev = $mod_type_char;
+if ($mod_type =~ /^Phospho/i)                    { $mod_type_abbrev = 'ph'; }
+elsif ($mod_type =~ /^Oxidation/i)               { $mod_type_abbrev = 'ox'; }
+elsif ($mod_type =~ /(^Des*thio|^ATP\b|\bATP$)/) { $mod_type_abbrev = 'de'; }
+elsif ($mod_type =~ /^Gly/i)                     { $mod_type_abbrev = 'gl'; }
+elsif ($mod_type =~ /^Lact/i)                    { $mod_type_abbrev = 'la'; }
+elsif ($mod_type =~ /^Acetyl/i)                  { $mod_type_abbrev = 'ac'; }
+elsif ($mod_type =~ /^Biotin-H/i)                { $mod_type_abbrev = 'bh'; }
+# use first 2 letters
+else  { $mod_type_abbrev = lc substr $mod_type, 0, 2; };
+
+printf STDERR "Modification type:\t%s\t%s\t%s\n",
+    $mod_type, $mod_type_abbrev, $mod_type_char;
+
 
 #if (!defined($modified_sequence_col))
 #{
@@ -1299,22 +1317,8 @@ while(defined($line=<INFILE>))
     $proteins_new  = join ';', @new_accession_array;
     $positions_new = join ';', @new_positions_array;
 
-    # abbreviations for ModificationID
-    # 2-letter abbreviations are still hard-coded
-    # unspported types will fall back to single letter
-    $abbrev = $mod_type_char;
-    if ($mod_type =~ /^Phospho/i)                 { $abbrev = 'ph'; }
-    elsif ($mod_type =~ /^Oxidation/i)               { $abbrev = 'ox'; }
-    elsif ($mod_type =~ /(^Des*thio|^ATP\b|\bATP$)/) { $abbrev = 'de'; }
-    elsif ($mod_type =~ /^Gly/i)                     { $abbrev = 'gl'; }
-    elsif ($mod_type =~ /^Lact/i)                    { $abbrev = 'la'; }
-    elsif ($mod_type =~ /^Acetyl/i)                  { $abbrev = 'ac'; }
-    elsif ($mod_type =~ /^Biotin-H/i)                { $abbrev = 'bh'; }
-    # use first 2 letters
-    else  { $abbrev = lc substr $mod_type, 0, 2; };
-
     $phosphosite_id = sprintf "%s_%s:%s",
-        $abbrev, $proteins_new, $positions_new;
+        $mod_type_abbrev, $proteins_new, $positions_new;
     
     # HACK -- heavy labeled peptides
 #    if ($modified_sequence =~ /\(si\)/)
