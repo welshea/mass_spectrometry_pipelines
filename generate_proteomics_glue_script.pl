@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2023-08-29:  document new flags
+# 2023-08-29:  add --comp-pool-exclusions-first --comp-pool-exclusions-last
 # 2023-08-23:  flag proteogenomics mutant-only peptides
 # 2023-08-22:  support Gencode-based proteogenomics annotation
 # 2023-08-22:  bugfix --iron-ref=sample, non-TMT data
@@ -44,6 +46,8 @@ $comp_pool_exclude_flag         = 0;
 $comp_pool_exclude_filename     = '';
 $comp_pool_exclude_dark_flag    = 0;
 $comp_pool_exclude_boost_flag   = 0;
+$comp_pool_exclude_first_flag   = 0;
+$comp_pool_exclude_last_flag    = 0;
 $iron_untilt_flag               = 0;
 $auto_single_variable_pool_flag = 0;    # different auto reference per plex
 
@@ -112,6 +116,20 @@ for ($i = 0; $i < @ARGV; $i++)
             # $comp_pool_flag = 1;
             $comp_pool_exclude_flag = 1;
             $comp_pool_exclude_boost_flag = 1;
+            $comp_pool_exclude_filename = '';
+        }
+        elsif ($field =~ /^--comp-pool-exclusions-first$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_first_flag = 1;
+            $comp_pool_exclude_filename = '';
+        }
+        elsif ($field =~ /^--comp-pool-exclusions-last$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_last_flag = 1;
             $comp_pool_exclude_filename = '';
         }
         elsif ($field =~ /^--iron-untilt$/)
@@ -183,9 +201,9 @@ if ($syntax_error_flag)
     print STDERR "Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh\n";
     print STDERR "\n";
     print STDERR "  Options:\n";
-    print STDERR "    --boost            use highest channel for normalization\n";
-    print STDERR "    --last-ch          use highest channel for normalization\n";
-    print STDERR "    --first-ch         use lowest  channel for normalization\n";
+    print STDERR "    --boost            use highest channel  (N)   for normalization\n";
+    print STDERR "    --last-ch          use highest channel  (N)   for normalization\n";
+    print STDERR "    --first-ch         use lowest  channel (126C) for normalization\n";
     print STDERR "    --iron-ref=sample  use \"sample\" name for normalization\n";
     print STDERR "\n";
     print STDERR "    --iron             apply IRON normalization (default)\n";
@@ -201,6 +219,10 @@ if ($syntax_error_flag)
     print STDERR "    --no-comp-pool     use reference channel for de-batching (default)\n";
     print STDERR "    --comp-pool-exclusions-dark\n";
     print STDERR "                       auto-excludes dark samples from computational pool\n";
+    print STDERR "    --comp-pool-exclusions-first\n";
+    print STDERR "                       excludes the lowest channel (126C) from comp pool\n";
+    print STDERR "    --comp-pool-exclusions-last\n";
+    print STDERR "                       excludes the highest channel (N) from comp pool\n";
     print STDERR "    --comp-pool-exclusions-boost\n";
     print STDERR "                       excludes boosting channels (N, N-2) from comp pool\n";
     print STDERR "    --comp-pool-exclusions=filename.txt\n";
@@ -548,6 +570,16 @@ if (defined($autodetect_hash{TMT}) &&
         $comp_pool_exclude_boost_flag)
     {
         $options_str .= ' --comp-pool-exclusions-boost';
+    }
+    if ($comp_pool_flag && $comp_pool_exclude_flag &&
+        $comp_pool_exclude_first_flag)
+    {
+        $options_str .= ' --comp-pool-exclusions-first';
+    }
+    if ($comp_pool_flag && $comp_pool_exclude_flag &&
+        $comp_pool_exclude_last_flag)
+    {
+        $options_str .= ' --comp-pool-exclusions-last';
     }
 
     $options_str =~ s/^\s+//;
