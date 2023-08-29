@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2023-08-29: document new flags
 # 2023-08-29: add --comp-pool-exclusions-first --comp-pool-exclusions-last
 # 2023-08-07: --iron-untilt overrides --no-iron flag if specified afterwards
 # 2023-06-27: update is_number() to not treat NaNs as numbers
@@ -1817,16 +1818,22 @@ if ($error_flag)
     print STDERR "    --no-debatch       do not perform cross-plex normalization\n";
     print STDERR "    --leave-ratios     leave cross-plex normalized data as log2 ratios\n";
     print STDERR "    --no-leave-ratios  scale cross-plex normalized log2 ratios back into abundances [default]\n";
+    print STDERR "\n";
     print STDERR "    --comp-pool        use all-channel geometric mean for cross-plex debatching\n";
     print STDERR "    --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]\n";
     print STDERR "    --comp-pool-exclusions-dark\n";
     print STDERR "                       auto-excludes dark samples from computational pool\n";
+    print STDERR "    --comp-pool-exclusions-first\n";
+    print STDERR "                       excludes the lowest channel (126C) from comp pool\n";
+    print STDERR "    --comp-pool-exclusions-last\n";
+    print STDERR "                       excludes the highest channel (N) from comp pool\n";
     print STDERR "    --comp-pool-exclusions-boost\n";
     print STDERR "                       excludes boosting channels (N, N-2) from comp pool\n";
     print STDERR "    --comp-pool-exclusions=filename.txt\n";
     print STDERR "                       load comp pool sample exclusions from tab-delimited file\n";
     print STDERR "    --iron-exclusions=filename.txt\n";
     print STDERR "                       exclude row identifiers from IRON training\n";
+    print STDERR "\n";
     print STDERR "\n";
     print STDERR "    --no-iron --no-debatch will leave the output abundances unchanged\n";
     print STDERR "\n";
