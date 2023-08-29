@@ -120,7 +120,7 @@ autodetect_ms_data.pl
 
     Output:
       Modification  [yes/no]         does the data contain modification sites
-      RefSeq        [yes/no]         is the data mainly matched against RefSeqs
+      RefDB         [RefSeq/etc.]    database we think it was matched against
       TMT           [single/multi/injection]
                                      1 plex, >=2 plexes, >=2 all injection reps
       TMT_Channel   [auto/TMT-????]  reference channel for IRON normalization
@@ -159,12 +159,17 @@ automate_tmt.pl
     --no-comp-pool     do not create a computational reference pool for cross-plex debatching [default]
     --comp-pool-exclusions-dark
                        auto-excludes dark samples from computational pool
+    --comp-pool-exclusions-first
+                       excludes the lowest channel (126C) from comp pool
+    --comp-pool-exclusions-last
+                       excludes the highest channel (N) from comp pool
     --comp-pool-exclusions-boost
                        excludes boosting channels (N, N-2) from comp pool
     --comp-pool-exclusions=filename.txt
                        load comp pool sample exclusions from tab-delimited file
     --iron-exclusions=filename.txt
                        exclude row identifiers from IRON training
+
 
     --no-iron --no-debatch will leave the output abundances unchanged
 
@@ -175,7 +180,7 @@ automate_tmt.pl
 
       *_scaling_factors.txt  various statistics from the IRON normalizations
       *_findmedian.txt       results from the various findmedian runs
-    
+
 
 
 clean_tmt.pl
@@ -297,23 +302,29 @@ generate_proteomics_glue_script.pl
   Usage: generate_proteomics_glue_script.pl [options] maxquant_output.txt output_root_name [[species] autodetect.txt] > run_proteomics.sh
 
   Options:
-    --boost         use highest channel for normalization
-    --last-ch       use highest channel for normalization
+    --boost            use highest channel  (N)   for normalization
+    --last-ch          use highest channel  (N)   for normalization
+    --first-ch         use lowest  channel (126C) for normalization
+    --iron-ref=sample  use "sample" name for normalization
 
-    --iron          apply IRON normalization (default)
-    --iron-auto-ch  auto-pick different reference channel per-plex
-                    *** forces --no-debatch ***
-    --iron-untilt   account for relative dynamic range
-    --no-iron       disable IRON normalization
+    --iron             apply IRON normalization (default)
+    --iron-auto-ch     auto-pick different reference channel per-plex
+                       *** forces --no-debatch ***
+    --iron-untilt      account for relative dynamic range
+    --no-iron          disable IRON normalization
 
-    --debatch       cross-plex de-batch TMT data (default)
-    --no-debatch    disable cross-plex de-batching
+    --debatch          cross-plex de-batch TMT data (default)
+    --no-debatch       disable cross-plex de-batching
 
-    --comp-pool     average all plex channels for cross-plex de-batching
-    --no-comp-pool  use reference channel for de-batching (default)
-    --comp-pool-exclusions-dark.txt
+    --comp-pool        average all plex channels for cross-plex de-batching
+    --no-comp-pool     use reference channel for de-batching (default)
+    --comp-pool-exclusions-dark
                        auto-excludes dark samples from computational pool
-    --comp-pool-exclusions-boost.txt
+    --comp-pool-exclusions-first
+                       excludes the lowest channel (126C) from comp pool
+    --comp-pool-exclusions-last
+                       excludes the highest channel (N) from comp pool
+    --comp-pool-exclusions-boost
                        excludes boosting channels (N, N-2) from comp pool
     --comp-pool-exclusions=filename.txt
                        load comp pool sample exclusions from tab-delimited file
