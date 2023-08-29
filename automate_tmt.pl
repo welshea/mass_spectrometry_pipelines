@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2023-08-29: add --comp-pool-exclusions-first --comp-pool-exclusions-last
 # 2023-08-07: --iron-untilt overrides --no-iron flag if specified afterwards
 # 2023-06-27: update is_number() to not treat NaNs as numbers
 # 2023-05-18: strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
@@ -343,6 +344,12 @@ sub store_condensed_data
 # file should have no headers, just a list of samples
 sub read_in_comp_pool_exclusions_file
 {
+    my @array;
+    my $infile;
+    my $line;
+    my $i;
+    my $sample;
+
     $infile = $_[0];
 
     open INFILE, "$infile" or die "ABORT -- can't open $infile\n";
@@ -384,6 +391,16 @@ sub read_in_comp_pool_exclusions_file
 # flag any sample that is much worse than the median for that plex as bad
 sub auto_flag_failed_samples
 {
+    my @temp_array;
+    my $median_log2_sf;
+    my $ch;
+    my $log2_sf;
+    my $num_ch_half;
+    my $tmt_plex;
+    my $sample;
+    my $delta;
+    my $p;
+
     for ($p = 0; $p < $num_plexes; $p++)
     {
         @temp_array     = ();
@@ -433,22 +450,63 @@ sub auto_flag_failed_samples
 
 
 # exclude the last and 2nd to last channels
+#
+# WHOA, I never knew that Perl wrapped negative array indicies back to the end.
+# I previously had a bug in the calculations that was resulting in negative
+# indicies, but, due to how Perl works, it was still giving correct results.
+#
+# I have now fixed the calculations to no longer generate negative indicies.
+#
 sub flag_boosting_channels
 {
+    my @temp_array; my $p; my $index; my $sample;
+
     @temp_array = sort cmp_orig_sample_order @sample_array;
 
     for ($p = 0; $p < $num_plexes; $p++)
     {
-        $tmt_plex = $tmt_plex_array[$p];
-
-        $sample = $temp_array[($p * $num_channels) - 1];
-        #printf STDERR "Auto-exclude boost channel from comp pool:\t%s\n",
-        #    $sample;
+        $index    = ($p+1) * $num_channels - 1;
+        $sample   = $temp_array[$index];
+        #printf STDERR "Auto-exclude boost channel from comp pool:\t%s\t%s\n",
+        #    $index, $sample;
         $comp_pool_exclude_hash{$sample} = 1;
 
-        $sample = $temp_array[($p * $num_channels) - 3];
-        #printf STDERR "Auto-exclude boost channel from comp pool:\t%s\n",
-        #    $sample;
+        $index    = ($p+1) * $num_channels - 3;
+        $sample   = $temp_array[$index];
+        #printf STDERR "Auto-exclude boost channel from comp pool:\t%s\t%s\n",
+        #    $index, $sample;
+        $comp_pool_exclude_hash{$sample} = 1;
+    }
+}
+
+
+# exclude the last channels
+sub flag_last_channels
+{
+    my @temp_array; my $p; my $index; my $sample;
+
+    @temp_array = sort cmp_orig_sample_order @sample_array;
+
+    for ($p = 0; $p < $num_plexes; $p++)
+    {
+        $index    = ($p+1) * $num_channels - 1;
+        $sample   = $temp_array[$index];
+        $comp_pool_exclude_hash{$sample} = 1;
+    }
+}
+
+
+# exclude the first channels
+sub flag_first_channels
+{
+    my @temp_array; my $p; my $index; my $sample;
+
+    @temp_array = sort cmp_orig_sample_order @sample_array;
+
+    for ($p = 0; $p < $num_plexes; $p++)
+    {
+        $index    = $p * $num_channels;
+        $sample   = $temp_array[$index];
         $comp_pool_exclude_hash{$sample} = 1;
     }
 }
@@ -1616,6 +1674,8 @@ $comp_pool_exclude_flag       = 0;
 $comp_pool_exclude_filename   = '';
 $comp_pool_exclude_dark_flag  = 0;
 $comp_pool_exclude_boost_flag = 0;
+$comp_pool_exclude_first_flag = 0;
+$comp_pool_exclude_last_flag  = 0;
 $iron_untilt_flag  = 0;    # --rnaseq flag
 
 $error_flag = 0;
@@ -1658,6 +1718,24 @@ for ($i = 0; $i < @ARGV; $i++)
             $comp_pool_exclude_filename = '';
 
             printf STDERR "Excluding boost and boost-blank channels from comp pool\n",
+        }
+        elsif ($field =~ /^--comp-pool-exclusions-first$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_first_flag = 1;
+            $comp_pool_exclude_filename = '';
+
+            printf STDERR "Excluding first channels from comp pool\n",
+        }
+        elsif ($field =~ /^--comp-pool-exclusions-last$/)
+        {
+            # $comp_pool_flag = 1;
+            $comp_pool_exclude_flag = 1;
+            $comp_pool_exclude_last_flag = 1;
+            $comp_pool_exclude_filename = '';
+
+            printf STDERR "Excluding last channels from comp pool\n",
         }
         elsif ($field =~ /^--no-debatch$/)
         {
@@ -1816,6 +1894,16 @@ if ($comp_pool_flag && $comp_pool_exclude_flag &&
     $comp_pool_exclude_boost_flag)
 {
     flag_boosting_channels();
+}
+if ($comp_pool_flag && $comp_pool_exclude_flag &&
+    $comp_pool_exclude_first_flag)
+{
+    flag_first_channels();
+}
+if ($comp_pool_flag && $comp_pool_exclude_flag &&
+    $comp_pool_exclude_last_flag)
+{
+    flag_last_channels();
 }
 foreach $sample (sort keys %comp_pool_exclude_hash)
 {
