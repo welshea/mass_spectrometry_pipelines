@@ -3,6 +3,11 @@
 #include <string.h>
 #include <stdint.h>
 
+#ifdef _WIN32    /* needed for disabling Windows LF -> CRLF auto-conversion */
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 #define MEM_OVERHEAD 1.01    /* speed hack -- overallocate to avoid reallocs */
 
 struct text_data
@@ -174,18 +179,30 @@ int read_text_data(char *filename, struct text_data *text_data)
     uint32_t   old_allocated_cols   = 0;
     uint32_t   max_row = 0, max_col = 0;
     uint32_t   line_length, max_field_index;
+
+    /* Change STDIN to binary mode, to prevent various EOL-related issues */
+#ifdef _WIN32
+    /* disable Windows LF -> CRLF auto-conversion */
+    /* freopen() doesn't work on stdin in Windows... */
+    _setmode(fileno(stdin),  O_BINARY);
+#else
+    /* https://stackoverflow.com/questions/1598985/c-read-binary-stdin
+     *
+     * Evidently, the returned file handle isn't the new binary handle,
+     * but the old text handle and not to be actually used?
+     */
+    freopen(NULL, "rb", stdin);
+#endif
     
     /* allocate my own i/o buffer, since we can't trust the system and/or
      * compiler to allocate a decently large one...
      */
-    
     buffer = (char *) malloc(1048576 * sizeof(char));
 
     /* standard input */
     if (filename == NULL || strcmp(filename, "-") == 0)
     {
-        /* reopen in binary mode, to prevent various EOL-related issues */
-        infile = freopen(NULL, "rb", stdin);
+        infile = stdin;
     }
     else
     {
@@ -535,6 +552,7 @@ int transpose_entry_point(char *infile_name, char *outfile_name)
     
     return 0;
 }
+
 
 int main (int argc, char *argv[])
 {
