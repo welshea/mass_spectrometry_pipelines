@@ -184,7 +184,8 @@ int read_text_data(char *filename, struct text_data *text_data)
     /* standard input */
     if (filename == NULL || strcmp(filename, "-") == 0)
     {
-        infile = stdin;
+        /* reopen in binary mode, to prevent various EOL-related issues */
+        infile = freopen(NULL, "rb", stdin);
     }
     else
     {
