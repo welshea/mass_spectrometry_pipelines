@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-09-25:  add p[] and n[] detection from merge_metabolomics_pos_neg.pl
 # 2023-08-18:  new (D#) rule for matching heavy label text at end of name
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-06-08:  improve LipidSearch detection for stripping adducts from formula
@@ -1099,24 +1100,83 @@ for ($col = 0; $col < @header_col_array; $col++)
 # none found, check for pos/neg
 if ($first_abundance_col == 9E99)
 {
-  for ($col = 0; $col < @header_col_array; $col++)
-  {
-    $field = $header_col_array[$col];
+    # flags for renaming n[ and p[ to pos[ and neg[
+    $temp_saw_pos_neg_flag = 0;
 
-    if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
-        $field =~ /(pos|neg)$/i)
+    # check for absense of regular pos/neg sample names
+    for ($col = 0; $col < @header_col_array; $col++)
     {
-        if (!defined($col_to_remove_hash{$col}))
-        {
-            $sample_col_hash{$col} = 1;
+        $field = $header_col_array[$col];
 
-            if ($col < $first_abundance_col)
+        if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+            $field =~ /[^A-Za-z0-9](pos|neg)[0-9]{0,1}(?:\]*)$/i ||
+            $field =~ /^(pos|neg)[^A-Za-z0-9]/)
+        {
+            # which columns should be actual sample data
+            if ($field =~ /^IRON /i ||
+                $field =~ /([^A-Za-z0-9]*(Height|Area)[^A-Za-z0-9]*)/i)
             {
-                $first_abundance_col = $col;
+                $temp_saw_pos_neg_flag = 1;
+                last;
             }
         }
     }
-  }
+    # rename p[ or n[ to pos[ or neg[
+    if ($temp_saw_pos_neg_flag == 0)
+    {
+        for ($col = 0; $col < @header_col_array; $col++)
+        {
+            $field = $header_col_array[$col];
+
+            if ($field =~ /^(?:IRON\s+)*[p|n]\[/)
+            {
+                $iron_str = $1;
+                if (!defined($iron_str))
+                {
+                    $iron_str = '';
+                }
+            
+                # which columns should be actual sample data
+                if ($field =~ /^IRON /i ||
+                    $field =~ /([^A-Za-z0-9]*(Height|Area)*[^A-Za-z0-9]*)/i)
+                {
+                    $header_col_array[$col] =~ s/^($iron_str)p\[/pos\[/;
+                    $header_col_array[$col] =~ s/^($iron_str)n\[/neg\[/;
+
+                    # book keeping for back-naming later
+                    $temp_str = $header_col_array[$col];
+                    $temp_str =~ s/^(IRON\s+)//;
+                    $field    =~ s/^(IRON\s+)//;
+                    $renamed_to_orig_hash{$temp_str} = $field;
+
+                    #printf STDERR "Renaming %s to %s\n",
+                    #    $field, $header_col_array[$col];
+                }
+            }
+        }
+    }
+
+    # categorize columns
+    for ($col = 0; $col < @header_col_array; $col++)
+    {
+        $field = $header_col_array[$col];
+
+        if ($field =~ /^IRON /i ||
+            $field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+            $field =~ /[^A-Za-z0-9](pos|neg)[0-9]{0,1}(?:\]*)$/i ||
+            $field =~ /^(pos|neg)[^A-Za-z0-9]/)
+        {
+            if (!defined($col_to_remove_hash{$col}))
+            {
+                $sample_col_hash{$col} = 1;
+        
+                if ($col < $first_abundance_col)
+                {
+                    $first_abundance_col = $col;
+                }
+            }
+        }
+    }
 }
 
 # uh oh, column headers don't have anything obviously abundance-looking
