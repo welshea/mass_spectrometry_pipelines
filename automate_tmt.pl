@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2023-10-05: add backwards compatability for older iron --rnaseq output
 # 2023-08-29: document new flags
 # 2023-08-29: add --comp-pool-exclusions-first --comp-pool-exclusions-last
 # 2023-08-07: --iron-untilt overrides --no-iron flag if specified afterwards
@@ -1025,6 +1026,12 @@ sub iron_pools
                         {
                             $global_log2_sf_col = $j;
                         }
+                        # backwards compatability, need to negate it later
+                        if ($array[$j] eq 'Log2FitScale')
+                        {
+                            $global_log2_sf_col = $j;
+                            $older_untilt_flag  = 1;
+                        }
                     }
                 }
             
@@ -1304,6 +1311,12 @@ sub iron_samples
                             {
                                 $global_log2_sf_col = $j;
                             }
+                            # backwards compatability, need to negate it later
+                            if ($array[$j] eq 'Log2FitScale')
+                            {
+                                $global_log2_sf_col = $j;
+                                $older_untilt_flag  = 1;
+                            }
                         }
                     }
                 
@@ -1350,6 +1363,10 @@ sub iron_samples
                 
                 # store the log2 scaling factors for later
                 $log2_sf               = $array[$global_log2_sf_col];
+                if ($older_untilt_flag)
+                {
+                    $log2_sf *= -1.0;
+                }
                 $log2_sf_array[$p][$k] = $log2_sf;
                 $k++;
             }
@@ -1677,7 +1694,8 @@ $comp_pool_exclude_dark_flag  = 0;
 $comp_pool_exclude_boost_flag = 0;
 $comp_pool_exclude_first_flag = 0;
 $comp_pool_exclude_last_flag  = 0;
-$iron_untilt_flag  = 0;    # --rnaseq flag
+$iron_untilt_flag             = 0;    # --rnaseq flag
+$older_untilt_flag            = 0;    # iron < v2.3.0
 
 $error_flag = 0;
 for ($i = 0; $i < @ARGV; $i++)
