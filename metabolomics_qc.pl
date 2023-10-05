@@ -9,6 +9,7 @@
 # 2021-08-19:  bugfix: print some errors to STDERR instead of STDOUT
 # 2021-08-13:  print samples sorted by worst score first
 # 2021-08-13:  fix typo in median sample indexing for odd N
+# 2021-10-05:  support UnTiltDegrees metric from new findmedian output
 
 
 use Scalar::Util qw(looks_like_number);
@@ -184,11 +185,13 @@ sub read_in_scaling_factors_file
 
     my $sampleid_col;
     my $log2scale_col;
+    my $untilt_col;
     my $present_sample_col;
     my $present_dataset_col;
     my $sampleid;
     my $sample_merged;
     my $log2scale;
+    my $untilt;
     my $present_sample;
     my $present_dataset;
 
@@ -219,8 +222,19 @@ sub read_in_scaling_factors_file
  
     $sampleid_col        = $header_col_hash{'SampleID'};
     $log2scale_col       = $header_col_hash{'Log2Scale'};
+    $untilt_col          = $header_col_hash{'UnTiltDegrees'};
     $present_sample_col  = $header_col_hash{'PresentSample'};
     $present_dataset_col = $header_col_hash{'PresentDataset'};
+    
+    # backwards compatability with older iron_generic --iron-untilt output
+    if (!defined($log2scale_col))
+    {
+        $log2scale_col   = $header_col_hash{'Log2FitScale'};
+    }
+    if (!defined($untilt_col))
+    {
+        $untilt_col      = $header_col_hash{'FitTiltDegrees'};
+    }
     
     if (!defined($sampleid_col))
     {
@@ -267,6 +281,25 @@ sub read_in_scaling_factors_file
         
         $global_present_dataset = $present_dataset;
 
+        $untilt = '';
+        if (defined($untilt_col))
+        {
+            $untilt = $array[$untilt_col];
+
+            $global_untilt_flag = 1;
+        }
+
+        # backwards compatability with older iron_generic --iron-untilt output
+        if (defined($header_col_hash{'Log2FitScale'}) &&
+            defined($log2scale) && is_number($log2scale))
+        {
+            $log2scale *= -1.0;
+        }
+        if (defined($header_col_hash{'FitTiltDegrees'}) &&
+            defined($untilt) && is_number($untilt))
+        {
+            $untilt    *= -1.0;
+        }
         
         if ($pos_neg =~ /pos/i)
         {
@@ -315,6 +348,12 @@ sub read_in_scaling_factors_file
                 $log2scale;
             $sample_merged_hash{$sample_merged}{$pos_neg}{present} =
                 $present_sample;
+            
+            if (defined($untilt_col))
+            {
+                $sample_merged_hash{$sample_merged}{$pos_neg}{untilt} =
+                    $untilt;
+            }
         }
     }
     close INFILE;
@@ -616,6 +655,15 @@ sub score_qc
         $present_neg   = $sample_merged_hash{$sample}{neg}{present};
         $mean_dist_neg = $sample_merged_hash{$sample}{neg}{mean_dist};
         $mean_log2_neg = $sample_merged_hash{$sample}{neg}{mean_log2};
+        
+        $untilt_merged = '';
+        $untilt_pos    = '';
+        $untilt_neg    = '';
+        if ($global_untilt_flag)
+        {
+            $untilt_pos = $sample_merged_hash{$sample}{pos}{untilt};
+            $untilt_neg = $sample_merged_hash{$sample}{neg}{untilt};
+        }
 
         # missing pos sample
         if (!defined($log2scale_pos))
@@ -623,6 +671,7 @@ sub score_qc
             $log2scale_merged = $log2scale_neg;
             $mean_dist_merged = $mean_dist_neg;
             $mean_log2_merged = $mean_log2_neg;
+            $untilt_merged    = $untilt_neg;
 
             # this isn't going to be scaled correctly...
             # leaving out the missing counts would be too small
@@ -635,6 +684,7 @@ sub score_qc
             $log2scale_merged = $log2scale_pos;
             $mean_dist_merged = $mean_dist_pos;
             $mean_log2_merged = $mean_log2_pos;
+            $untilt_merged    = $untilt_pos;
 
             # this isn't going to be scaled correctly...
             # leaving out the missing counts would be too small
@@ -648,13 +698,23 @@ sub score_qc
             $mean_dist_merged = 0.5 * ($mean_dist_pos + $mean_dist_neg);
             $present_merged   = $present_pos + $present_neg;
             $mean_log2_merged = 0.5 * ($mean_log2_pos + $mean_log2_neg);
+            
+            if ($global_untilt_flag)
+            {
+                $untilt_merged = 0.5 * ($untilt_pos + $untilt_neg);
+            }
         }
 
         
-        $sample_merged_hash{$sample}{merged}{log2scale} = $log2scale_merged;
-        $sample_merged_hash{$sample}{merged}{present}   = $present_merged;
-        $sample_merged_hash{$sample}{merged}{mean_dist} = $mean_dist_merged;
-        $sample_merged_hash{$sample}{merged}{mean_log2} = $mean_log2_merged;
+        $sample_merged_hash{$sample}{merged}{log2scale}  = $log2scale_merged;
+        $sample_merged_hash{$sample}{merged}{present}    = $present_merged;
+        $sample_merged_hash{$sample}{merged}{mean_dist}  = $mean_dist_merged;
+        $sample_merged_hash{$sample}{merged}{mean_log2}  = $mean_log2_merged;
+        
+        if ($global_untilt_flag)
+        {
+            $sample_merged_hash{$sample}{merged}{untilt} = $untilt_merged;
+        }
     }
 
     # sort samples mainly on merged log2scale
@@ -690,6 +750,13 @@ sub score_qc
         $sample_merged_hash{$sample}{merged}{mean_dist_adj} =
             $sample_merged_hash{$sample}{merged}{mean_dist} /
             $sample_merged_hash{$sample_median}{merged}{mean_dist};
+
+        if ($global_untilt_flag)
+        {
+            $sample_merged_hash{$sample}{merged}{untilt_adj} =
+                $sample_merged_hash{$sample}{merged}{untilt} -
+                $sample_merged_hash{$sample_median}{merged}{untilt};
+        }
         
 
         $log2scale_adj = $sample_merged_hash{$sample}{merged}{log2scale_adj};
@@ -745,6 +812,11 @@ sub print_qc
     printf "\t%s", 'ScoreRelative';
     printf "\t%s", 'ScaleRelative';
     printf "\t%s", 'Log2ScaleRelative';
+    if ($global_untilt_flag)
+    {
+        printf "\t%s", 'UnTiltDegreesRelative';
+    }
+    
     printf "\t%s", 'DistanceRelative';
     printf "\t%s", 'PresentRelative';
     printf "\t%s", 'AbundanceRelative';
@@ -754,6 +826,12 @@ sub print_qc
     printf "\t%s", 'ScaleNEG';
     printf "\t%s", 'Log2ScalePOS';
     printf "\t%s", 'Log2ScaleNEG';
+    if ($global_untilt_flag)
+    {
+        printf "\t%s", 'UnTiltDegreesPOS';
+        printf "\t%s", 'UnTiltDegreesNEG';
+    }
+
     printf "\t%s", 'MeanDistancePOS';
     printf "\t%s", 'MeanDistanceNEG';
     printf "\t%s", 'PresentPOS';
@@ -781,16 +859,19 @@ sub print_qc
 
         $score         = $sample_merged_hash{$sample}{merged}{score};
         $log2scale_adj = $sample_merged_hash{$sample}{merged}{log2scale_adj};
+        $untilt_adj    = $sample_merged_hash{$sample}{merged}{untilt_adj};
         $present_adj   = $sample_merged_hash{$sample}{merged}{present_adj};
         $mean_dist_adj = $sample_merged_hash{$sample}{merged}{mean_dist_adj};
         $mean_log2_adj = $sample_merged_hash{$sample}{merged}{mean_log2_adj};
 
         $log2scale_pos = $sample_merged_hash{$sample}{pos}{log2scale};
+        $untilt_pos    = $sample_merged_hash{$sample}{pos}{untilt};
         $mean_dist_pos = $sample_merged_hash{$sample}{pos}{mean_dist};
         $present_pos   = $sample_merged_hash{$sample}{pos}{present};
         $mean_log2_pos = $sample_merged_hash{$sample}{pos}{mean_log2};
 
         $log2scale_neg = $sample_merged_hash{$sample}{neg}{log2scale};
+        $untilt_neg    = $sample_merged_hash{$sample}{neg}{untilt};
         $mean_dist_neg = $sample_merged_hash{$sample}{neg}{mean_dist};
         $present_neg   = $sample_merged_hash{$sample}{neg}{present};
         $mean_log2_neg = $sample_merged_hash{$sample}{neg}{mean_log2};
@@ -799,6 +880,8 @@ sub print_qc
         # if ($sample_neg eq '')        { $sample_neg    = ''; }
         if (!defined($log2scale_pos)) { $log2scale_pos = ''; }
         if (!defined($log2scale_neg)) { $log2scale_neg = ''; }
+        if (!defined($untilt_pos))    { $untilt_pos    = ''; }
+        if (!defined($untilt_neg))    { $untilt_neg    = ''; }
         if (!defined($mean_dist_pos)) { $mean_dist_pos = ''; }
         if (!defined($mean_dist_neg)) { $mean_dist_neg = ''; }
         if (!defined($present_pos))   { $present_pos   = ''; }
@@ -825,6 +908,11 @@ sub print_qc
         printf "\t%f", $score;
         printf "\t%f", pow(2, $log2scale_adj);
         printf "\t%f", $log2scale_adj;
+        if ($global_untilt_flag)
+        {
+            printf "\t%f", $untilt_adj;
+        }
+
         printf "\t%f", $mean_dist_adj;
         printf "\t%f", $present_adj;
         printf "\t%f", pow(2, $mean_log2_adj);
@@ -834,6 +922,12 @@ sub print_qc
         printf "\t%s", $scale_neg;
         printf "\t%s", $log2scale_pos;
         printf "\t%s", $log2scale_neg;
+        if ($global_untilt_flag)
+        {
+            printf "\t%s", $untilt_pos;
+            printf "\t%s", $untilt_neg;
+        }
+
         printf "\t%s", $mean_dist_pos;
         printf "\t%s", $mean_dist_neg;
         printf "\t%s", $present_pos;
@@ -849,11 +943,12 @@ sub print_qc
 
 # begin main()
 
-$filename_table  = shift;   # _sample_table.txt
-$filename_sf_pos = shift;   # _pos_cleaned_scaling_factors.txt
-$filename_sf_neg = shift;   # _neg_cleaned_scaling_factors.txt
-$filename_fm_pos = shift;   # _pos_cleaned_findmedian.txt
-$filename_fm_neg = shift;   # _neg_cleaned_findmedian.txt
+$filename_table     = shift;   # _sample_table.txt
+$filename_sf_pos    = shift;   # _pos_cleaned_scaling_factors.txt
+$filename_sf_neg    = shift;   # _neg_cleaned_scaling_factors.txt
+$filename_fm_pos    = shift;   # _pos_cleaned_findmedian.txt
+$filename_fm_neg    = shift;   # _neg_cleaned_findmedian.txt
+$global_untilt_flag = 0;       # was the data untilt normalized?
 
 
 if (!defined($filename_table) ||
