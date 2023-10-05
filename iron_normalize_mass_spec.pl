@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-10-05:  add --iron-ignore-low to untilt flags, for IRON >= v2.3.0
 # 2023-08-07:  --iron-untilt overrides --no-iron flag if specified afterwards
 # 2023-08-07:  change --norm-none to --no-iron for consistency with other .pl
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
@@ -666,7 +667,7 @@ sub iron_samples
 
     if ($iron_untilt_flag)
     {
-        $cmd_string =~ s/--proteomics/--rnaseq/g;
+        $cmd_string =~ s/--proteomics/--rnaseq --iron-ignore-low/g;
     }
 
 
