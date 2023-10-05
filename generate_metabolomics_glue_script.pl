@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-10-05:  add --iron-untilt to address rare dynamic range compression
 # 2023-08-07:  change --norm-none to --no-iron for consistency with other .pl
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-06-13:  default to not filtering on #peaks pre- gap filling
@@ -44,6 +45,7 @@ $scale_heavy_flag          = 0;    # control normalization of heavy rows
 $mz_tol_ppm                = '';   # '' means no --ppm argument specified
 $no_iron_flag              = 0;    # disable normalization
 $no_log2_flag              = 0;    # do not log2 transform the data
+$iron_untilt_flag          = 0;
 
 $syntax_error_flag         = 0;
 $num_files                 = 0;
@@ -145,6 +147,11 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $no_log2_flag = 1;
         }
+        elsif ($field =~ /^--iron-untilt$/)
+        {
+            $iron_untilt_flag = 1;
+            $no_iron_flag     = 0;
+        }
         # override default PPM tolerance
         elsif ($field eq '--ppm' ||
                $field =~ /^--ppm\=/)
@@ -214,6 +221,7 @@ if ($syntax_error_flag ||
     printf STDERR "Options:\n";
     printf STDERR "    --heavy-spikein            heavy rows are spikeins, leave unscaled (default)\n";
     printf STDERR "    --heavy-tracer             heavy rows are biological, normalize them\n";
+    printf STDERR "    --iron-untilt              account for relative dynamic range\n";
     printf STDERR "    --no-iron                  disable normalization; use on targeted panels\n";
     printf STDERR "    --no-log2                  disable log2 transform of output data\n";
     printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
@@ -458,6 +466,10 @@ if ($no_iron_flag)
 {
     # disable normalization
     $norm_extra_options_str = '--no-iron';
+}
+if ($iron_untilt_flag)
+{
+    $norm_extra_options_str = '--iron-untilt';
 }
 if ($no_log2_flag)
 {
