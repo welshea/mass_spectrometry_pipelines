@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-10-30:  comment out unused p[] and n[] back-naming book keeping
 # 2023-09-25:  add p[] and n[] detection from merge_metabolomics_pos_neg.pl
 # 2023-08-18:  new (D#) rule for matching heavy label text at end of name
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
@@ -1143,11 +1144,11 @@ if ($first_abundance_col == 9E99)
                     $header_col_array[$col] =~ s/^($iron_str)p\[/pos\[/;
                     $header_col_array[$col] =~ s/^($iron_str)n\[/neg\[/;
 
-                    # book keeping for back-naming later
-                    $temp_str = $header_col_array[$col];
-                    $temp_str =~ s/^(IRON\s+)//;
-                    $field    =~ s/^(IRON\s+)//;
-                    $renamed_to_orig_hash{$temp_str} = $field;
+                    ## book keeping for back-naming later
+                    #$temp_str = $header_col_array[$col];
+                    #$temp_str =~ s/^(IRON\s+)//;
+                    #$field    =~ s/^(IRON\s+)//;
+                    #$renamed_to_orig_hash{$temp_str} = $field;
 
                     #printf STDERR "Renaming %s to %s\n",
                     #    $field, $header_col_array[$col];
