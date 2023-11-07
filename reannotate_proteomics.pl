@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-11-07  bugfix NumGenes to better handle fusions/readthroughs
 # 2023-08-23  detect FragPipe reverse sequences
 # 2023-08-23  flag proteogenomics mutant-only peptides
 # 2023-08-23  bugfix proteogeonomics 2-character chromosomes
@@ -1391,7 +1392,25 @@ sub print_probeid_annotation
         foreach $field (@symbol_array)
         {
             # potential fusion gene
-            if ($field =~ /^[^-]+\-[^-]+$/)
+            # some can have multiple fusions and/or hyphens, check both ends
+            #
+            # hyphen in individual gene: ERVK3-1 ZNF8-ERVK3-1
+            # was missed before: CD302 LY75-CD302
+            # not fusions: AS-, -AS, -AS#, -#, -OT#, -DT
+            #
+            # problems: ABCF2-H2BE1, C1QTNF3-AMACR, C8orf44-SGK3,
+            #           CCZ1P-OR7E38P
+            # weird:    CH17-340M24.3, CH507-42P11.6, CTB-178M22.2,
+            #           CTB-1I21.1, CTB-49A3.2, CTC-338M12.4, CTD-3080P12.3
+            #
+            # XXX, XX#(X|#), X#(X|#)
+            #
+            # must have hyphen in middle, tolerate up to 2 alphanum in middle
+            #
+            # RB1 is a real symbol, so we may miss some potential real fusions
+            #
+            if ($field =~
+                /\b[A-Za-z]([A-Za-z]{2}|[A-Za-z]?[0-9][A-Za-z0-9])[^-]*\-([A-Za-z0-9]{1,2}[0-9]?\-)*[A-Za-z]([A-Za-z]{2}|[A-Za-z]?[0-9][A-Za-z0-9])[^-]*\b/)
             {
                 $fusion_hash{$field} = 1;
             }
@@ -1403,44 +1422,27 @@ sub print_probeid_annotation
             }
         }
         
-        # add fusion genes to counts
-        foreach $field (sort keys %fusion_hash)
+        # decide whether to add potential fusion genes to counts
+        foreach $fusion (keys %fusion_hash)
         {
-            $count_flag = 1;
-
-            if ($field =~ /^([^-]+)\-([^-]+)$/)
+            $fusion_flag = 0;
+            
+            # fusion that includes a non-fusion gene
+            # we already counted the non-fusion, so don't count the fusion
+            foreach $field (keys %non_fusion_hash)
             {
-                $symbol1 = $1;
-                $symbol2 = $2;
-                
-                # check to see if symbol2 looks like a real symbol or not
-
-                # example: FOOBAR-AS
-                $length2 = length $symbol2;
-                if ($length2 <= 2)
+                # match within the fusion, make sure it passes the same
+                # starting character rules as were used in the fusion matching
+                if ($fusion =~ /\b\Q$field\E\b/ &&
+                    $fusion =~ /^[A-Za-z]([A-Za-z]{2}|[A-Za-z]?[0-9][A-Za-z0-9])/)
                 {
-                    $count_flag = 1;
-                }
-                # example: FOOBAR-AS1
-                elsif ($symbol2 =~ /^[A-Za-z][A-Za-z][0-9]+$/)
-                {
-                    $count_flag = 1;
-                }
-                # example: FOOBAR-1
-                elsif ($symbol2 =~ /^[0-9]+$/)
-                {
-                    $count_flag = 1;
-                }
-                
-                # do not count if already covered by a non_fusion symbol
-                elsif (defined($non_fusion_hash{$symbol1}) ||
-                    defined($non_fusion_hash{$symbol2}))
-                {
-                    $count_flag = 0;
+                    $fusion_flag = 1;
+                    last;
                 }
             }
-            
-            if ($count_flag)
+
+            # didn't match any non-fusions, count it
+            if ($fusion_flag == 0)
             {
                 $count_symbols++;
             }
