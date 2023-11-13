@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2023-11-13: support iTRAQ-4 and iTRAQ-8
 # 2023-10-05: add backwards compatability for older iron --rnaseq output
 # 2023-08-29: document new flags
 # 2023-08-29: add --comp-pool-exclusions-first --comp-pool-exclusions-last
@@ -222,7 +223,7 @@ sub read_in_data_file
     $num_samples = 0;
     for ($i = 0; $i < @array; $i++)
     {
-        if ($array[$i] =~ /TMT\-\d\d\d/)
+        if ($array[$i] =~ /(TMT|iTRAQ)\-\d\d\d/)
         {
             $array[$i] =~ s/[^A-Za-z0-9-]+/_/g;
             $array[$i] =~ s/_+/_/g;
@@ -231,7 +232,7 @@ sub read_in_data_file
             
             $sample_name = $array[$i];
             
-            if ($array[$i] =~ /(.*?)_(TMT-\d\d\d[NC]*)/)
+            if ($array[$i] =~ /(.*?)_(TMT-\d\d\d[NC]*|iTRAQ-\d\d\d[NC]*)/)
             {
                 $tmt_plex = $1;
                 $channel  = $2;
@@ -241,6 +242,13 @@ sub read_in_data_file
                 $tmt_plex_hash{$tmt_plex}{$channel} = $sample_name;
 
                 $channel_hash{$channel} = 1;
+                
+                # hack in iTRAQ support
+                if ($channel =~ /iTRAQ/)
+                {
+                    $itraq_flag = 1;
+                    $itraq_channel_hash{$channel} = 1;
+                }
             }
         }
     }
@@ -682,6 +690,8 @@ sub identify_pools
 
             $pool1 =~ s/^TMT-//;
             $pool2 =~ s/^TMT-//;
+            $pool1 =~ s/^iTRAQ-//;
+            $pool2 =~ s/^iTRAQ-//;
 
             printf STDERR "POOL\t%s\t%s\t%s\t%f\n",
                 $tmt_plex,
@@ -767,6 +777,8 @@ sub identify_pools
 
             $pool1 =~ s/^TMT-//;
             $pool2 =~ s/^TMT-//;
+            $pool1 =~ s/^iTRAQ-//;
+            $pool2 =~ s/^iTRAQ-//;
 
             printf STDERR "POOL\t%s\t%s\t%s\t%f\n",
                 $tmt_plex,
@@ -823,6 +835,8 @@ sub check_outlier_pools
 
             $pool1 =~ s/^TMT-//;
             $pool2 =~ s/^TMT-//;
+            $pool1 =~ s/^iTRAQ-//;
+            $pool2 =~ s/^iTRAQ-//;
 
             printf STDERR "WARNPOOL\t%s\t%s\t%s\t%.4f\t%.4f\n",
                 $tmt_plex,
@@ -1883,17 +1897,35 @@ $row_scales_output_name = sprintf "%s_row_scales.txt", $row_scales_output_name;
 $iron_input_name  = sprintf "temp_iron_input_%s.txt", $process_id;
 $iron_output_name = sprintf "temp_iron_output_%s.txt", $process_id;
 
+
+%comp_pool_exclude_hash = ();
+
+$itraq_flag = 0;
+read_in_data_file($filename);
+store_condensed_data();
+
+
 # default to using TMT-126C as the normalization channel
 @fixed_pool_array = sort keys %fixed_pool_hash;
 if (@fixed_pool_array == 0)
 {
-    $fixed_pool_hash{'TMT-126C'} = 1;
+    if ($itraq_flag)
+    {
+        # 8-plex
+        if (defined($itraq_channel_hash{'iTRAQ-113'}))
+        {
+            $fixed_pool_hash{'iTRAQ-113'} = 1;
+        }
+        # 4-plex
+        {
+            $fixed_pool_hash{'iTRAQ-114'} = 1;
+        }
+    }
+    else
+    {
+        $fixed_pool_hash{'TMT-126C'} = 1;
+    }
 }
-
-%comp_pool_exclude_hash = ();
-
-read_in_data_file($filename);
-store_condensed_data();
 
 if ($comp_pool_flag && $comp_pool_exclude_flag &&
     $comp_pool_exclude_filename ne '')
