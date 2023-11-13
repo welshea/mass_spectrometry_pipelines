@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2023-11-13: support iTRAQ-4 and iTRAQ-8
 # 2023-08-23: add Ensembl accessions detection
 # 2023-08-23: bugfix proteogeonomics 2-character chromosomes
 # 2023-08-22: replace RefSeq field with RefDB field; guess DB searched against
@@ -31,6 +32,20 @@
 #             (this never occured before...)
 
 # rename MaxQuant sample column headers to conform to the TMT pipeline
+$channel_map_table[4][0]   = '114';	# iTRAQ
+$channel_map_table[4][1]   = '115';
+$channel_map_table[4][2]   = '116';
+$channel_map_table[4][3]   = '117';
+
+$channel_map_table[8][0]  = '113';	# iTRAQ
+$channel_map_table[8][1]  = '114';
+$channel_map_table[8][2]  = '115';
+$channel_map_table[8][3]  = '116';
+$channel_map_table[8][4]  = '117';
+$channel_map_table[8][5]  = '118';
+$channel_map_table[8][6]  = '119';
+$channel_map_table[8][7]  = '121';
+
 $channel_map_table[6][0]   = '126C';	# 126C
 $channel_map_table[6][1]   = '127C';
 $channel_map_table[6][2]   = '128C';
