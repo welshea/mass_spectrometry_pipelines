@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-11-13: support iTRAQ-4 and iTRAQ-8
 # 2023-08-17: properly sort sample names containing text before Plex
 # 2023-07-31: disable removal of oxidation site columns
 # 2023-06-08: warn about missing fields if they are encountered
@@ -115,10 +116,10 @@ sub cmp_renamed_header_cols
 
 
     # may contain a _run1 or _run2 after the plex
-    if ($header_a =~ /(.*)_TMT-([0-9CN]+)$/)
+    if ($header_a =~ /(.*)_(TMT|iTRAQ)-([0-9CN]+)$/)
     {
         $plex_a = $1;
-        $ch_a   = $2;
+        $ch_a   = $3;
 
         $ch_a_digits = $ch_a;
         $ch_a_digits =~ s/[^0-9]//g;
@@ -134,10 +135,10 @@ sub cmp_renamed_header_cols
             }
         }
     }
-    if ($header_b =~ /(.*)_TMT-([0-9CN]+)$/)
+    if ($header_b =~ /(.*)_(TMT|iTRAQ)-([0-9CN]+)$/)
     {
         $plex_b = $1;
-        $ch_b   = $2;
+        $ch_b   = $3;
 
         $ch_b_digits = $ch_b;
         $ch_b_digits =~ s/[^0-9]//g;
@@ -209,6 +210,20 @@ sub cmp_renamed_header_cols
 
 
 # rename MaxQuant sample column headers to conform to the TMT pipeline
+$channel_map_table[4][0]   = '114';	# iTRAQ
+$channel_map_table[4][1]   = '115';
+$channel_map_table[4][2]   = '116';
+$channel_map_table[4][3]   = '117';
+
+$channel_map_table[8][0]  = '113';	# iTRAQ
+$channel_map_table[8][1]  = '114';
+$channel_map_table[8][2]  = '115';
+$channel_map_table[8][3]  = '116';
+$channel_map_table[8][4]  = '117';
+$channel_map_table[8][5]  = '118';
+$channel_map_table[8][6]  = '119';
+$channel_map_table[8][7]  = '121';
+
 $channel_map_table[6][0]   = '126C';	# 126C
 $channel_map_table[6][1]   = '127C';
 $channel_map_table[6][2]   = '128C';
@@ -359,7 +374,7 @@ for ($i = 0; $i < @array; $i++)
     # clean up messed up sample names, IRON treats '/' as path delimiters
     else
     {
-        if ($array[$i] =~ /TMT\-\d\d\d/)
+        if ($array[$i] =~ /(TMT|iTRAQ)\-\d\d\d/)
         {
             $array[$i] =~ s/[^A-Za-z0-9-]+/_/g;
             $array[$i] =~ s/_+/_/g;
@@ -367,8 +382,8 @@ for ($i = 0; $i < @array; $i++)
             $array[$i] =~ s/_+$//;
             
             # flag channel summary columns for removal later
-            if ($array[$i] =~ /^TMT\-\d\d\d\w*/ ||
-                $array[$i] =~ /^[^_]+_TMT\-\d\d\d\w*/)
+            if ($array[$i] =~ /^(TMT|iTRAQ)\-\d\d\d\w*/ ||
+                $array[$i] =~ /^[^_]+_(TMT|iTRAQ)\-\d\d\d\w*/)
             {
                 $strip_col_flags{$i} = 1;
             }
@@ -828,9 +843,9 @@ foreach $header (sort keys %header_to_col_hash)
         # assume that there are purely technical replicates of a single
         #  biological sample, so call them different TMTs to prevent them
         #  from being averaged together later in the pipeline
-        if ($plex =~ /^TMTrun(\d+)$/i)
+        if ($plex =~ /^(TMT|iTRAQ)run(\d+)$/i)
         {
-            $replicate = $1;
+            $replicate = $2;
 #            $plex = sprintf "TMT_%d", $replicate;
 #            $plex = sprintf "TMT%d", $replicate;
             $plex = sprintf "Plex1_run%d", $replicate;
@@ -843,9 +858,19 @@ foreach $header (sort keys %header_to_col_hash)
 #            $plex = sprintf "TMT%d", $replicate;
             $plex = sprintf "Plex1_run%d", $replicate;
         }
-        
-        $sample_name = sprintf "%s_TMT-%s",
-            $plex, $channel;
+
+        # iTRAQ
+        if ($max_channel + 1 == 4 || $max_channel + 1 == 8)
+        {
+            $sample_name = sprintf "%s_iTRAQ-%s",
+                $plex, $channel;
+        }
+        # TMT
+        else
+        {
+            $sample_name = sprintf "%s_TMT-%s",
+                $plex, $channel;
+        }
         
         $array[$header_to_col_hash{$header}] = $sample_name;
         
@@ -868,15 +893,25 @@ foreach $header (sort keys %header_to_col_hash)
         # assume that there are purely technical replicates of a single
         #  biological sample, so call them different TMTs to prevent them
         #  from being averaged together later in the pipeline
-        if ($plex =~ /^TMTrun(\d+)$/i)
+        if ($plex =~ /^(TMT|iTRAQ)run(\d+)$/i)
         {
-            $replicate = $1;
+            $replicate = $2;
 #            $plex = sprintf "TMT_%d", $replicate;
 #            $plex = sprintf "TMT%d", $replicate;
             $plex = sprintf "Plex1_run%d", $replicate;
         }
 
-        $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
+
+        # iTRAQ
+        if ($max_channel + 1 == 4 || $max_channel + 1 == 8)
+        {
+            $sample_name = sprintf "%s_iTRAQ-%s", $plex, $channel;
+        }
+        # TMT
+        else
+        {
+            $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
+        }
         
         $array[$header_to_col_hash{$header}] = $sample_name;
         
@@ -907,7 +942,16 @@ foreach $header (sort keys %header_to_col_hash)
         $plex           = 'Plex' . $plex_num;
         $channel        = $channel_map[$channel_number];
 
-        $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
+        # iTRAQ
+        if ($max_channel + 1 == 4 || $max_channel + 1 == 8)
+        {
+            $sample_name = sprintf "%s_iTRAQ-%s", $plex, $channel;
+        }
+        # TMT
+        else
+        {
+            $sample_name = sprintf "%s_TMT-%s", $plex, $channel;
+        }
         
         $array[$header_to_col_hash{$header}] = $sample_name;
         
@@ -938,12 +982,13 @@ if ($pd_grouped_flag)
     {
         $header = $array[$col];
 
-        if ($header =~ /([0-9]+)_TMT-([0-9CN]+)/)
+        if ($header =~ /([0-9]+)_(TMT|iTRAQ)-([0-9CN]+)/)
         {
-            $plex   = $1;
-            $ch_str = $2;
+            $plex     = $1;
+            $platform = $2;
+            $ch_str   = $3;
 
-            $sample_name = sprintf "Plex%s_TMT-%s", $plex, $ch_str;
+            $sample_name = sprintf "Plex%s_%s-%s", $plex, $platform, $ch_str;
 
             $seen_sample_hash{$sample_name} = 1;
             $seen_plex_hash{$plex} = 1;
@@ -956,7 +1001,17 @@ if ($pd_grouped_flag)
         for ($i = 0; $i <= $max_channel; $i++)
         {
             $ch_str      = $channel_map_table[$max_channel+1][$i];
-            $sample_name = sprintf "Plex%s_TMT-%s", $plex, $ch_str;
+
+            # iTRAQ
+            if ($max_channel + 1 == 4 || $max_channel + 1 == 8)
+            {
+                $sample_name = sprintf "Plex%s_iTRAQ-%s", $plex, $ch_str;
+            }
+            # TMT
+            else
+            {
+                $sample_name = sprintf "Plex%s_TMT-%s", $plex, $ch_str;
+            }
 
             if (!defined($seen_sample_hash{$sample_name}))
             {
@@ -981,7 +1036,7 @@ for ($i = 0; $i < @array; $i++)
 {
     $header = $array[$i];
 
-    if ($header =~ /([0-9]+)(.*_TMT-[0-9CN]+)$/)
+    if ($header =~ /([0-9]+)(.*_TMT-[0-9CN]+|.*_iTRAQ-[0-9CN]+)$/)
     {
         $plex    = $1;
         $end_str = $2;
@@ -1001,7 +1056,8 @@ if ($max_plex_digits > 1)
     {
         $header = $array[$i];
 
-        if ($header =~ /^([^0-9]+)([0-9]+)(.*_TMT-[0-9CN]+)$/)
+        if ($header =~
+            /^([^0-9]+)([0-9]+)(.*_TMT-[0-9CN]+|.*_iTRAQ-[0-9CN]+)$/)
         {
             $plex_txt = $1;
             $plex_num = $2;
