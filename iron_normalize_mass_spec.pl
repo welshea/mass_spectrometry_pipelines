@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2023-11-13:  support iTRAQ-4 and iTRAQ-8
 # 2023-10-05:  add --iron-ignore-low to untilt flags, for IRON >= v2.3.0
 # 2023-08-07:  --iron-untilt overrides --no-iron flag if specified afterwards
 # 2023-08-07:  change --norm-none to --no-iron for consistency with other .pl
@@ -332,7 +333,7 @@ sub read_in_data_file
         
 
         # check to see if it is cleaned up TMT column headers
-        if ($field =~ /^TMT/i)
+        if ($field =~ /^(TMT|iTRAQ)/i)
         {
             # skip individual fractions
             if ($field =~ /___\d+$/)
@@ -343,7 +344,7 @@ sub read_in_data_file
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
         }
-        elsif ($field =~ /TMT\-\d+[NC]*$/i)
+        elsif ($field =~ /(TMT|iTRAQ)\-\d+[NC]*$/i)
         {
             # skip individual fractions
             if ($field =~ /___\d+$/)
