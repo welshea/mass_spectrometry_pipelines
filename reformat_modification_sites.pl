@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-11-13:  update single plex channel names to Plex1 instead of TMT01
 # 2023-08-25:  print modification type abbreviations to STDERR
 # 2023-08-24:  replace hard-coded modification types with auto-detection
 # 2023-05-18:  strip UTF-8 BOM from MaxQuant 2.4 output, which broke many things
@@ -887,7 +888,7 @@ for ($i = 0, $j = 0; $i < @temp_array_i; $i++)
         if ($maxquant_tmt_single_flag &&
             defined($intensities_col_hash{$i}))
         {
-            $temp_array_j[$j] .= ' TMT01';
+            $temp_array_j[$j] .= ' Plex1';
         }
         
         $j++;
