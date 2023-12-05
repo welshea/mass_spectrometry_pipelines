@@ -342,7 +342,7 @@ while(defined($line=<DATA_FILE>))
 
     $num_batches = @batch_array;
 
-printf STDERR "FOOBAR\t%s\t%s\n", $happy_batch_count, $num_batches;
+    # printf STDERR "FOOBAR\t%s\t%s\n", $happy_batch_count, $num_batches;
     
     # print row if all batches have enough samples
     if ($happy_batch_count == @batch_array)
