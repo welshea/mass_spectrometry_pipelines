@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-07  bugfix accession sorting in output sub-fields
 # 2023-11-07  bugfix NumGenes to better handle fusions/readthroughs
 # 2023-08-23  detect FragPipe reverse sequences
 # 2023-08-23  flag proteogenomics mutant-only peptides
@@ -488,16 +489,18 @@ sub compare_accession
 {
     my $accession_a   = $a;
     my $accession_b   = $b;
-    my %hash_a        = %{$accession_annotation_hash{$accession_a}};
-    my %hash_b        = %{$accession_annotation_hash{$accession_b}};
-    my $geneid_a      = $hash_a{gene_id};
-    my $geneid_b      = $hash_b{gene_id};
-    my $symbol_a      = $hash_a{symbol};
-    my $symbol_b      = $hash_b{symbol};
-    my $type_a        = $hash_a{type};
-    my $type_b        = $hash_b{type};
-    my $description_a = $hash_a{description};
-    my $description_b = $hash_b{description};
+    my %hash_a;
+    my %hash_b;
+    my $geneid_a = '';
+    my $geneid_b = '';
+    my $symbol_a = '';
+    my $symbol_b = '';
+    my $alias_a  = '';
+    my $alias_b  = '';
+    my $type_a   = '';
+    my $type_b   = '';
+    my $description_a = '';
+    my $description_b = '';
     my $value_a;
     my $value_b;
     my $temp_a;
@@ -506,6 +509,31 @@ sub compare_accession
     my $temp_length;
     my $debug = 0;
 
+    if (defined($accession_annotation_hash{$accession_a}))
+    {
+        %hash_a = %{$accession_annotation_hash{$accession_a}};
+    }
+    if (defined($accession_annotation_hash{$accession_b}))
+    {
+        %hash_b = %{$accession_annotation_hash{$accession_b}};
+    }
+
+    if (%hash_a)
+    {
+        $geneid_a      = $hash_a{gene_id};
+        $symbol_a      = $hash_a{symbol};
+        $alias_a       = $hash_a{alias};
+        $type_a        = $hash_a{type};
+        $description_a = $hash_a{description};
+    }
+    if (%hash_b)
+    {
+        $geneid_b      = $hash_b{gene_id};
+        $symbol_b      = $hash_b{symbol};
+        $alias_b       = $hash_b{alias};
+        $type_b        = $hash_b{type};
+        $description_b = $hash_b{description};
+    }
 
     if (!defined($geneid_a))       { $geneid_a = ''; }
     if (!defined($geneid_b))       { $geneid_b = ''; }
@@ -859,14 +887,12 @@ sub compare_accession
 
     # presence of alias
     $value_a = 0;
-    if (defined($hash_a{alias}) &&
-        $hash_a{alias} =~ /[A-Za-z0-9]/)
+    if ($alias_a =~ /[A-Za-z0-9]/)
     {
         $value_a = 1;
     }
     $value_b = 0;
-    if (defined($hash_b{alias}) &&
-        $hash_b{alias} =~ /[A-Za-z0-9]/)
+    if ($alias_b =~ /[A-Za-z0-9]/)
     {
         $value_b = 1;
     }
@@ -875,19 +901,17 @@ sub compare_accession
 
 
     # sketchiness of alias
-    $value_a = score_symbol_sketchiness($value_a);
-    $value_b = score_symbol_sketchiness($value_b);
+    $value_a = score_symbol_sketchiness($alias_a);
+    $value_b = score_symbol_sketchiness($alias_b);
     if ($value_a > $value_b) {return -1;}
     if ($value_a < $value_b) {return  1;}
     
 
     # alias, alphabetical
-    $value_a = $hash_a{alias};
-    $value_b = $hash_b{alias};
-    if (defined($value_a) && defined($value_b))
+    if ($alias_a ne '' && $alias_b ne '')
     {
-        if (lc($value_a) lt lc($value_a)) {return -1;}
-        if (lc($value_a) gt lc($value_b)) {return  1;}
+        if (lc($alias_a) lt lc($alias_b)) {return -1;}
+        if (lc($alias_a) gt lc($alias_b)) {return  1;}
     }
     
 
@@ -1341,6 +1365,7 @@ sub print_probeid_annotation
     }
 
     # remove symbols without geneids if we already have some
+    # no need to sort the temp array, we're not using its values here
     @temp_array = keys %symbol_with_geneid_hash;
     if (@temp_array)
     {
@@ -1726,7 +1751,8 @@ sub print_probeid_annotation
     # must keep these separate, for the modification site reordering below
     @accession_less_pruned_array = @accession_pruned_array;
     $count_pruned                = @accession_pruned_array;
-    foreach $accession (keys %seen_accession_protein_hash)
+    foreach $accession (sort compare_accession
+                        keys %seen_accession_protein_hash)
     {
         if (defined($seen_accession_hash{$accession}) ||
             defined($accession_annotation_hash{$accession}))
@@ -2644,7 +2670,7 @@ while(defined($line=<DATA>))
     # store new accessions
     @new_accession_array = ();
     $num_new_accessions = 0;
-    foreach $accession (sort keys %local_accession_hash)
+    foreach $accession (sort compare_accession keys %local_accession_hash)
     {
         # skip reversed accessions
         if (defined($reversed_accession_hash{$accession}))
