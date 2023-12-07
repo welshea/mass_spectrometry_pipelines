@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2023-12-07: add --output-log2 --output-unlog --input-log2 --input-unlog
 # 2023-11-13: support iTRAQ-4 and iTRAQ-8
 # 2023-10-05: add backwards compatability for older iron --rnaseq output
 # 2023-08-29: document new flags
@@ -33,7 +34,7 @@
 # 2020-08-03: output scaling factors in proper TMT N/C label order
 # 2020-07-15: change TMT-126 to TMT-126C
 # 2020-03-06: replace | with ~ in RowIdentifier column
-# 2020-02-28: added --no-log2 --log2 --unlog2 flags
+# 2020-02-28: added --no-log2 --log2 --unlog2 flags (all since replaced)
 #             prioritize ModificationID over RowIdentifier column for id
 #              this is to catch cases where cleanup is done in the wrong order
 # 2020-02-24: added --leave-ratios flag to NOT scale ratios into abundances
@@ -1803,6 +1804,22 @@ for ($i = 0; $i < @ARGV; $i++)
             $iron_untilt_flag = 1;
             $no_iron_flag     = 0;
         }
+        elsif ($field =~ /^--output-log2$/)
+        {
+            $no_log2_flag = 0;    # output is log2
+        }
+        elsif ($field =~ /^--output-unlog$/)
+        {
+            $no_log2_flag = 1;    # output is unlogged
+        }
+        elsif ($field =~ /^--input-log2$/)
+        {
+            $unlog2_flag = 1;     # input is already log2
+        }
+        elsif ($field =~ /^--input-unlog$/)
+        {
+            $unlog2_flag = 0;     # input is unlogged
+        }
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -1865,6 +1882,11 @@ if ($error_flag)
     print STDERR "                       load comp pool sample exclusions from tab-delimited file\n";
     print STDERR "    --iron-exclusions=filename.txt\n";
     print STDERR "                       exclude row identifiers from IRON training\n";
+    print STDERR "\n";
+    print STDERR "    --input-log2       input is already log2 abundances\n";
+    print STDERR "    --input-unlog      input is unlogged abundances (default)\n";
+    print STDERR "    --output-log2      output log2 abundances       (default)\n";
+    print STDERR "    --output-unlog     output unlogged abundances\n";
     print STDERR "\n";
     print STDERR "\n";
     print STDERR "    --no-iron --no-debatch will leave the output abundances unchanged\n";
