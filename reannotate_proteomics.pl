@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-15  check for _BOVIN, _PIG, _GRIFR contaminants
 # 2023-12-07  bugfix accession sorting in output sub-fields
 # 2023-11-07  bugfix NumGenes to better handle fusions/readthroughs
 # 2023-08-23  detect FragPipe reverse sequences
@@ -2352,10 +2353,10 @@ for ($i = 0; $i < @array; $i++)
             ($field =~ /^Protein/i && !($field =~ /^Protein\s*Group\s*ID/i)) ||
             $field =~ /^Leading\s*Protein/i ||
             $field =~ /Leading razor protein/i ||
-            $field =~ /\bprotein ids\b/i ||
-            $field =~ /^Majority Protein IDs$/i ||
+            $field =~ /\bprotein ids*\b/i ||
+            $field =~ /^Majority Protein IDs*$/i ||
             $field =~ /^Parent Protein$/i ||
-            $field =~ /^Mapped Proteins$/i)
+            $field =~ /^Mapped Proteins*$/i)
         {
             $accession_col_array[$num_accession_cols++] = $i;
         }
@@ -2521,9 +2522,16 @@ while(defined($line=<DATA>))
         }
     }
 
+    $cow_pig_shroom_flag = 0;
     foreach $accession_col (@accession_col_array)
     {
         $accession_str = $array[$accession_col];
+
+        # check SwissProt for contaminants before we strip SwissProt out
+        if ($accession_str =~ /_(BOVIN|PIG|GRIFR)\b/i)
+        {
+            $cow_pig_shroom_flag = 1;
+        }
 
         # handle database identifier junk
         # otherwise, REV_ CON_ mapping will break on sp|stuff, etc.
@@ -2533,7 +2541,6 @@ while(defined($line=<DATA>))
         $accession_str =~ s/REFSEQ:([A-Za-z0-9\.]+)/$1/ig;
         $accession_str =~ s/ref\|([A-Za-z0-9\.]+)/$1/ig;
 
-        
         # strip SwissProt alias from uniprot fasta identifiers
         #  only the uniprot identifier part is flagged as con/rev elsewhere
         #  including the SwissProt identifier results in con/rev inclusion!
@@ -2704,7 +2711,9 @@ while(defined($line=<DATA>))
     {
         $num_total++;
     
-        if (defined($contam_accession_hash{$accession}))
+        # adding cow_pig_shroom flag will overcount, but it doesn't matter
+        if (defined($contam_accession_hash{$accession}) ||
+            $cow_pig_shroom_flag)
         {
             $num_contam++;
         }
@@ -2731,7 +2740,8 @@ while(defined($line=<DATA>))
     {
         for ($i = 0; $i < @array; $i++)
         {
-            if ($array[$i] =~ /bos taurus/i)
+            if ($array[$i] =~ /bos taurus/i ||
+                $array[$i] =~ /_BOVIN\b/i)
             {
                 $cow_contam = 1;
             }
