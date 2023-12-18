@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2023-12-23:  fixed typo in print STDERR lines
+# 2023-12-18:  updated first abundance column detection
+# 2023-12-18:  fixed typo in print STDERR lines
 # 2021-08-19:  update csv2tsv_not_excel() function
 # 2021-03-05:  expand usage help message
 # 2020-08-05:  more robust csb2tab_not_excel() function
@@ -644,15 +645,135 @@ for ($col = 0; $col < @header_col_array; $col++)
     $field = $header_col_array[$col];
 
     if ($field =~ / Peak height$/i ||
-        $field =~ / Peak area$/i)
+        $field =~ / Peak area$/i ||
+        $field =~ /^Area[,[]/i ||
+        $field =~ /^Height[,[]/i)
     {
-        if (!defined($col_to_remove_hash{$col}) &&
-            $col < $first_abundance_col)
+        if (!defined($col_to_remove_hash{$col}))
         {
-            $first_abundance_col = $col;
+            $sample_col_hash{$col} = 1;
+        
+            if ($col < $first_abundance_col)
+            {
+                $first_abundance_col = $col;
+            }
         }
     }
 }
+
+# none found, check for pos/neg
+if ($first_abundance_col == 9E99)
+{
+    # flags for renaming n[ and p[ to pos[ and neg[
+    $temp_saw_pos_neg_flag = 0;
+
+    # check for absense of regular pos/neg sample names
+    for ($col = 0; $col < @header_col_array; $col++)
+    {
+        $field = $header_col_array[$col];
+
+        if ($field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+            $field =~ /[^A-Za-z0-9](pos|neg)[0-9]{0,1}(?:\]*)$/i ||
+            $field =~ /^(pos|neg)[^A-Za-z0-9]/)
+        {
+            # which columns should be actual sample data
+            if ($field =~ /^IRON /i ||
+                $field =~ /([^A-Za-z0-9]*(Height|Area)[^A-Za-z0-9]*)/i)
+            {
+                $temp_saw_pos_neg_flag = 1;
+                last;
+            }
+        }
+    }
+    # rename p[ or n[ to pos[ or neg[
+    if ($temp_saw_pos_neg_flag == 0)
+    {
+        for ($col = 0; $col < @header_col_array; $col++)
+        {
+            $field = $header_col_array[$col];
+
+            if ($field =~ /^(?:IRON\s+)*[p|n]\[/)
+            {
+                $iron_str = $1;
+                if (!defined($iron_str))
+                {
+                    $iron_str = '';
+                }
+            
+                # which columns should be actual sample data
+                if ($field =~ /^IRON /i ||
+                    $field =~ /([^A-Za-z0-9]*(Height|Area)*[^A-Za-z0-9]*)/i)
+                {
+                    $header_col_array[$col] =~ s/^($iron_str)p\[/pos\[/;
+                    $header_col_array[$col] =~ s/^($iron_str)n\[/neg\[/;
+
+                    ## book keeping for back-naming later
+                    #$temp_str = $header_col_array[$col];
+                    #$temp_str =~ s/^(IRON\s+)//;
+                    #$field    =~ s/^(IRON\s+)//;
+                    #$renamed_to_orig_hash{$temp_str} = $field;
+
+                    #printf STDERR "Renaming %s to %s\n",
+                    #    $field, $header_col_array[$col];
+                }
+            }
+        }
+    }
+
+    # categorize columns
+    for ($col = 0; $col < @header_col_array; $col++)
+    {
+        $field = $header_col_array[$col];
+
+        if ($field =~ /^IRON /i ||
+            $field =~ /(^|[^A-Za-z0-9]+)(pos|neg)([^A-Za-z0-9]+|$)/i ||
+            $field =~ /[^A-Za-z0-9](pos|neg)[0-9]{0,1}(?:\]*)$/i ||
+            $field =~ /^(pos|neg)[^A-Za-z0-9]/)
+        {
+            if (!defined($col_to_remove_hash{$col}))
+            {
+                $sample_col_hash{$col} = 1;
+        
+                if ($col < $first_abundance_col)
+                {
+                    $first_abundance_col = $col;
+                }
+            }
+        }
+    }
+}
+
+# uh oh, column headers don't have anything obviously abundance-looking
+# use the known-last metadata column to denote where samples start
+if ($first_abundance_col == 9E99)
+{
+    $col = $header_col_hash{'Non-heavy identified flag'};
+    if (defined($col))
+    {
+        printf STDERR "WARNING -- using pipeline known-last metadata column to locate data columns\n";
+        $first_abundance_col = $col + 1;
+
+        for ($col = 0; $col < $first_abundance_col; $col++)
+        {
+            $field = $header_col_array[$col];
+
+            #if ($field =~ /\S/)
+            #{
+            #    $metadata_col_hash{$col} = 1;
+            #}
+        }
+        for ($col = $first_abundance_col; $col < @header_col_array; $col++)
+        {
+            $field = $header_col_array[$col];
+
+            if ($field =~ /\S/)
+            {
+                $sample_col_hash{$col} = 1;
+            }
+        }
+    }
+}
+
 
 
 # no sample columns found, take a guess
