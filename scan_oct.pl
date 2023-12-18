@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-18:  tweak search algorithm and cutoffs
 # 2023-12-18:  denote whether flagged peak is OCT or anti-OCT behavior
 # 2023-12-18:  output 3rd file of OCT-flagged data
 # 2023-12-18:  update csv2tsv_not_excel() function
@@ -588,9 +589,13 @@ $delta_rt_norm_cutoff = 0.5;
 #$rt_mz_norm_ub        =  0.50;
 $rt_mz_norm_lb        = -0.1;
 $rt_mz_norm_ub        =  0.4;    # 0.35 appears safe?, 0.03 is NOT sfae
-$nearest_delta_mz_cutoff = 3 * 22.0131 + $ref_err;
+$nearest_delta_mz_cutoff = 4 * 22.0131 + $ref_err;
 $mz_1_min_cutoff      = 11 * 22.0131 - $ref_err;    # < 11 not safe
 $mz_2_min_cutoff      = 11 * 22.0131 - $ref_err;    # < 11 not safe
+
+$small_group_cutoff_1 = 3;
+$small_group_cutoff_2 = 2;
+$small_group_cutoff_3 = 4;
 
 $filename = shift;
 $outfile_oct_name = shift;
@@ -1273,27 +1278,30 @@ for ($i = 0; $i < $num_rows; $i++)
 foreach $index_1 (@filt_1_index_array)
 {
     @index_2_array = sort cmp_row_mz keys %{$filt_1_hash{$index_1}};
+    $count_1       = @index_2_array + 1;
 
     # skip small groups
-    if (@index_2_array < 3)
+    if ($count_1 < $small_group_cutoff_1)
     {
         next;
     }
-    
+
     foreach $index_2 (@index_2_array)
     {
-        %temp_overlap_hash = ();
+        %temp_overlap_hash  = ();
+        %temp_overlap_hash2 = ();
 
         $rt_mz_norm_1_2 = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
 
         @index_3_array = sort cmp_row_mz keys %{$filt_1_hash{$index_2}};
+        $count_2       = @index_3_array;
 
         # skip small groups
-        if (@index_3_array < 3)
+        if ($count_2 < $small_group_cutoff_2)
         {
             next;
         }
-        
+
         foreach $index_3 (@index_3_array)
         {
             if ($index_3 eq $index_1)
@@ -1336,6 +1344,10 @@ foreach $index_1 (@filt_1_index_array)
 #                }
             }
 
+            # less-strict overlap
+            $temp_overlap_hash2{$index_3} = 1;
+
+            # more strict overlap
             if (defined($filt_1_hash{$index_1}{$index_3}))
             {
                 $temp_overlap_hash{$index_3} = 1;
@@ -1343,13 +1355,41 @@ foreach $index_1 (@filt_1_index_array)
         }
 
         @temp_overlap_array = keys %temp_overlap_hash;
-        if (@temp_overlap_array >= 2)
+        $count_3            = @temp_overlap_array + 1;
+        @temp_overlap_array = keys %temp_overlap_hash2;
+        if ($count_3 >= $small_group_cutoff_2)
         {
-            $overlap_hash{$index_1}{$index_2} = 1;
-
             foreach $index_3 (@temp_overlap_array)
             {
                 $overlap_hash{$index_1}{$index_3} = 1;
+
+                # re-calculate and store pairwise values that may
+                # not have been stored earlier, due to various cutoffs
+
+                $mz_1 = $row_data[$index_1]{'mz'};
+                $mz_2 = $row_data[$index_3]{'mz'};
+                $rt_1 = $row_data[$index_1]{'rt'};
+                $rt_2 = $row_data[$index_3]{'rt'};
+
+                $delta_rt = $rt_2 - $rt_1;
+                $delta_mz = $mz_2 - $mz_1;
+
+                $rt_min = $rt_1;
+                if ($rt_2 < $rt_min) { $rt_min = $rt_2; }
+                $mz_min = $mz_1;
+                if ($mz_2 < $mz_min) { $mz_min = $mz_2; }
+                
+                $rt_mz = $delta_rt;
+                if ($delta_mz)
+                {
+                    $rt_mz = $delta_rt / $delta_mz;
+                }
+
+                $delta_rt_norm = $delta_rt / $rt_min;
+                $delta_mz_norm = $delta_mz / $mz_min;
+                $rt_mz_norm = $rt_mz * $mz_min / $rt_min;
+
+                $pairwise_hash{$index_1}{$index_3}{'rt_mz_norm'} = $rt_mz_norm;
             }
         }
     }
@@ -1364,11 +1404,15 @@ foreach $index_1 (@filt_1_index_array)
 %best_delta_mz_hash = ();
 foreach $index_1 (@overlap_array)
 {
+    $mz_1 = $row_data[$index_1]{'mz'};
+
     @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
     
     foreach $index_2 (@temp_array)
     {
-        $delta_mz = abs($filt_1_hash{$index_1}{$index_2}{'delta_mz'});
+        # recalculate delta_mz, since it may not have passed filt_1
+        $mz_2     = $row_data[$index_2]{'mz'};
+        $delta_mz = abs($mz_2 - $mz_1);
         
         if (!defined($best_delta_mz_hash{$index_1}))
         {
@@ -1540,7 +1584,7 @@ foreach $index_1 (@overlap_array)
     $count = @temp_array + 1;		# add self back in
     
     # skip small clusters
-    if ($count < 4)
+    if ($count < $small_group_cutoff_3)
     {
         next;
     }
