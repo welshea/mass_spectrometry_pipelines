@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-23:  fixed typo in print STDERR lines
 # 2021-08-19:  update csv2tsv_not_excel() function
 # 2021-03-05:  expand usage help message
 # 2020-08-05:  more robust csb2tab_not_excel() function
@@ -1243,11 +1244,11 @@ if (@neg_slopes_rt_array)
 printf STDERR "Pos slopes rt:\t%f\t%f\t%f\n",
     $avg_pos_slopes_rt - 2 * $sd_pos_slopes_rt,
     $avg_pos_slopes_rt,
-    $avg_pos_slopes_rt + 2 * $sd_pos_slopes_rt,
+    $avg_pos_slopes_rt + 2 * $sd_pos_slopes_rt;
 printf STDERR "Neg slopes rt:\t%f\t%f\t%f\n",
     $avg_neg_slopes_rt - 2 * $sd_neg_slopes_rt,
     $avg_neg_slopes_rt,
-    $avg_neg_slopes_rt + 2 * $sd_neg_slopes_rt,
+    $avg_neg_slopes_rt + 2 * $sd_neg_slopes_rt;
 $pos_slopes_rt_ub = $avg_pos_slopes_rt + 2 * $sd_pos_slopes_rt;
 $neg_slopes_rt_lb = $avg_neg_slopes_rt - 2 * $sd_neg_slopes_rt;
 $rt_mirror_point = 0.5 * ($pos_slopes_rt_ub + $neg_slopes_rt_lb);
