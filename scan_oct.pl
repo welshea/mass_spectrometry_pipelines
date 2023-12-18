@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
-# 2023-12-18:  updated first abundance column detection
+# 2023-12-18:  denote whether flagged peak is OCT or anti-OCT behavior
+# 2023-12-18:  output 3rd file of OCT-flagged data
+# 2023-12-18:  update csv2tsv_not_excel() function
+# 2023-12-18:  update first abundance column detection
 # 2023-12-18:  fixed typo in print STDERR lines
 # 2021-08-19:  update csv2tsv_not_excel() function
 # 2021-03-05:  expand usage help message
@@ -150,13 +153,116 @@ sub cmp_row_rt
 # csv.reader and csv.writer set to "dialect=csv.excel_tab".
 #
 #
+# The following requirements of RFC 4180 are intentionally ignored:
+#
+# 1) "Fields containing line breaks (CRLF), double quotes, and commas
+#     should be enclosed in double-quotes."
+# 2) "Each record is located on a separate line, delimited by a line
+#     break (CRLF)."
+# 3) "Each line should contain the same number of fields throughout the file."
+# 4) "The last field in the record must not be followed by a comma."
+#
+# I'm going to assume that all four of these are likely defined in the RFC
+# due to the allowance of embedded newlines in 1).  The common implementation
+# of 1) appears to assumes MS-DOS CRLF end-of-line (EOL) characters, rather
+# than unix LF or a mix-and-match of some lines ending in CRLF and others in
+# LF (frequently occurs after editing a CRLF file in Unix).  For example,
+# Excel appears to assume that LF will be used to denote an embedded newline,
+# with CRLF indicating a "real" newline.  This, as well as 2), is problematic
+# in Unix software, which generally assumes LF is the EOL character, since
+# lines containing embedded newlines are then split across multiple lines of
+# text.  This is where 3) and 4) come in.  If we know that all lines contain
+# the same number of fields, whenever we encounter a line that is too short,
+# and its last field begins with a " that doesn't have a matching
+# right-enclosing ", we can assume it is line-wrapped, read in the next line,
+# and append it to the end of the original line, continuing to do so until we
+# reach our fixed total number of fields per line.  Due to splitting of
+# embedded newlines into multiple lines, escaped commas within embedded quotes
+# could be left dangling at the end of a wrapped line instead of indicating a
+# new field, so 4) is probably there to better handle these resulting
+# problematic line-wrapped lines.  By requiring 3) and 4), we can sanity check
+# the un-wrapped lines as well.  I wouldn't be surprised if 3) and 4) also
+# make the embedded newline-aware parsing simpler?
+#
+# This tool is intended to be used within the Unix paradigm of line-based text
+# processing tools, in which each line is generally independent of all other
+# lines.  Allowing embedded newlines in 1) would break grep, sed, sort, wc,
+# etc., and probably most Unix-based tools in general.  Wrapped lines could be
+# reordered or filtered so that they are no longer sequential with their
+# original line-wrapped partner lines or ordered for correct unwrapping.
+# Thus, we do not support embedded newlines in CSV files.  If you wish to
+# handle them, you will need to write a separate function to undo the line
+# wrap and escape the embedded newlines as something such as \r or \n or \r\n
+# prior to passing the results to this function.
+#
+# CRLF in 2) is not enforced, since we expect to receive data from Unix text
+# files, which end in LF instead of CRLF.  Since 2), 3), and 4) are no longer
+# needed to support 1), we have no reason to enforce them.  It is not uncommon
+# for real data to have lines with variable numbers of fields.  After
+# disallowing embedded newlines and ignoring 1, 2), and 3), we see no reason
+# why terminal empty fields should be encoded as ,"" to satisfy 4) instead of
+# simply using a terminal comma.  Excel also violates 4).  Thus, 4) is ignored
+# as well, since it is frequently violated in real data.
+#
+# Additionally, the following requirement of RFC 4180 is loosened so as to
+# attempt to accept invalid syntax wherever valid syntax could not be parsed.
+# Excel also selectively loosens this requirement when reading in files:
+#   
+#   "If fields are not enclosed with double quotes, then double quotes may not
+#    appear inside the fields."
+#
+#
+# The specific invalid edge cases I tested for involve quotes inside fields
+# that *aren't* enclosed in double-quotes, as well as leading/trailing spaces
+# before or after enclosing double-quotes.
+#
+#
+#   RFC 4180 on double-quotes:
+#
+#     "If double-quotes are used to enclose fields, then a double-quote
+#      appearing inside a field must be escaped by preceding it with
+#      another double quote.
+#
+#     "If fields are not enclosed with double quotes, then double quotes
+#      may not appear inside the fields."
+#
+#
+# This would appear to rule out treating fields surrounded in double-quotes
+# as "enclosed" if there are any leading/trailing spaces, or if there are
+# an even number of leading or trailing double-quotes.  However, this all
+# depends on the defintion of "enclosed".
+#
+#
+#   From Wikipedia's discussion on leading/trailing spaces:
+#
+#     "According to RFC 4180, spaces outside quotes in a field are not
+#      allowed; however, the RFC also says that "Spaces are considered
+#      part of a field and should not be ignored." and "Implementors
+#      should 'be conservative in what you do, be liberal in what you
+#      accept from others' (RFC 793, section 2.10) when processing CSV
+#      files.""
+#
+#
+# I choose to ignore leading/trailing spaces for the purposes of determining
+# whether a field is enclosed within double-quotes or not.  I shall peserve
+# them if the field is not enclosed ('spaces are considered part of a field
+# and should not be ignored' and 'be conservative in what you do'), but remove
+# them if the field is considered enclosed ('be liberal in what you accept
+# from others').  Detecting and removing spaces that surround enclosing
+# double-quotes allows for using spaces to visually align columns of variable
+# width fields when displayed on a simple terminal or text editor that would,
+# otherwise, not be vertically aligned.  I believe that this strikes a useful
+# balance between simply preserving or removing all leading/trailing spaces.
+# This attempts to follow the principle of "least surprise" to the user.
+#
+#
 # This implementation results in the following behavior:
 #
 #   1) One or more embedded tab characters (not escaped as \t) in a row are
 #      either removed (at beginning/end of field or space on either side),
 #      or replaced with a single space (if removing would otherwise merge
 #      non-space text together).  Existing spaces are preserved, only
-#      multiple unescaped tabs in a row are stripped/condensed.
+#      one or more unescaped tabs in a row are stripped/condensed.
 #
 #      While not exactly standards compliant (is there even a standard for
 #      for how to handle embedded tabs??), I have observed this to be closest
@@ -199,6 +305,19 @@ sub cmp_row_rt
 #
 #   7) *MOST*, but not all, white space is preserved.  See 1) and 5).
 #
+#
+# A relatively simple example: ""word""
+#
+# If we consider it to be enclosed within double-quotes, then the remaining
+# single double-quotes are invalid, but if it is not considered enclosed, then
+# the original "" are also invalid.  How best should we deal with it?
+#
+# Various tools result in different results:
+#
+#   word""    python and Excel, this looks not-right to me
+#   "wor      many conversion websites, truncation is just plain wrong
+#   "word"    this function, which I think handles it the most reasonably
+#
 sub csv2tsv_not_excel
 {
     my $line = $_[0];
@@ -227,7 +346,7 @@ sub csv2tsv_not_excel
     #  double-quotes are used for "grouping".
     #
     my $tab = "\x1A";    # (substitute)      need single char for split regex
-    my $dq  = "\x1D";    # (group separator) seed single char for split regex
+    my $dq  = "\x1D";    # (group separator) need single char for split regex
     
     # remove null characters, since I've only seen them randomly introduced
     #  during NTFS glitches; "Null characters may be inserted into or removed
@@ -272,7 +391,7 @@ sub csv2tsv_not_excel
         #  but *much* slower on lines containing very few quoted fields
         # use split loop instead
         #
-        # /e to evaluates code to handle different capture cases correctly
+        # /e to evaluate code to handle different capture cases correctly
         #$line =~ s/(,?)((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))|(,)/defined($3) ? "\t" : ((defined($1) && $1 ne '') ? "\t$2" : $2)/ge;
     }
     else
@@ -476,19 +595,20 @@ $mz_2_min_cutoff      = 11 * 22.0131 - $ref_err;    # < 11 not safe
 $filename = shift;
 $outfile_oct_name = shift;
 $outfile_metrics_name = shift;
+$outfile_flagged_name = shift;    # original file, but with OCT flag col added
 
 if (!defined($filename) || $filename =~ /^-/)
 {
     print "Usage:\n";
     print "\n";
-    print "  scan_oct.pl mzmine_pos.csv [output_oct_rows.txt [output_oct_metrics.txt]]\n";
+    print "  scan_oct.pl mzmine_pos.csv [output_oct_rows.txt [output_oct_metrics.txt [output_flagged_data.txt]]]\n";
     print "\n";
     print "  Both CSV and tab-delimited input is accepted.\n";
     print "  (+) ion mode files yield best results, since OCT doesn't show up in (-).\n";
     print "  Any (-) ion mode rows detected as OCT are likely false positives.\n";
     print "\n";
     print "  If output file names are not specified, default file names will be used:\n";
-    print "    oct_detected_rows.txt oct_sample_metrics.txt\n";
+    print "    oct_detected_rows.txt oct_sample_metrics.txt oct_flagged_data.txt\n";
     print "\n";
     print "  Output files contain rows identified as potential OCT, and OCT abundance-\n";
     print "  related metrics, respectively.\n";
@@ -504,6 +624,10 @@ if (!defined($outfile_oct_name))
 if (!defined($outfile_metrics_name))
 {
     $outfile_metrics_name = 'oct_sample_metrics.txt';
+}
+if (!defined($outfile_flagged_name))
+{
+    $outfile_flagged_name = 'oct_flagged_data.txt';
 }
 
 open INFILE, "$filename" or die "can't open $filename\n";
@@ -541,6 +665,8 @@ for ($i = 0; $i < @array; $i++)
     $header_col_hash{$field} = $i;
     $header_col_array[$i] = $array[$i];
 }
+@header_col_array_not_conformed = @header_col_array;
+
 
 $row_id_col = $header_col_hash{'row ID'};
 $mz_col     = $header_col_hash{'row m/z'};
@@ -805,13 +931,14 @@ if ($first_abundance_col == 9E99)
         $first_abundance_col = $rt_col;
     }
     $first_abundance_col += 1;
-
 }
 
 #printf STDERR "First sample column: %s\n",
 #    $header_col_array[$first_abundance_col];
 
 
+@line_array = ();
+$row_orig = 0;
 $row = 0;
 $max_col = 0;
 while(defined($line=<INFILE>))
@@ -820,7 +947,7 @@ while(defined($line=<INFILE>))
     if ($csv_flag) { $line = csv2tsv_not_excel($line); }
     $line =~ s/\"//g;
 
-    @array = split /\t/, $line;
+    @array = split /\t/, $line, -1;
 
     # clean up fields
     for ($col = 0; $col < @array; $col++)
@@ -829,6 +956,9 @@ while(defined($line=<INFILE>))
         $array[$col] =~ s/\s+$//;
         $array[$col] =~ s/\s+/ /g;
     }
+    
+    # store original line for later output
+    $line_array[$row_orig++] = join "\t", $line;
 
     # no row id column found, use the row # as the identifier
     if (!defined($row_id_col))
@@ -844,13 +974,6 @@ while(defined($line=<INFILE>))
     $mz     = $array[$mz_col];
     $rt     = $array[$rt_col];
 
-    # mz too low, don't even read it in
-    # NOTE -- we need to store it all for the histogram
-#    if ($mz < $mz_2_min_cutoff)
-#    {
-#        next;
-#    }
-    
     if ($row_id =~ /[A-Za-z0-9]/ &&
         is_number($mz) && is_number($rt))
     {
@@ -877,6 +1000,7 @@ while(defined($line=<INFILE>))
         $row++;
     }
 }
+close INFILE;
 $num_rows = $row;
 
 
@@ -1455,9 +1579,9 @@ if (@kept_array >= 16)
     $num_detected = @kept_array;
     printf STDERR "Finished: %d potential OCT detected\n", $num_detected;
 
-    printf OUTFILE "%s\t%s\t%s\t%s\n",
+    printf OUTFILE "%s\t%s\t%s\t%s\t%s\n",
         'Row_ID', 'Row_ID_merged',
-        'Retention_Time', 'm/z';
+        'Retention_Time', 'm/z', 'OCT_behavior';
 
     foreach $index_1 (@kept_array)
     {
@@ -1495,9 +1619,21 @@ if (@kept_array >= 16)
             }
         }
         
-        printf OUTFILE "%s\t%s\t%f\t%f\n",
+        $behavior = '???';
+        if ($rt_1 < $rt_mirror_point)
+        {
+            $behavior = 'OCT';
+        }
+        if ($rt_1 > $rt_mirror_point)
+        {
+            $behavior = 'anti-OCT';
+        }
+        
+        printf OUTFILE "%s\t%s\t%f\t%f\t%s\n",
             $row_id_1, $row_id_pos_neg,
-            $rt_1, $mz_1;
+            $rt_1, $mz_1, $behavior;
+
+        $oct_row_id_hash{$row_id_1} = 1;
     }
 }
 else
@@ -1697,3 +1833,71 @@ for ($col = $first_abundance_col; $col <= $max_col; $col++)
     printf OUTFILE "%s\t%f\n", $sample_name, $metric;
 }
 close OUTFILE;
+
+
+open OUTFILE, ">$outfile_flagged_name" or die "ABORT -- can't open $outfile_flagged_name for writing\n";
+
+# output header line to flagged data file
+for ($i = 0; $i < @header_col_array_not_conformed; $i++)
+{
+    if ($i)
+    {
+        print OUTFILE "\t";
+    }
+
+    # insert new columns before name col
+    if ($i == $name_col)
+    {
+        print OUTFILE "OCT_Peak\t";
+    }
+    
+    print OUTFILE $header_col_array_not_conformed[$i];
+}
+print OUTFILE "\n";
+
+# output the rest of the flagged data file
+foreach $line (@line_array)
+{
+    @array = split /\t/, $line, -1;
+    
+    $row_id = $array[$row_id_col];
+    $rt     = $array[$rt_col];
+    
+    $oct_peak = '';
+    if (defined($row_id))
+    {
+        if (defined($oct_row_id_hash{$row_id}))
+        {
+            $oct_peak = '???';
+            if ($rt < $rt_mirror_point)
+            {
+                $oct_peak = 'OCT';
+            }
+            if ($rt > $rt_mirror_point)
+            {
+                $oct_peak = 'anti-OCT';
+            }
+        }
+    }
+    else
+    {
+        $row_id = '';
+    }
+
+    for ($i = 0; $i < @array; $i++)
+    {
+        if ($i)
+        {
+            print OUTFILE "\t";
+        }
+
+        # insert new columns before name col
+        if ($i == $name_col)
+        {
+            print OUTFILE "$oct_peak\t";
+        }
+    
+        print OUTFILE $array[$i];
+    }
+    print OUTFILE "\n";
+}
