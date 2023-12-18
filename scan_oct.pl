@@ -1829,6 +1829,11 @@ for ($col = $first_abundance_col; $col <= $max_col; $col++)
     
     $sample_name = $header_col_array[$col];
     
+    if (!defined($sample_name))
+    {
+        next;
+    }
+    
 #    printf STDERR "Sample:\t%s\t%f\n", $sample_name, $metric;
     printf OUTFILE "%s\t%f\n", $sample_name, $metric;
 }
