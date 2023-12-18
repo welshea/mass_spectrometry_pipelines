@@ -67,7 +67,7 @@ for ($i = 0; $i < @ARGV; $i++)
 {
     $field = $ARGV[$i];
     
-    if ($field =~ /^-/)
+    if ($field =~ /^-/ && $field ne '-')
     {
         if ($field =~ /^--keep-all-cols/)
         {
