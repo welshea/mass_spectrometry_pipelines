@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-20:  improvements to search algorithm, skip merged neg ion mode rows
 # 2023-12-18:  tweak search algorithm and cutoffs
 # 2023-12-18:  denote whether flagged peak is OCT or anti-OCT behavior
 # 2023-12-18:  output 3rd file of OCT-flagged data
@@ -589,13 +590,16 @@ $delta_rt_norm_cutoff = 0.5;
 #$rt_mz_norm_ub        =  0.50;
 $rt_mz_norm_lb        = -0.1;
 $rt_mz_norm_ub        =  0.4;    # 0.35 appears safe?, 0.03 is NOT sfae
-$nearest_delta_mz_cutoff = 4 * 22.0131 + $ref_err;
+#$nearest_delta_mz_cutoff = 3 * 22.0131 + $ref_err;
+$nearest_delta_mz_cutoff = 6 * 22.0131 + $ref_err;
 $mz_1_min_cutoff      = 11 * 22.0131 - $ref_err;    # < 11 not safe
 $mz_2_min_cutoff      = 11 * 22.0131 - $ref_err;    # < 11 not safe
 
 $small_group_cutoff_1 = 3;
-$small_group_cutoff_2 = 2;
+$small_group_cutoff_2 = 3;
 $small_group_cutoff_3 = 4;
+
+$skip_anti_oct_stats_flag = 1;    # I don't know what to do with these
 
 $filename = shift;
 $outfile_oct_name = shift;
@@ -946,6 +950,8 @@ if ($first_abundance_col == 9E99)
 $row_orig = 0;
 $row = 0;
 $max_col = 0;
+$skipped_neg_flag = 0;
+
 while(defined($line=<INFILE>))
 {
     $line =~ s/[\r\n]+//g;
@@ -974,6 +980,21 @@ while(defined($line=<INFILE>))
     else
     {
         $row_id = $array[$row_id_col];
+    }
+    
+    if ($row_id =~ /^neg(ative)*(_|\b)/ ||
+        $row_id =~ /(_|\b)neg(ative)*$/)
+    {
+        if ($skipped_neg_flag == 0)
+        {
+            printf STDERR
+              "Skipping rows that appear to be (-) ion mode, such as:  %s\n",
+              $row_id;
+
+            $skipped_neg_flag = 1;
+        }
+        
+        next;
     }
 
     $mz     = $array[$mz_col];
@@ -1294,7 +1315,7 @@ foreach $index_1 (@filt_1_index_array)
         $rt_mz_norm_1_2 = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
 
         @index_3_array = sort cmp_row_mz keys %{$filt_1_hash{$index_2}};
-        $count_2       = @index_3_array;
+        $count_2       = @index_3_array + 1;
 
         # skip small groups
         if ($count_2 < $small_group_cutoff_2)
@@ -1357,7 +1378,7 @@ foreach $index_1 (@filt_1_index_array)
         @temp_overlap_array = keys %temp_overlap_hash;
         $count_3            = @temp_overlap_array + 1;
         @temp_overlap_array = keys %temp_overlap_hash2;
-        if ($count_3 >= $small_group_cutoff_2)
+        if ($count_3 >= 2)
         {
             foreach $index_3 (@temp_overlap_array)
             {
@@ -1568,6 +1589,200 @@ if ($count_pos_slopes_rt && $count_neg_slopes_rt &&
     }
   }
   @overlap_array = sort cmp_row_mz keys %overlap_hash;
+}
+
+
+# merge offset groups together
+%temp_overlap_hash = ();
+foreach $index_1 (@overlap_array)
+{
+    # we've already merged it
+    if (!defined($overlap_hash{$index_1})) { next; }
+    
+    @index_1_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+
+    $row_id_1 = $row_data[$index_1]{'row_id'};
+    $mz_1     = $row_data[$index_1]{'mz'};
+    $rt_1     = $row_data[$index_1]{'rt'};
+
+    $mz_1_min    = $mz_1; $mz_1_max = $mz_1;
+    $rt_1_min    = $rt_1; $rt_1_max = $rt_1;
+    $slope_1_min = 9E99;  $slope_1_max = -9E99;
+
+    foreach $index (@index_1_array)
+    {
+        $mz = $row_data[$index]{'mz'};
+        $rt = $row_data[$index]{'rt'};
+               
+        if ($mz < $mz_1_min) { $mz_1_min = $mz; }
+        if ($mz > $mz_1_max) { $mz_1_max = $mz; }
+        if ($rt < $rt_1_min) { $rt_1_min = $rt; }
+        if ($rt > $rt_1_max) { $rt_1_max = $rt; }
+    }
+    foreach $index (@index_1_array)
+    {
+        $rt_mz_norm = $pairwise_hash{$index_1}{$index}{'rt_mz_norm'};
+        
+        if ($rt_mz_norm < $slope_1_min) { $slope_1_min = $rt_mz_norm; }
+        if ($rt_mz_norm > $slope_1_max) { $slope_1_max = $rt_mz_norm; }
+    }
+    # this shouldn't ever happen anymore
+    if (($slope_1_min < 0 && $slope_1_max > 0) ||
+        ($slope_1_max < 0 && $slope_1_min > 0))
+    {
+        printf STDERR "ERROR -- opposite slopes:\t%s\t%g\t%g\n",
+            $row_id_1, $slope_1_min, $slope_1_max;
+        next;
+    }
+
+    foreach $index_2 (@overlap_array)
+    {
+        if ($index_1 == $index_2) { next; }
+
+        # we've already merged it
+        if (!defined($overlap_hash{$index_2})) { next; }
+
+        @index_2_array = sort cmp_row_mz keys %{$overlap_hash{$index_2}};
+
+        $row_id_2 = $row_data[$index_2]{'row_id'};
+        $mz_2     = $row_data[$index_2]{'mz'};
+        $rt_2     = $row_data[$index_2]{'rt'};
+        
+        # skip points on opposite sides of the slope mirror line
+        if (($rt_1 <= $rt_mirror_point && $rt_2 >= $rt_mirror_point) ||
+            ($rt_1 >= $rt_mirror_point && $rt_2 <= $rt_mirror_point))
+        {
+            next;
+        }
+        
+        $delta_mz = $mz_2 - $mz_1;
+        $delta_rt = $rt_2 - $rt_1;
+
+        $rt_min = $rt_1;
+        if ($rt_2 < $rt_min) { $rt_min = $rt_2; }
+        $mz_min = $mz_1;
+        if ($mz_2 < $mz_min) { $mz_min = $mz_2; }
+
+        $rt_mz = $delta_rt;
+        if ($delta_mz)
+        {
+            $rt_mz = $delta_rt / $delta_mz;
+        }
+
+        $delta_rt_norm = $delta_rt / $rt_min;
+        $delta_mz_norm = $delta_mz / $mz_min;
+        $rt_mz_norm = $rt_mz * $mz_min / $rt_min;
+
+        # same criteria from original filt_1, but without m/z check
+        if ($rt_mz >= $rt_mz_lb &&
+            $rt_mz <= $rt_mz_ub &&
+            $rt_mz_norm >= $rt_mz_norm_lb &&
+            $rt_mz_norm <= $rt_mz_norm_ub &&
+            abs($rt_mz_norm) > $zero_rt_mz_norm_tol &&
+            abs($delta_rt_norm) <= $delta_rt_norm_cutoff)
+        {
+            $mz_2_min = $mz_2; $mz_2_max = $mz_2;
+            $rt_2_min = $rt_2; $rt_2_max = $rt_2;
+
+            foreach $index (@index_2_array)
+            {
+                $mz = $row_data[$index]{'mz'};
+                $rt = $row_data[$index]{'rt'};
+                       
+                if ($mz < $mz_2_min) { $mz_2_min = $mz; }
+                if ($mz > $mz_2_max) { $mz_2_max = $mz; }
+                if ($rt < $rt_2_min) { $rt_2_min = $rt; }
+                if ($rt > $rt_2_max) { $rt_2_max = $rt; }
+            }
+            
+            # skip zero overlap
+            if ($mz_1_min > $mz_2_max || $mz_2_min > $mz_1_max) { next; }
+            if ($rt_1_min > $rt_2_max || $rt_2_min > $rt_1_max) { next; }
+
+            # skip slopes that are too different
+            $slope_2_min = 9E99; $slope_2_max = -9E99;
+            foreach $index (@index_2_array)
+            {
+                $rt_mz_norm = $pairwise_hash{$index_2}{$index}{'rt_mz_norm'};
+                
+                if ($rt_mz_norm < $slope_2_min) { $slope_2_min = $rt_mz_norm; }
+                if ($rt_mz_norm > $slope_2_max) { $slope_2_max = $rt_mz_norm; }
+            }
+            # this shouldn't ever happen anymore
+            if (($slope_2_min < 0 && $slope_2_max > 0) ||
+                ($slope_2_max < 0 && $slope_2_min > 0))
+            {
+                printf STDERR "ERROR -- opposite slopes:\t%s\t%g\t%g\n",
+                    $row_id_2, $slope_2_min, $slope_2_max;
+                next;
+            }
+
+            # skip zero slope overlap
+            if ($slope_1_min > $slope_2_max || $slope_2_min > $slope_1_max)
+            {
+                next;
+            }
+
+            # check to see if they contain each other already
+            $skip_flag = 0;
+            foreach $index_3 (@index_1_array)
+            {
+                foreach $index_4 (@index_2_array)
+                {
+                    if ($index_3 == $index_4)
+                    {
+                        $skip_flag = 1;
+                        last;
+                    }
+                }
+                if ($skip_flag) { last; }
+            }
+            if ($skip_flag) { last; }
+        
+            
+            $merge_flag = 1;
+            
+            # completely inside the other group
+            if ($mz_2_min >= $mz_1_min && $mz_2_max <= $mz_1_max &&
+                $rt_2_min >= $rt_1_min && $rt_2_max <= $rt_1_max)
+            {
+                $merge_flag = 1;
+            }
+            if ($mz_1_min >= $mz_2_min && $mz_1_max <= $mz_2_max &&
+                $rt_1_min >= $rt_2_min && $rt_1_max <= $rt_2_max)
+            {
+                $merge_flag = 1;
+            }
+            
+            # merge the groups together
+            if ($merge_flag)
+            {
+                #printf STDERR "DEBUG1\t%g\t%g\t%g\t%g\t%g\t%g\n",
+                #    $mz_1_min, $mz_1_max, $rt_1_min, $rt_1_max,
+                #    $slope_1_min, $slope_1_max;
+                #printf STDERR "DEBUG2\t%g\t%g\t%g\t%g\t%g\t%g\n",
+                #    $mz_2_min, $mz_2_max, $rt_2_min, $rt_2_max,
+                #    $slope_2_min, $slope_2_max;
+
+                foreach $index (@index_2_array)
+                {
+                    $temp_overlap_hash{$index_1}{$index} = 1;
+                }
+            }
+        }
+    }
+}
+
+
+# merge newly added overlaps into overlap hash
+foreach $index_1 (@overlap_array)
+{
+    @index_2_array = sort cmp_row_mz keys %{$temp_overlap_hash{$index_1}};
+    
+    foreach $index_2 (@index_2_array)
+    {
+        $overlap_hash{$index_1}{$index_2} = 1;
+    }
 }
 
 
@@ -1791,6 +2006,29 @@ for ($col = $first_abundance_col; $col <= $max_col; $col++)
 
     for ($row = 0; $row < $num_rows; $row++)
     {
+        if ($skip_anti_oct_stats_flag)
+        {
+            $rt     = $row_data[$row]{'rt'};
+            $row_id = $row_data[$row]{'row_id'};
+
+            $oct_peak = '';
+            if (defined($row_id))
+            {
+                if (defined($oct_row_id_hash{$row_id}))
+                {
+                    $oct_peak = '???';
+                    if ($rt < $rt_mirror_point)
+                    {
+                        $oct_peak = 'OCT';
+                    }
+                    if ($rt > $rt_mirror_point)
+                    {
+                        $oct_peak = 'anti-OCT';
+                    }
+                }
+            }
+        }
+
         $value = $data_matrix[$row][$col];
         
         if (!defined($value) || !($value =~ /\S/))
