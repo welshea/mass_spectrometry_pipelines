@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-21:  more minor improvements, tweaks, and sanity checking
 # 2023-12-20:  improvements to search algorithm, skip merged neg ion mode rows
 # 2023-12-18:  tweak search algorithm and cutoffs
 # 2023-12-18:  denote whether flagged peak is OCT or anti-OCT behavior
@@ -554,20 +555,6 @@ $rt_mz_ub =  0.01;
 $rt_mz_norm_lb = -0.1;		# ~ -0.046 for trends ~12 rt
 $rt_mz_norm_ub =  0.4;		# 0.3 loses a few minor ones, 0.31 is ok
 
-
-#$mz_min_cutoff       = 4 * 22.0131 - $ref_err;	# keeps them all
-#$mz_1_min_cutoff      = 11 * 22.0131 - $ref_err;
-#$mz_1_min_cutoff      = 140;
-#$mz_2_min_cutoff      = 240;	# loses a few somewhat questionable ones
-#$mz_2_min_cutoff      = 6 * 44.0262;
-
-#$mz_1_min_cutoff      = 7 * 22.0131 - $ref_err;
-#$mz_2_min_cutoff      = 7 * 22.0131 - $ref_err;
-
-# recommend minimum of 6x, any smaller and not-so-great looking groups appear
-$mz_1_min_cutoff      = 11 * 22.0131 - $ref_err; # ~240
-$mz_2_min_cutoff      = 11 * 22.0131 - $ref_err; # ~240
-
 #$rt_1_cutoff          = 5;
 #$rt_2_cutoff          = 5;
 #$rt_1_cutoff          = 4.5;
@@ -592,8 +579,12 @@ $rt_mz_norm_lb        = -0.1;
 $rt_mz_norm_ub        =  0.4;    # 0.35 appears safe?, 0.03 is NOT sfae
 #$nearest_delta_mz_cutoff = 3 * 22.0131 + $ref_err;
 $nearest_delta_mz_cutoff = 6 * 22.0131 + $ref_err;
-$mz_1_min_cutoff      = 11 * 22.0131 - $ref_err;    # < 11 not safe
-$mz_2_min_cutoff      = 11 * 22.0131 - $ref_err;    # < 11 not safe
+
+# 11 used to be unsafe, before I added some more sanity checking elsewhere
+# 9.5 is safe for Cress LUAD, 9 is not
+$mz_1_min_cutoff      = 9.5 * 22.0131 - $ref_err;
+$mz_2_min_cutoff      = 9.5 * 22.0131 - $ref_err;
+
 
 $small_group_cutoff_1 = 3;
 $small_group_cutoff_2 = 3;
@@ -1377,7 +1368,10 @@ foreach $index_1 (@filt_1_index_array)
 
         @temp_overlap_array = keys %temp_overlap_hash;
         $count_3            = @temp_overlap_array + 1;
-        @temp_overlap_array = keys %temp_overlap_hash2;
+
+        # this doesn't help much, and can sometimes add false positives
+        #@temp_overlap_array = keys %temp_overlap_hash2;
+
         if ($count_3 >= 2)
         {
             foreach $index_3 (@temp_overlap_array)
@@ -1415,10 +1409,58 @@ foreach $index_1 (@filt_1_index_array)
         }
     }
 }
-
-
 @overlap_array = sort cmp_row_mz keys %overlap_hash;
-#@overlap_array = sort cmp_row_mz keys %filt_1_hash;
+
+
+# for groups with mixed slopes, keep only the majority slope points
+foreach $index_1 (@overlap_array)
+{
+    @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+
+    $n_pos = 0;
+    $n_neg = 0;
+
+    foreach $index_2 (@temp_array)
+    {
+        $rt_mz_norm = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
+        
+        if ($rt_mz_norm > 0) { $n_pos++; }
+        if ($rt_mz_norm < 0) { $n_neg++; }
+    }
+
+    if ($n_pos > $n_neg)
+    {
+        foreach $index_2 (@temp_array)
+        {
+            $rt_mz_norm = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
+
+            if ($rt_mz_norm < 0)
+            {
+                print STDERR "Removing NEG from POS:\t$rt_mz_norm\n";
+                delete $overlap_hash{$index_1}{$index_2};
+            }
+        }
+    }
+    elsif ($n_pos < $n_neg)
+    {
+        foreach $index_2 (@temp_array)
+        {
+            $rt_mz_norm = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
+
+            if ($rt_mz_norm > 0)
+            {
+                print STDERR "Removing POS from NEG:\t$rt_mz_norm\n";
+                delete $overlap_hash{$index_1}{$index_2};
+            }
+        }
+    }
+    else
+    {
+        # no consensus slope, discard it
+        #delete $overlap_hash{$index_1};
+    }
+}
+@overlap_array = sort cmp_row_mz keys %overlap_hash;
 
 
 # find closest overlaps in delta_mz
@@ -1489,9 +1531,9 @@ foreach $index_1 (@overlap_array)
 # positive slopes are on the left side of the m/z vs. rt plot
 # negative slopes are on the right side of the m/z vs. rt plot
 %pos_slopes_rt_array = ();
-%neg_slopes_rt_array = ();
 $count_pos_slopes_rt = 0;
-$count_neg_slopes_rt = 0;
+$avg_pos_slopes_rt = 0;
+$sd_pos_slopes_rt  = 0;
 foreach $index_1 (@overlap_array)
 {
     @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
@@ -1505,17 +1547,8 @@ foreach $index_1 (@overlap_array)
         {
             $pos_slopes_rt_array[$count_pos_slopes_rt++] = $rt_2;
         }
-        if ($rt_mz_norm_1_2 < 0)
-        {
-            $neg_slopes_rt_array[$count_neg_slopes_rt++] = $rt_2;
-        }
     }
 }
-
-$avg_pos_slopes_rt = 0;
-$avg_neg_slopes_rt = 0;
-$sd_pos_slopes_rt  = 0;
-$sd_neg_slopes_rt  = 0;
 foreach $rt (@pos_slopes_rt_array)
 {
     $avg_pos_slopes_rt += $rt;
@@ -1533,6 +1566,52 @@ if (@pos_slopes_rt_array)
 {
     $sd_pos_slopes_rt = sqrt($sd_pos_slopes_rt / @pos_slopes_rt_array);
 }
+$pos_slopes_rt_ub = $avg_pos_slopes_rt + 2 * $sd_pos_slopes_rt;
+
+
+# negative slopes aren't as confident
+# there can be spurious negative slopes within the positive slope range,
+# which will then mess up the negative slope statistics
+# purge them here
+foreach $index_1 (@overlap_array)
+{
+    @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+    
+    foreach $index_2 (@temp_array)
+    {
+        $rt_2 = $row_data[$index_2]{'rt'};
+        $rt_mz_norm_1_2 = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
+        
+        if ($rt_mz_norm_1_2 < 0 && $rt_2 < $pos_slopes_rt_ub)
+        {
+            delete $overlap_hash{$index_1}{$index_2};
+        }
+    }
+}
+@overlap_array = sort cmp_row_mz keys %overlap_hash;
+
+
+%neg_slopes_rt_array = ();
+$avg_neg_slopes_rt = 0;
+$sd_neg_slopes_rt  = 0;
+$count_neg_slopes_rt = 0;
+foreach $index_1 (@overlap_array)
+{
+    @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+    
+    foreach $index_2 (@temp_array)
+    {
+        $rt_2 = $row_data[$index_2]{'rt'};
+        $rt_mz_norm_1_2 = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
+        
+        if ($rt_mz_norm_1_2 < 0)
+        {
+            $neg_slopes_rt_array[$count_neg_slopes_rt++] = $rt_2;
+        }
+    }
+}
+
+
 foreach $rt (@neg_slopes_rt_array)
 {
     $avg_neg_slopes_rt += $rt;
@@ -1559,7 +1638,6 @@ printf STDERR "Neg slopes rt:\t%f\t%f\t%f\n",
     $avg_neg_slopes_rt - 2 * $sd_neg_slopes_rt,
     $avg_neg_slopes_rt,
     $avg_neg_slopes_rt + 2 * $sd_neg_slopes_rt;
-$pos_slopes_rt_ub = $avg_pos_slopes_rt + 2 * $sd_pos_slopes_rt;
 $neg_slopes_rt_lb = $avg_neg_slopes_rt - 2 * $sd_neg_slopes_rt;
 $rt_mirror_point = 0.5 * ($pos_slopes_rt_ub + $neg_slopes_rt_lb);
 printf STDERR "Pos/Neg rt mirror point:\t%f\n", $rt_mirror_point;
@@ -1592,14 +1670,25 @@ if ($count_pos_slopes_rt && $count_neg_slopes_rt &&
 }
 
 
+# remove now-empty groups
+foreach $index_1 (@overlap_array)
+{
+    @index_1_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+    if (@index_1_array == 0)
+    {
+        delete $overlap_hash{$index_1};
+    }
+}
+
+
 # merge offset groups together
 %temp_overlap_hash = ();
 foreach $index_1 (@overlap_array)
 {
-    # we've already merged it
     if (!defined($overlap_hash{$index_1})) { next; }
     
     @index_1_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+    #if (@index_1_array == 0) { next; }
 
     $row_id_1 = $row_data[$index_1]{'row_id'};
     $mz_1     = $row_data[$index_1]{'mz'};
@@ -1639,10 +1728,10 @@ foreach $index_1 (@overlap_array)
     {
         if ($index_1 == $index_2) { next; }
 
-        # we've already merged it
         if (!defined($overlap_hash{$index_2})) { next; }
 
         @index_2_array = sort cmp_row_mz keys %{$overlap_hash{$index_2}};
+        #if (@index_2_array == 0) { next; }
 
         $row_id_2 = $row_data[$index_2]{'row_id'};
         $mz_2     = $row_data[$index_2]{'mz'};
