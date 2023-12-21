@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-21:  allow limited inclusion of (-) ion rows
 # 2023-12-21:  detect 1/3 and 1/4 PVA mu offsets
 # 2023-12-21:  more minor improvements, tweaks, and sanity checking
 # 2023-12-20:  improvements to search algorithm, skip merged neg ion mode rows
@@ -950,7 +951,6 @@ if ($first_abundance_col == 9E99)
 $row_orig = 0;
 $row = 0;
 $max_col = 0;
-$skipped_neg_flag = 0;
 
 while(defined($line=<INFILE>))
 {
@@ -985,16 +985,7 @@ while(defined($line=<INFILE>))
     if ($row_id =~ /^neg(ative)*(_|\b)/ ||
         $row_id =~ /(_|\b)neg(ative)*$/)
     {
-        if ($skipped_neg_flag == 0)
-        {
-            printf STDERR
-              "Skipping rows that appear to be (-) ion mode, such as:  %s\n",
-              $row_id;
-
-            $skipped_neg_flag = 1;
-        }
-        
-        next;
+        $neg_row_hash{$row} = 1;
     }
 
     $mz     = $array[$mz_col];
@@ -1218,6 +1209,15 @@ for ($i = 0; $i < $num_rows; $i++)
         }
     
         $index_2  = $sorted_rows[$j];
+
+        # skip row pairs that aren't the same ion mode
+        if ((defined($neg_row_hash{$index_1})  &&
+            !defined($neg_row_hash{$index_2})) ||
+            (defined($neg_row_hash{$index_2})  &&
+            !defined($neg_row_hash{$index_1})))
+        {
+            next;
+        }
 
 #        $row_id_2 = $row_data[$index_2]{'row_id'};
         $mz_2     = $row_data[$index_2]{'mz'};
@@ -1541,6 +1541,87 @@ foreach $index_1 (@overlap_array)
         if ($best_delta_mz_hash{$index_2} > $nearest_delta_mz_cutoff)
         {
             delete $overlap_hash{$index_1}{$index_2};
+        }
+    }
+}
+@overlap_array = sort cmp_row_mz keys %overlap_hash;
+
+
+# HACK -- remove (-) ion rows with rt less than the (+) OCT positive slopes
+# these are all false positives so far
+%temp_hash = ();
+foreach $index_1 (@overlap_array)
+{
+    if (defined($neg_row_hash{$index_1}))
+    {
+        next;
+    }
+
+    @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+    
+    foreach $index_2 (@temp_array)
+    {
+        $rt_2           = $row_data[$index_2]{'rt'};
+        $rt_mz_norm_1_2 = $pairwise_hash{$index_1}{$index_2}{'rt_mz_norm'};
+        
+        if ($rt_mz_norm_1_2 > 0)
+        {
+            $temp_hash{$index_1} = 1;
+            $temp_hash{$index_2} = 1;
+        }
+    }
+}
+@temp_row_array = sort keys %temp_hash;
+$n   = @temp_row_array;
+$avg = 0;
+$sd  = 0;
+foreach $index (@temp_row_array)
+{
+    $rt   = $row_data[$index]{'rt'};
+    $avg += $rt;
+}
+if ($n)
+{
+    $avg /= $n;
+}
+foreach $index (@temp_row_array)
+{
+    $rt    = $row_data[$index]{'rt'};
+    $diff  = $rt - $avg;
+    $sd   += $diff * $diff;
+}
+if ($n)
+{
+    $sd = sqrt($sd / $n);
+}
+$temp_cutoff = $avg - 2 * $sd;
+foreach $index_1 (@overlap_array)
+{
+    if (defined($neg_row_hash{$index_1}))
+    {
+        @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+    
+        %removed_hash = ();
+        foreach $index_2 (@temp_array)
+        {
+            $rt_2 = $row_data[$index_2]{'rt'};
+            
+            if ($rt_2 < $temp_cutoff)
+            {
+                $removed_hash{$index_2} = 1;
+                delete $overlap_hash{$index_1}{$index_2};
+            }
+        }
+        
+        # add them back in if it turns out to look OK
+        @temp_array = sort cmp_row_mz keys %{$overlap_hash{$index_1}};
+        $count = @temp_array + 1;
+        if ($count >= 3)
+        {
+            foreach $index_2 (sort keys %removed_hash)
+            {
+                $overlap_hash{$index_1}{$index_2} = 1;
+            }
         }
     }
 }
@@ -2115,6 +2196,16 @@ for ($col = $first_abundance_col; $col <= $max_col; $col++)
 
     for ($row = 0; $row < $num_rows; $row++)
     {
+        # skip (-) ion mode rows, since they generally
+        # don't contribute to OCT, and would thus
+        # usually make the relative OCT estimate worse
+        if (defined($neg_row_hash{$row}))
+        {
+            next;
+        }
+        
+        # Skip OCT-like with negative slopes.
+        # I don't know what these are or what to do with them.
         if ($skip_anti_oct_stats_flag)
         {
             $rt     = $row_data[$row]{'rt'};
