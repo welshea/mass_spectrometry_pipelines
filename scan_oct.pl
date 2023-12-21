@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-21:  detect 1/3 and 1/4 PVA mu offsets
 # 2023-12-21:  more minor improvements, tweaks, and sanity checking
 # 2023-12-20:  improvements to search algorithm, skip merged neg ion mode rows
 # 2023-12-18:  tweak search algorithm and cutoffs
@@ -544,11 +545,18 @@ sub debug_print_stuff
 }
 
 
-$ref_mz              = 22.0131;
-#$ref_mz *= 2;
+# C2H4O = 44.026215
+# +2 = 22.0131075, +3 = 14.67540
+# we also might sometimes see a few +4 at 11.00655375 ???
+#$ref_mz              = 22.0131075;    # C2H4O = 44.026215, divided by 2
+$ref_mz              = 11.00655375;    # C2H4O = 44.026215, divided by 2
+$ref_mz_3            = 14.675405;      # two of them = 29.35081
+
 #$ref_err             = 0.0015;	# super lax
 #$ref_err             = 0.0012;	# loses pos_02665
-$ref_err             = 0.0009;	# 0.0008 loses pos_05796
+#$ref_err             = 0.0009;	# 0.0008 loses pos_05796
+$ref_err              = 0.0006; # correctly discards pos_07078
+#$ref_err             = 0.0004; # lowest before we discard increasingly more
 
 $rt_mz_lb = -0.003;		# -0.001255 is lowest observed in ~12 rt region
 $rt_mz_ub =  0.01;
@@ -577,13 +585,14 @@ $delta_rt_norm_cutoff = 0.5;
 #$rt_mz_norm_ub        =  0.50;
 $rt_mz_norm_lb        = -0.1;
 $rt_mz_norm_ub        =  0.4;    # 0.35 appears safe?, 0.03 is NOT sfae
-#$nearest_delta_mz_cutoff = 3 * 22.0131 + $ref_err;
-$nearest_delta_mz_cutoff = 6 * 22.0131 + $ref_err;
+#$nearest_delta_mz_cutoff = 3 * 22.0131075 + $ref_err;
+$nearest_delta_mz_cutoff = 6 * 22.0131075 + $ref_err;
 
 # 11 used to be unsafe, before I added some more sanity checking elsewhere
-# 9.5 is safe for Cress LUAD, 9 is not
-$mz_1_min_cutoff      = 9.5 * 22.0131 - $ref_err;
-$mz_2_min_cutoff      = 9.5 * 22.0131 - $ref_err;
+# 9.0 is safe for Cress LUAD, 8.5 adds some false positives
+# 4.0 causes some mixed POS/NEG groups
+$mz_1_min_cutoff      = 9.0 * 22.0131075 - $ref_err;
+$mz_2_min_cutoff      = 9.0 * 22.0131075 - $ref_err;
 
 
 $small_group_cutoff_1 = 3;
@@ -1234,6 +1243,10 @@ for ($i = 0; $i < $num_rows; $i++)
         $division    = abs($delta_mz / $ref_mz);
         $rounded     = floor($division + 0.5);
         $error       = $rounded * $ref_mz - abs($delta_mz);
+
+        $division    = abs($delta_mz / $ref_mz_3);
+        $rounded     = floor($division + 0.5);
+        $error_3     = $rounded * $ref_mz_3 - abs($delta_mz);
         
         $delta_rt    = $rt_2 - $rt_1;
 
@@ -1260,7 +1273,8 @@ for ($i = 0; $i < $num_rows; $i++)
         }
         
         # skip m/z that don't differ by a multiple of our target m/z
-        if (abs($error) > $ref_err)
+        if (abs($error)   > $ref_err &&
+            abs($error_3) > $ref_err)
         {
             next;
         }
@@ -1334,8 +1348,13 @@ foreach $index_1 (@filt_1_index_array)
             $rounded     = floor($division + 0.5);
             $error       = $rounded * $ref_mz - abs($delta_mz);
 
+            $division    = abs($delta_mz / $ref_mz_3);
+            $rounded     = floor($division + 0.5);
+            $error_3       = $rounded * $ref_mz_3 - abs($delta_mz);
+
             # make sure the delta_mz is within tolerance
-            if (abs($error) > $ref_err)
+            if (abs($error)   > $ref_err &&
+                abs($error_3) > $ref_err)
             {
                 next;
             }
@@ -1457,7 +1476,8 @@ foreach $index_1 (@overlap_array)
     else
     {
         # no consensus slope, discard it
-        #delete $overlap_hash{$index_1};
+        print STDERR "Removing mixed POS/NEG entirely:\t$rt_mz_norm\n";
+        delete $overlap_hash{$index_1};
     }
 }
 @overlap_array = sort cmp_row_mz keys %overlap_hash;
