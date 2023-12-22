@@ -547,12 +547,12 @@ sub debug_print_stuff
 }
 
 
-# C2H4O = 44.026215
-# +2 = 22.0131075, +3 = 14.67540
+# C2H4O = 44.0262147505
+# +2 = 22.01310737525, +3 = ~14.67540
 # we also might sometimes see a few +4 at 11.00655375 ???
-#$ref_mz              = 22.0131075;    # C2H4O = 44.026215, divided by 2
-$ref_mz              = 11.00655375;    # C2H4O = 44.026215, divided by 2
-$ref_mz_3            = 14.675405;      # two of them = 29.35081
+$pva_mu              = 44.0262147505;
+$ref_mz              = $pva_mu / 4;    # +4, +2, +1 charge state multiples
+$ref_mz_3            = $pva_mu / 3;    # two of them = 29.35081
 
 #$ref_err             = 0.0015;	# super lax
 #$ref_err             = 0.0012;	# loses pos_02665
@@ -584,14 +584,14 @@ $delta_rt_norm_cutoff = 0.5;    # was 0.5; 0.14 doesn't help with pos_05924
 #$rt_mz_norm_ub        =  0.50;
 $rt_mz_norm_lb        = -0.045;  # was -0.1; 0.045 correctly discards pos_01252
 $rt_mz_norm_ub        =  0.4;    # was 0.4; 0.36 does not help with false-pos
-#$nearest_delta_mz_cutoff = 3 * 22.0131075 + $ref_err;
-$nearest_delta_mz_cutoff = 6 * 22.0131075 + $ref_err;   # 3 doesn't help f-p
+#$nearest_delta_mz_cutoff = 3 * 22.01310737525 + $ref_err;
+$nearest_delta_mz_cutoff = 6 * 22.01310737525 + $ref_err;   # 3 doesn't help f-p
 
 # 11 used to be unsafe, before I added some more sanity checking elsewhere
 # 9.0 is safe for Cress LUAD, 8.5 adds some false positives
 # 4.0 causes some mixed POS/NEG groups
-$mz_1_min_cutoff      = 9.0 * 22.0131075 - $ref_err;
-$mz_2_min_cutoff      = 9.0 * 22.0131075 - $ref_err;
+$mz_1_min_cutoff      = 9.0 * 22.01310737525 - $ref_err;
+$mz_2_min_cutoff      = 9.0 * 22.01310737525 - $ref_err;
 
 
 $small_group_cutoff_1 = 3;
