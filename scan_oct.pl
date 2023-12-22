@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2023-12-22:  more strict negative slope cutoff; more cutoff comments
 # 2023-12-21:  allow limited inclusion of (-) ion rows
 # 2023-12-21:  detect 1/3 and 1/4 PVA mu offsets
 # 2023-12-21:  more minor improvements, tweaks, and sanity checking
@@ -559,11 +560,8 @@ $ref_mz_3            = 14.675405;      # two of them = 29.35081
 $ref_err              = 0.0006; # correctly discards pos_07078
 #$ref_err             = 0.0004; # lowest before we discard increasingly more
 
-$rt_mz_lb = -0.003;		# -0.001255 is lowest observed in ~12 rt region
-$rt_mz_ub =  0.01;
-$rt_mz_norm_lb = -0.1;		# ~ -0.046 for trends ~12 rt
-$rt_mz_norm_ub =  0.4;		# 0.3 loses a few minor ones, 0.31 is ok
-
+#$rt_mz_lb = -0.003;		# -0.001255 is lowest observed in ~12 rt region
+#$rt_mz_ub =  0.01;
 #$rt_1_cutoff          = 5;
 #$rt_2_cutoff          = 5;
 #$rt_1_cutoff          = 4.5;
@@ -581,13 +579,13 @@ $rt_mz_lb             = -9E99;
 $rt_mz_ub             =  9E99;
 #$delta_mz_norm_cutoff = 2.0;
 $delta_mz_norm_cutoff  = 9E99;
-$delta_rt_norm_cutoff = 0.5;
+$delta_rt_norm_cutoff = 0.5;    # was 0.5; 0.14 doesn't help with pos_05924
 #$rt_mz_norm_lb        = -0.25;
 #$rt_mz_norm_ub        =  0.50;
-$rt_mz_norm_lb        = -0.1;
-$rt_mz_norm_ub        =  0.4;    # 0.35 appears safe?, 0.03 is NOT sfae
+$rt_mz_norm_lb        = -0.045;  # was -0.1; 0.045 correctly discards pos_01252
+$rt_mz_norm_ub        =  0.4;    # was 0.4; 0.36 does not help with false-pos
 #$nearest_delta_mz_cutoff = 3 * 22.0131075 + $ref_err;
-$nearest_delta_mz_cutoff = 6 * 22.0131075 + $ref_err;
+$nearest_delta_mz_cutoff = 6 * 22.0131075 + $ref_err;   # 3 doesn't help f-p
 
 # 11 used to be unsafe, before I added some more sanity checking elsewhere
 # 9.0 is safe for Cress LUAD, 8.5 adds some false positives
