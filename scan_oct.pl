@@ -547,12 +547,14 @@ sub debug_print_stuff
 }
 
 
-# C2H4O = 44.0262147505
+# OCT: 10.24% polyvinyl alcohol (PVA), 4.26% polyethylene glycol (PEG)
+# PVA: [CH2CH(OH)]n; PEG: H-(O-CH2-CH2)n-OH 
+# PEG and PVA both have C2H4O as their repeating unit; C2H4O = 44.0262147505
 # +2 = 22.01310737525, +3 = ~14.67540
 # we also might sometimes see a few +4 at 11.00655375 ???
-$pva_mu              = 44.0262147505;
-$ref_mz              = $pva_mu / 4;    # +4, +2, +1 charge state multiples
-$ref_mz_3            = $pva_mu / 3;    # two of them = 29.35081
+$pva_peg_mu          = 44.0262147505;
+$ref_mz              = $pva_peg_mu / 4;    # +4, +2, +1 charge state multiples
+$ref_mz_3            = $pva_peg_mu / 3;    # two of them = 29.35081
 
 #$ref_err             = 0.0015;	# super lax
 #$ref_err             = 0.0012;	# loses pos_02665
