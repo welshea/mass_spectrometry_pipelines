@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2024-01-03  check for _SHEEP and _LYSEN contaminants (found in crapome)
+# 2024-01-03  support additional accession column headers
 # 2023-12-15  check for _BOVIN, _PIG, _GRIFR contaminants
 # 2023-12-07  bugfix accession sorting in output sub-fields
 # 2023-11-07  bugfix NumGenes to better handle fusions/readthroughs
@@ -2346,8 +2348,11 @@ for ($i = 0; $i < @array; $i++)
         }
         
         if ($field =~ /^Accession/i ||
-            $field =~ /^Proteins_/i ||
-            $field =~ /^Uniprot_/i ||
+            $field =~ /^Proteins[_ ]/i ||
+            $field =~ /^Uniprot[_ ]/i ||
+            $field =~ /^SwissProt[_ ]/i ||
+            $field =~ /^RefSeq[_ ]/i ||
+            $field =~ /^Ensemble[_ ]/i ||
             $field eq 'Uniprot' ||
             $field eq 'prey_ac' ||
             ($field =~ /^Protein/i && !($field =~ /^Protein\s*Group\s*ID/i)) ||
@@ -2528,7 +2533,7 @@ while(defined($line=<DATA>))
         $accession_str = $array[$accession_col];
 
         # check SwissProt for contaminants before we strip SwissProt out
-        if ($accession_str =~ /_(BOVIN|PIG|GRIFR)\b/i)
+        if ($accession_str =~ /_(BOVIN|PIG|GRIFR|SHEEP|LYSEN)\b/i)
         {
             $cow_pig_shroom_flag = 1;
         }
