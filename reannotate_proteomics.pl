@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2024-01-03  check for _SHEEP and _LYSEN contaminants (found in crapome)
+# 2024-01-16  detect CRAPomeScore and output new CRAPomeScoreMax column
+# 2024-01-03  check for _SHEEP and _LYSEN contaminants (found in CRAPome)
 # 2024-01-03  support additional accession column headers
 # 2023-12-15  check for _BOVIN, _PIG, _GRIFR contaminants
 # 2023-12-07  bugfix accession sorting in output sub-fields
@@ -1043,10 +1044,18 @@ sub print_probeid_annotation
     $type_str = '';
     $location_str = '';
     $description_str = '';
+    $crapome_str = '';
     
     # initialize extra annotation strings
     foreach $col (@annotation_extra_col_array)
     {
+        # skip CRAPome, since we handle it separtaely
+        if (defined($accession_crapome_col) &&
+            $col == $accession_crapome_col)
+        {
+            next;
+        }
+    
         $row_extra_str_by_col_hash{$col} = '';
     }
 
@@ -1059,6 +1068,7 @@ sub print_probeid_annotation
     %seen_location_hash = ();
     %seen_description_hash = ();
     %seen_extra_hash = ();
+    %seen_crapome_hash = ();
     %symbol_with_geneid_hash = ();
 
     # flag accessions with pseudogenes
@@ -1104,6 +1114,7 @@ sub print_probeid_annotation
     }
 
 
+    $crapome_max = 0;
     foreach $accession (@accession_array)
     {
         # skip pseudogenes, unless there are no non-pseudogene hits
@@ -1123,6 +1134,7 @@ sub print_probeid_annotation
         $type              = $accession_annotation_hash{$accession}{type};
         $location          = $accession_annotation_hash{$accession}{location};
         $description       = $accession_annotation_hash{$accession}{description};
+        $crapome           = $accession_annotation_hash{$accession}{crapome};
         
 #        if (!defined($accession_rna))     { $accession_rna     = ''; }
 #        if (!defined($accession_protein)) { $accession_protein = ''; }
@@ -1132,6 +1144,7 @@ sub print_probeid_annotation
 #        if (!defined($type))              { $type              = ''; }
 #        if (!defined($location))          { $location          = ''; }
 #        if (!defined($description))       { $description       = ''; }
+         if (!defined($crapome))           { $crapome           = ''; }
 
         # remove NULL fields
         $accession_rna     =~ s/^null$//i;
@@ -1142,6 +1155,7 @@ sub print_probeid_annotation
         $type              =~ s/^null$//i;
         $location          =~ s/^null$//i;
         $description       =~ s/^null$//i;
+        $crapome           =~ s/^null$//i;
 
         $accession_rna     = bless_delimiter_bar($accession_rna);
         $accession_protein = bless_delimiter_bar($accession_protein);
@@ -1149,6 +1163,7 @@ sub print_probeid_annotation
         $symbol            = bless_delimiter_bar($symbol);
         $alias             = bless_delimiter_bar($alias);
         $type              = bless_delimiter_bar($type);
+        $crapome           = bless_delimiter_bar($crapome);
         
         foreach $field (split /\|/, $accession_rna)
         {
@@ -1274,10 +1289,41 @@ sub print_probeid_annotation
                 $seen_description_hash{$field} = 1;
             }
         }
+
+        # sort CRAPome sub-fields in reverse order
+        @temp_array = sort { $b <=> $a } split /\|/, $crapome;
+        foreach $field (@temp_array)
+        {
+            if ($field =~ /[A-Za-z0-9]/ &&
+                is_number($field) &&
+                $field > 0 &&
+                !defined($seen_crapome_hash{$field}))
+            {
+                if ($crapome_str =~ /\S/)
+                {
+                    $crapome_str .= '|';
+                }
+                $crapome_str .= $field;
+                
+                if ($field > $crapome_max)
+                {
+                    $crapome_max = $field;
+                }
+
+                $seen_crapome_hash{$field} = 1;
+            }
+        }
         
         # handle extra annotation columns
         foreach $col (@annotation_extra_col_array)
         {
+            # skip CRAPome, since we handle it separately
+            if (defined($accession_crapome_col) &&
+                $col == $accession_crapome_col)
+            {
+                next;
+            }
+        
             $value_str  = $row_extra_str_by_col_hash{$col};
             $value_orig = $accession_annotation_extra_hash{$accession}{$col};
             
@@ -1343,6 +1389,10 @@ sub print_probeid_annotation
     {
         $type_str = '---';
     }
+    if (!($crapome_str =~ /[A-Za-z0-9]/))
+    {
+        $crapome_str = '---';
+    }
 
     $accession_rna_str     = bless_delimiter_space($accession_rna_str);
     $accession_protein_str = bless_delimiter_space($accession_protein_str);
@@ -1351,10 +1401,18 @@ sub print_probeid_annotation
     $alias_str             = bless_delimiter_space($alias_str);
     $type_str              = bless_delimiter_bar($type_str);
     $type_str              =~ s/\;/\|/g;
+    $crapome_str           = bless_delimiter_space($crapome_str);
 
     # clean up extra annotation
     foreach $col (@annotation_extra_col_array)
     {
+        # skip CRAPome, since we handle it separately
+        if (defined($accession_crapome_col) &&
+            $col == $accession_crapome_col)
+        {
+            next;
+        }
+    
         $value_str = $row_extra_str_by_col_hash{$col};
     
         if (!($value_str =~ /\S/))
@@ -1963,9 +2021,23 @@ sub print_probeid_annotation
 
     $line_new .= "\t$accession_pruned_str";
 
+    # insert CRAPome fields
+    if (defined($accession_crapome_col))
+    {
+        $line_new .= "\t$crapome_str";
+        $line_new .= "\t$crapome_max";
+    }
+
     # insert extra annotation fields
     foreach $col (@annotation_extra_col_array)
     {
+        # skip CRAPome, since we handle it separately
+        if (defined($accession_crapome_col) &&
+            $col == $accession_crapome_col)
+        {
+            next;
+        }
+    
         $value_str = $row_extra_str_by_col_hash{$col};
         $line_new .= "\t$value_str";
     }
@@ -2094,6 +2166,7 @@ $accession_alias_col             = $accession_header_hash{'Alias'};
 $accession_type_col              = $accession_header_hash{'Type'};
 $accession_location_col          = $accession_header_hash{'Location'};
 $accession_description_col       = $accession_header_hash{'Description'};
+$accession_crapome_col           = $accession_header_hash{'CRAPomeScore'};
 
 
 # support merged Gencode ENST annotation
@@ -2213,6 +2286,12 @@ while(defined($line=<ANNOTATION>))
     $location            = $array[$accession_location_col];
     $description         = $array[$accession_description_col];
 
+    $crapome             = '';
+    if (defined($accession_crapome_col))
+    {
+        $crapome         = $array[$accession_crapome_col];
+    }
+
     # some non-standard accessions use periods as delimiters
     @temp_array = $accession =~ /\./g;
     if (@temp_array == 1)
@@ -2229,6 +2308,7 @@ while(defined($line=<ANNOTATION>))
     $symbol            = bless_delimiter_bar($symbol);
     $alias             = bless_delimiter_bar($alias);
     $type              = bless_delimiter_bar($type);
+    $crapome           = bless_delimiter_bar($crapome);
 
     # don't load the annotation if it has no geneid
     # since some isoforms aren't annotated right,
@@ -2253,6 +2333,11 @@ while(defined($line=<ANNOTATION>))
     $accession_annotation_hash{$accession}{type}              = $type;
     $accession_annotation_hash{$accession}{location}          = $location;
     $accession_annotation_hash{$accession}{description}       = $description;
+    
+    if (defined($accession_crapome_col))
+    {
+        $accession_annotation_hash{$accession}{crapome}           = $crapome;
+    }
 
     # store RNA/Protein lookups as well, in case we need them
     if ($map_with_additional_columns_flag)
@@ -2271,7 +2356,13 @@ while(defined($line=<ANNOTATION>))
           $accession_annotation_hash{$accession_temp}{type}              = $type;
           $accession_annotation_hash{$accession_temp}{location}          = $location;
           $accession_annotation_hash{$accession_temp}{description}       = $description;
+
+          if (defined($accession_crapome_col))
+          {
+            $accession_annotation_hash{$accession}{crapome}              = $crapome;
+          }
         }
+
       }
       @accession_array = split /\|/, $accession_protein;
       foreach $accession_temp (@accession_array)
@@ -2287,6 +2378,11 @@ while(defined($line=<ANNOTATION>))
           $accession_annotation_hash{$accession_temp}{type}              = $type;
           $accession_annotation_hash{$accession_temp}{location}          = $location;
           $accession_annotation_hash{$accession_temp}{description}       = $description;
+
+          if (defined($accession_crapome_col))
+          {
+            $accession_annotation_hash{$accession}{crapome}              = $crapome;
+          }
         }
       }
     }
@@ -2295,6 +2391,13 @@ while(defined($line=<ANNOTATION>))
     # if we store by col, we don't need to worry about header collisions
     foreach $col (@annotation_extra_col_array)
     {
+        # skip CRAPome, since we handle it separately
+        if (defined($accession_crapome_col) &&
+            $col == $accession_crapome_col)
+        {
+            next;
+        }
+    
         $value = $array[$col];
         
         if (!defined($value) || !($value =~ /\S/) ||
@@ -2438,11 +2541,25 @@ if ($proteogenomics_flag)
 
 printf "\t%s", 'Accession_Protein';
 
+
+# insert CRAPome fields
+if (defined($accession_crapome_col))
+{
+    printf "\tCRAPomeScore\tCRAPomeScoreMax";
+}
+
 # insert extra annotation fields
 foreach $header (@annotation_extra_header_array)
 {
+    # skip CRAPomeScore, since we handle it separately
+    if ($header eq 'CRAPomeScore')
+    {
+        next;
+    }
+
     printf "\t%s", $header;
 }
+
 
 printf "\t%s", 'GeneID';
 printf "\t%s", 'NumGenes';
