@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2024-02-27: add --iron-ignore-low to untilt flags, add --no-ignore-low flag
 # 2023-12-07: add --output-log2 --output-unlog --input-log2 --input-unlog
 # 2023-11-13: support iTRAQ-4 and iTRAQ-8
 # 2023-10-05: add backwards compatability for older iron --rnaseq output
@@ -965,14 +966,28 @@ sub iron_pools
         # IRON the pools
         printf STDERR "Running IRON:\tpools\n";
 
-        if ($exclusions_flag)
+        # override --proteomics or --rnaseq by putting it afterwards
+        if ($ignore_low_flag)
         {
-          $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|Fit)\"",
-              $exclusions_filename, $median_sample, $iron_input_name, $iron_output_name;
+            # use for all mass spec data, where values < 1 are junk
+            $ignore_low_str = '--iron-ignore-low';
         }
         else
         {
-          $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|Fit)\"",
+            # use for TPM/FPKM RNA-Seq data, values 0.00001 < x < 1 are OK
+            $ignore_low_str = '--iron-no-ignore-low';
+        }
+
+        if ($exclusions_flag)
+        {
+          $cmd_string = sprintf "iron_generic --proteomics %s --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|Fit)\"",
+              $ignore_low_str, $exclusions_filename,
+              $median_sample, $iron_input_name, $iron_output_name;
+        }
+        else
+        {
+          $cmd_string = sprintf "iron_generic --proteomics %s --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|Fit)\"",
+              $ignore_low_str,
               $median_sample, $iron_input_name, $iron_output_name;
         }
         
@@ -981,7 +996,7 @@ sub iron_pools
             $cmd_string =~ s/--proteomics/--rnaseq/g;
         }
 
-        `$cmd_string`;
+        #`$cmd_string`;
         # `cp -a $iron_output_name debug_iron_pools.txt`;
 
         @scale_lines_unsorted = `$cmd_string`;
@@ -1221,6 +1236,20 @@ sub iron_samples
         }
         close INPUT_FOR_IRON;
 
+
+        # override --proteomics or --rnaseq by putting it afterwards
+        if ($ignore_low_flag)
+        {
+            # use for all mass spec data, where values < 1 are junk
+            $ignore_low_str = '--iron-ignore-low';
+        }
+        else
+        {
+            # use for TPM/FPKM RNA-Seq data, values 0.00001 < x < 1 are OK
+            $ignore_low_str = '--iron-no-ignore-low';
+        }
+
+
         # IRON the samples
         if ($no_iron_flag == 0)
         {
@@ -1255,18 +1284,20 @@ sub iron_samples
 
             if ($exclusions_flag)
             {
-              $cmd_string = sprintf "iron_generic --proteomics --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
-                  $exclusions_filename, $median_sample, $iron_input_name, $iron_output_name;
+              $cmd_string = sprintf "iron_generic --proteomics %s --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
+                  $iron_low_str, $exclusions_filename,
+                  $median_sample, $iron_input_name, $iron_output_name;
             }
             else
             {
-              $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
+              $cmd_string = sprintf "iron_generic --proteomics %s --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
+                  $iron_low_str,
                   $median_sample, $iron_input_name, $iron_output_name;
             }
 
             if ($iron_untilt_flag)
             {
-                $cmd_string =~ s/--proteomics/--rnaseq/g;
+                $cmd_string =~ s/--proteomics/--rnaseq --iron-ignore-low/g;
             }
 
             @scale_lines_unsorted = `$cmd_string`;
@@ -1710,6 +1741,7 @@ $comp_pool_exclude_boost_flag = 0;
 $comp_pool_exclude_first_flag = 0;
 $comp_pool_exclude_last_flag  = 0;
 $iron_untilt_flag             = 0;    # --rnaseq flag
+$ignore_low_flag              = 1;    # ignore values < 1 during training
 $older_untilt_flag            = 0;    # iron < v2.3.0
 
 $error_flag = 0;
@@ -1819,6 +1851,12 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--input-unlog$/)
         {
             $unlog2_flag = 0;     # input is unlogged
+        }
+        # include values 0.00001 < x < 1 during normalization training
+        # used for TPM/FPKM RNA-Seq data
+        elsif ($field =~ /^--no-ignore-low/)
+        {
+            $ignore_low_flag = 0;
         }
         else
         {
