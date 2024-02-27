@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2024-02-27  map more proteogenomics identifiers to extra fields
 # 2024-01-16  detect CRAPomeScore and output new CRAPomeScoreMax column
 # 2024-01-03  check for _SHEEP and _LYSEN contaminants (found in CRAPome)
 # 2024-01-03  support additional accession column headers
@@ -2085,7 +2086,7 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $strip_flag = 1;
         }
-        # only the dat content can tell us if it is proteogenomics or not,
+        # only the data content can tell us if it is proteogenomics or not,
         # so we need a flag to tell us ahead of time for inserting columns
         elsif ($field eq '--proteogenomics')
         {
@@ -2407,6 +2408,30 @@ while(defined($line=<ANNOTATION>))
         }
 
         $accession_annotation_extra_hash{$accession}{$col} = $value;
+
+        if ($map_with_additional_columns_flag)
+        {
+          @accession_array = split /\|/, $accession_rna;
+          foreach $accession_temp (@accession_array)
+          {
+            if ($accession_temp =~ /[A-Za-z0-9]/ &&
+                !($accession_temp =~ /^N\/*A$/i))
+            {
+                $accession_annotation_extra_hash{$accession_temp}{$col} =
+                    $value;
+            }
+          }
+          @accession_array = split /\|/, $accession_protein;
+          foreach $accession_temp (@accession_array)
+          {
+            if ($accession_temp =~ /[A-Za-z0-9]/ &&
+                !($accession_temp =~ /^N\/*A$/i))
+            {
+                $accession_annotation_extra_hash{$accession_temp}{$col} =
+                    $value;
+            }
+          }
+        }
     }
 }
 close ANNOTATION;
