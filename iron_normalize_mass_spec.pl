@@ -3,6 +3,8 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2024-02-27:  if no sample columns detected, default to all columns
+# 2024-02-27:  add --iron-ignore-low to untilt flags, --no-ignore-low option
 # 2023-11-13:  support iTRAQ-4 and iTRAQ-8
 # 2023-10-05:  add --iron-ignore-low to untilt flags, for IRON >= v2.3.0
 # 2023-08-07:  --iron-untilt overrides --no-iron flag if specified afterwards
@@ -400,6 +402,22 @@ sub read_in_data_file
         }
     }
     
+    # still didn't find any, print warning and assume all columns are data
+    if ($num_samples == 0)
+    {
+        printf STDERR "WARNING -- no sample columns detected, using all cols after identifier\n";
+    
+        for ($i = $id_col + 1; $i < @array; $i++)
+        {
+            $field = $array[$i];
+
+            $sample_to_file_col_hash{$field} = $i;
+            $sample_array[$num_samples++] = $field;
+                
+            $intensity_at_end_flag = 1;
+        }
+    }
+    
     # strip header stuff from sample names
     @sample_strip_array = @sample_array;
     if ($strip_sample_names_flag && $num_samples)
@@ -660,15 +678,27 @@ sub iron_samples
     {
         $bg_string = '--bg-global';
     }
+    
+    # override --proteomics or --rnaseq by putting it afterwards
+    if ($ignore_low_flag)
+    {
+        # use for all mass spec data, where values < 1 are junk
+        $ignore_low_str = '--iron-ignore-low';
+    }
+    else
+    {
+        # use for TPM/FPKM RNA-Seq data, values 0.00001 < x < 1 are OK
+        $ignore_low_str = '--iron-no-ignore-low';
+    }
 
     # normalize data as usual
-    $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" %s %s %s \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
+    $cmd_string = sprintf "iron_generic --proteomics --norm-iron=\"%s\" %s %s %s %s \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
         $median_sample, $exclusions_string, $spikeins_string, $bg_string,
-        $iron_input_name, $iron_output_name;
+        $ignore_low_str, $iron_input_name, $iron_output_name;
 
     if ($iron_untilt_flag)
     {
-        $cmd_string =~ s/--proteomics/--rnaseq --iron-ignore-low/g;
+        $cmd_string =~ s/--proteomics/--rnaseq/g;
     }
 
 
@@ -699,11 +729,6 @@ sub iron_samples
             $iron_input_name, $iron_output_name;
         
         `$cmd_string`;
-    }
-
-    if ($iron_untilt_flag)
-    {
-        $cmd_string =~ s/--proteomics/--rnaseq/g;
     }
 
 
@@ -918,6 +943,7 @@ $no_iron_flag            = 0;   # do not normalize the data at all
 $iron_untilt_flag        = 0;   # --rnaseq flag
 $boost_flag              = 0;   # assume last sample is boosting channel
 $first_flag              = 0;   # assume first sample is pool
+$ignore_low_flag         = 1;   # ignore values < 1 during training
 $global_metabolomics_flag = 0;
 
 
@@ -985,6 +1011,12 @@ for ($i = 0; $i < @ARGV; $i++)
             $first_flag = 1;
             $boost_flag = 0;
         }
+        # include values 0.00001 < x < 1 during normalization training
+        # used for TPM/FPKM RNA-Seq data
+        elsif ($field =~ /^--no-ignore-low/)
+        {
+            $ignore_low_flag = 0;
+        }
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -1020,6 +1052,7 @@ if ($syntax_error_flag || $num_files == 0)
     printf STDERR "    --log2                        output log2 abundances [default]\n";
     printf STDERR "    --no-strip-sample-names       keep original full sample headers\n";
     printf STDERR "    --no-log2                     output unlogged abundances\n";
+    printf STDERR "    --no-ignore-low               *must use* for RNA-Seq TPM/FPKM data\n";
     printf STDERR "    --no-iron                     disable normalization\n";
     printf STDERR "    --unlog2                      exponentiate input data, pow(2, value)\n";
     printf STDERR "\n";
