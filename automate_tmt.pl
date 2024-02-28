@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2024-02-28: change additional norm channels to be per-plex, not within-plex
 # 2024-02-27: add --iron-ignore-low to untilt flags, add --no-ignore-low flag
 # 2023-12-07: add --output-log2 --output-unlog --input-log2 --input-unlog
 # 2023-11-13: support iTRAQ-4 and iTRAQ-8
@@ -606,8 +607,11 @@ sub normalize_crude
 # assume the two most similar channels are the pools
 sub identify_pools
 {
-    @fixed_pool_array = sort keys %fixed_pool_hash;
-    $num_fixed_pools = @fixed_pool_array;
+    my $prev_pool_ch;
+
+    #@fixed_pool_array = sort keys %fixed_pool_hash;
+    @fixed_pool_array  = @args_pool_array;
+    $num_fixed_pools   = @fixed_pool_array;
     
     # support auto identification of 2 pool channels
     # "auto2" is now what used to be "variable" mode
@@ -626,27 +630,40 @@ sub identify_pools
         $auto_single_variable_pool_flag = 1;
     }
 
-    # fixed pool channel(s)
+    # fixed pool channel
+    # no longer supports multiple pools per plex
     $num_pools = 1;             # also for single auto-identified ref sample
     if ($num_fixed_pools > 0)
     {
-        for ($fp = 0; $fp < $num_fixed_pools; $fp++)
+        # read in the pool to use for each plex
+        $channel_string = $fixed_pool_array[0];
+        $prev_pool_ch   = $channel_string_to_index_hash{$channel_string};
+        for ($p = 0; $p < $num_plexes; $p++)
         {
-            $channel_string = $fixed_pool_array[$fp];
-            $ch = $channel_string_to_index_hash{$channel_string};
-
-            for ($p = 0; $p < $num_plexes; $p++)
+            $channel_string = $fixed_pool_array[$p];
+            
+            if (defined($channel_string))
             {
-                $plex_pool_channels[$p][$fp] = $ch;
+                $ch = $channel_string_to_index_hash{$channel_string};
             }
+            # remaining plexes unspecified, use last provided pool ch
+            else
+            {
+                $ch = $prev_pool_ch;
+            }
+
+            $plex_pool_channels[$p][0] = $ch;
+            $prev_pool_ch              = $ch;
         }
         
-        $num_pools = $num_fixed_pools;
+        # no longer suupports multiple pools per plex
+        #$num_pools = $num_fixed_pools;
     }
 
 
     # calculate RMSD of the fixed-position pools
-    if ($num_fixed_pools > 1)
+    # no longer supported, leave the code here, but if(0) it out
+    if (0 && $num_fixed_pools > 1)
     {
       for ($p = 0; $p < $num_plexes; $p++)
       {
@@ -703,10 +720,32 @@ sub identify_pools
         }
       }
     }
-    if ($num_fixed_pools == 1)
+
+    if ($num_fixed_pools > 0)
     {
-        printf STDERR "POOL\t%s\t%s\n",
-            'fixed_pool_ch', $fixed_pool_array[0];
+        if ($num_fixed_pools > 1)
+        {
+            $prev_channel_string = $fixed_pool_array[0];
+
+            for ($p = 0; $p < $num_plexes; $p++)
+            {
+                $channel_string = $fixed_pool_array[$p];
+
+                if (!defined($channel_string))
+                {
+                    $channel_string = $prev_channel_string;
+                }
+                $prev_channel_string = $channel_string;
+
+                printf STDERR "POOL\t%s\t%s\n",
+                    $tmt_plex_array[$p], $channel_string;
+            }
+        }
+        else
+        {
+            printf STDERR "POOL\t%s\t%s\n",
+                'fixed_pool_ch', $fixed_pool_array[0];
+        }
     }
     
     
@@ -799,7 +838,9 @@ sub identify_pools
 # print warnings to STDERR if the pools look too different
 sub check_outlier_pools
 {
-    if ($num_fixed_pools == 1 || $auto_single_variable_pool_flag)
+    # no longer supports user-specified multiple pools per plex
+    #if ($num_fixed_pools == 1 || $auto_single_variable_pool_flag)
+    if ($num_fixed_pools > 0 || $auto_single_variable_pool_flag)
     {
         return;
     }
@@ -1744,6 +1785,9 @@ $iron_untilt_flag             = 0;    # --rnaseq flag
 $ignore_low_flag              = 1;    # ignore values < 1 during training
 $older_untilt_flag            = 0;    # iron < v2.3.0
 
+@args_pool_array = ();        # per-plex normalzation channels
+$args_pool_idx   = 0;         # plex index when reading in cmd arguments
+
 $error_flag = 0;
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -1874,12 +1918,15 @@ for ($i = 0; $i < @ARGV; $i++)
         }
         # treat any options after the filename as the pool channels
         # treat them as free text, don't try to get smart,
-        # the user will need to specify the channel names as they rae
+        # the user will need to specify the channel names as they are
         # in the input data file
         #
         # Don't forget that current file format is ex: TMT-126C, not just 126
         else
         {
+            $args_pool_array[$args_pool_idx++] = $field;
+        
+            # we still need this for auto/auto1/auto2 backwards compatability
             $fixed_pool_hash{$field} = 1;
         }
     }
@@ -1896,6 +1943,8 @@ if (!defined($filename))
 if ($error_flag)
 {
     print STDERR "Usage: automate_tmt.pl [options] maxquant_output_file.txt [IRON ref channels] > iron_output.txt\n";
+    print STDERR "\n";
+    print STDERR "  multiple reference channels are used to specify which channel to use per-plex\n";
     print STDERR "\n";
     print STDERR "  Options:\n";
     print STDERR "    --iron             normalize within-plex prior to other calcuations [default]\n";
