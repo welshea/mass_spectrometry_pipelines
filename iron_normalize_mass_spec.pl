@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2024-02-28:  add --keep-zero-rows flag
 # 2024-02-27:  if no sample columns detected, default to all columns
 # 2024-02-27:  add --iron-ignore-low to untilt flags, --no-ignore-low option
 # 2023-11-13:  support iTRAQ-4 and iTRAQ-8
@@ -869,22 +870,25 @@ sub output_final_data
     {
         @array = ();
 
-        # count number present
-        $count = 0;
-        for ($i = 0; $i < $num_samples; $i++)
+        if ($keep_zero_rows_flag == 0)
         {
-            $value = $iron_normalized_array[$row][$i];
-            
-            if (defined($value) && is_number($value))
+            # count number present
+            $count = 0;
+            for ($i = 0; $i < $num_samples; $i++)
             {
-                $count++;
+                $value = $iron_normalized_array[$row][$i];
+                
+                if (defined($value) && is_number($value))
+                {
+                    $count++;
+                }
             }
-        }
-        
-        # skip rows with no data
-        if ($count == 0)
-        {
-            next;
+            
+            # skip rows with no data
+            if ($count == 0)
+            {
+                next;
+            }
         }
 
         # print original columns
@@ -944,6 +948,7 @@ $iron_untilt_flag        = 0;   # --rnaseq flag
 $boost_flag              = 0;   # assume last sample is boosting channel
 $first_flag              = 0;   # assume first sample is pool
 $ignore_low_flag         = 1;   # ignore values < 1 during training
+$keep_zero_rows_flag     = 0;   # keep all-zero rows
 $global_metabolomics_flag = 0;
 
 
@@ -1017,6 +1022,10 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $ignore_low_flag = 0;
         }
+        elsif ($field =~ /^--keep-zero-rows/)
+        {
+            $keep_zero_rows_flag = 1;
+        }
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -1049,6 +1058,7 @@ if ($syntax_error_flag || $num_files == 0)
     printf STDERR "    --iron-exclusions=filename    identifiers to exclude from training\n";
     printf STDERR "    --iron-spikeins=filename      list of spikein identifiers\n";
     printf STDERR "\n";
+    printf STDERR "    --keep-zero-rows              keep rows with all-zero data\n";
     printf STDERR "    --log2                        output log2 abundances [default]\n";
     printf STDERR "    --no-strip-sample-names       keep original full sample headers\n";
     printf STDERR "    --no-log2                     output unlogged abundances\n";
