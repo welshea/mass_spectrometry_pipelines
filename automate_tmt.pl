@@ -1285,13 +1285,13 @@ sub iron_samples
             if ($exclusions_flag)
             {
               $cmd_string = sprintf "iron_generic --proteomics %s --iron-exclusions=\"%s\" --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
-                  $iron_low_str, $exclusions_filename,
+                  $ignore_low_str, $exclusions_filename,
                   $median_sample, $iron_input_name, $iron_output_name;
             }
             else
             {
               $cmd_string = sprintf "iron_generic --proteomics %s --norm-iron=\"%s\" \"%s\" -o \"%s\" 2>&1| grep -P \"^Global(Scale|FitLine)\"",
-                  $iron_low_str,
+                  $ignore_low_str,
                   $median_sample, $iron_input_name, $iron_output_name;
             }
 
