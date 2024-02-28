@@ -105,6 +105,47 @@ sub is_number
 }
 
 
+# sort numeric parts as numbers, not strings
+sub cmp_args_alphanumeric
+{
+    my @array_a = split /([0-9]+)/, $_[0];
+    my @array_b = split /([0-9]+)/, $_[1];
+    my $count_a = @array_a;
+    my $count_b = @array_b;
+    my $min_count;
+    my $i;
+    my $j;
+    
+    $min_count = $count_a;
+    if ($count_b < $min_count)
+    {
+        $min_count = $count_b;
+    }
+    
+    for ($i = 0; $i < $min_count; $i += 2)
+    {
+        # even fields sort alphabetically
+        if ($array_a[$i] lt $array_b[$i]) { return -1; }
+        if ($array_a[$i] gt $array_b[$i]) { return  1; }
+        
+        # odd fields sort numerically
+        $j = $i + 1;
+        if ($j < $min_count)
+        {
+            if ($array_a[$j] < $array_b[$j]) { return -1; }
+            if ($array_a[$j] > $array_b[$j]) { return  1; }
+        }
+    }
+
+    # sort shorter remaining portion first
+    if ($count_a < $count_b) { return -1; }
+    if ($count_a > $count_b) { return  1; }
+
+    # this shouldn't ever trigger
+    return $_[0] cmp $_[1];
+}
+
+
 sub cmp_scale_lines
 {
     my $str_a = '';
@@ -258,9 +299,12 @@ sub read_in_data_file
     $num_header_cols = @array;
     $header_line = join "\t", @array;
 
-    @sample_array = sort keys %sample_to_file_col_hash;
-    @channel_array = sort keys %channel_hash;
-    @tmt_plex_array = sort keys %tmt_plex_hash;
+    @sample_array   = sort { cmp_args_alphanumeric($a, $b) }
+                      keys %sample_to_file_col_hash;
+    @channel_array  = sort { cmp_args_alphanumeric($a, $b) }
+                      keys %channel_hash;
+    @tmt_plex_array = sort { cmp_args_alphanumeric($a, $b) }
+                      keys %tmt_plex_hash;
 
     $num_samples  = @sample_array;
     $num_channels = @channel_array;
@@ -2015,7 +2059,8 @@ store_condensed_data();
 
 
 # default to using TMT-126C as the normalization channel
-@fixed_pool_array = sort keys %fixed_pool_hash;
+#@fixed_pool_array = sort keys %fixed_pool_hash;
+@fixed_pool_array  = @args_pool_array;
 if (@fixed_pool_array == 0)
 {
     if ($itraq_flag)
@@ -2071,7 +2116,8 @@ if ($comp_pool_flag && $comp_pool_exclude_flag &&
 {
     flag_last_channels();
 }
-foreach $sample (sort keys %comp_pool_exclude_hash)
+foreach $sample (sort { cmp_args_alphanumeric($a, $b) }
+                 keys %comp_pool_exclude_hash)
 {
     # only print excluded samples that exist in this file
     if (defined($sample_to_file_col_hash{$sample}))
