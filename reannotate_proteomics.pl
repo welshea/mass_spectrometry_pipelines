@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2024-02-28  annotate proteogenomics with RNA identifiers
 # 2024-02-27  map more proteogenomics identifiers to extra fields
 # 2024-01-16  detect CRAPomeScore and output new CRAPomeScoreMax column
 # 2024-01-03  check for _SHEEP and _LYSEN contaminants (found in CRAPome)
@@ -2029,6 +2030,12 @@ sub print_probeid_annotation
         $line_new .= "\t$crapome_max";
     }
 
+    # insert proteogenomics column(s)
+    if ($proteogenomics_flag)
+    {
+        $line_new .= "\t$accession_rna_str";
+    }
+
     # insert extra annotation fields
     foreach $col (@annotation_extra_col_array)
     {
@@ -2571,6 +2578,11 @@ printf "\t%s", 'Accession_Protein';
 if (defined($accession_crapome_col))
 {
     printf "\tCRAPomeScore\tCRAPomeScoreMax";
+}
+
+if ($proteogenomics_flag)
+{
+    printf "\t%s", 'Accession_RNA';
 }
 
 # insert extra annotation fields
