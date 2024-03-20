@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+
+# 2024-03-20:  fix csv2tsv edge cases such as ,"a b"  text,
 # 2023-12-22:  more strict negative slope cutoff; more cutoff comments
 # 2023-12-21:  allow limited inclusion of (-) ion rows
 # 2023-12-21:  detect 1/3 and 1/4 PVA mu offsets
@@ -335,24 +337,8 @@ sub csv2tsv_not_excel
     #    my $tab = '___TaBChaR___';
     #    my $dq  = '___DqUOteS___';
     #
-    # https://stackoverflow.com/questions/8695118/whats-the-file-group-record-unit-separator-control-characters-and-its-usage#:~:text=30%20%E2%80%93%20RS%20%E2%80%93%20Record%20separator%20Within,units%20in%20the%20ASCII%20definition.
-    # interestingly, Microsoft Word appears to use 1E and 1F as
-    #  non-breaking and optional hyphen
-    #
-    # http://jkorpela.fi/chars/c0.html
-    #
-    # I'm going to use \x1A (substitute) for tab, since it is
-    #  "used in the place of a character that has been found to be invalid
-    #   or in error. SUB is intended to be introduced by automatic means",
-    #   and that is exactly how this function uses it.
-    #
-    # I'll use \x1D for "", since Word may use 1E and 1F internally,
-    #  and who knows if they may ever accidentally show up in exported files,
-    #  plus "group separator" seems somewhat appropriate, given that regular
-    #  double-quotes are used for "grouping".
-    #
-    my $tab = "\x1A";    # (substitute)      need single char for split regex
-    my $dq  = "\x1D";    # (group separator) need single char for split regex
+    my $tab = "\x19";    # need single char for split regex
+    my $dq  = "\x16";    # need single char for split regex
     
     # remove null characters, since I've only seen them randomly introduced
     #  during NTFS glitches; "Null characters may be inserted into or removed
@@ -385,7 +371,8 @@ sub csv2tsv_not_excel
         # convert commas only if they are not within double quotes
         # incrementing $i within array access for minor speed increase
         #   requires initializing things to -2
-        @temp_array = split /((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))/, $line;
+        #@temp_array = split /((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))/, $line;
+        @temp_array = split /((?:^|(?<=,))[ $tab$dq]*\"[^\t"]+\"[ $tab$dq\r\n]*(?:$|(?=,)))/, $line, -1;
         $n = @temp_array - 2;
         for ($i = -2; $i < $n;)
         {
