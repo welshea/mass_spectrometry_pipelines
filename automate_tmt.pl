@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2024-03-20: add additional scaling factor criteria for auto-dark detection
 # 2024-02-28: change additional norm channels to be per-plex, not within-plex
 # 2024-02-27: add --iron-ignore-low to untilt flags, add --no-ignore-low flag
 # 2023-12-07: add --output-log2 --output-unlog --input-log2 --input-unlog
@@ -45,10 +46,14 @@
 
 use Scalar::Util qw(looks_like_number);
 
+
 # any sample with a scaling factor more than +log2(6x) from that of the
 # median log2 scaling factor is probably a bad sample
 # this should be fairly conservative, we can maybe tighten it a bit
-$log2_sf_above_median_cutoff = log(6.0) / log(2.0);
+$log2_sf_above_median_cutoff = log(6.0)  / log(2.0);
+
+# most pools are ~10x, so 10 + 6 is a decent additional dark sample check
+$log2_sf_absolute_cutoff     = log(16.0) / log(2.0);
 
 
 # all functions are effectively macros, since there are no local variables
@@ -457,7 +462,6 @@ sub auto_flag_failed_samples
     my $sample;
     my $delta;
     my $p;
-
     for ($p = 0; $p < $num_plexes; $p++)
     {
         @temp_array     = ();
@@ -494,7 +498,8 @@ sub auto_flag_failed_samples
             $delta   = $log2_sf - $median_log2_sf;
             
             # fudge it a little, for round off error
-            if ($delta > $log2_sf_above_median_cutoff - 1E-5)
+            if ($delta   > $log2_sf_above_median_cutoff - 1E-5 ||
+                $log2_sf > $log2_sf_absolute_cutoff     - 1E-5)
             {
                 #printf STDERR "Auto-exclude dark channel from comp pool:\t%s\n",
                 #    $sample;
@@ -2116,17 +2121,50 @@ if ($comp_pool_flag && $comp_pool_exclude_flag &&
 {
     flag_last_channels();
 }
-foreach $sample (sort { cmp_args_alphanumeric($a, $b) }
-                 keys %comp_pool_exclude_hash)
+
+
+# print list of excluded samples
+@temp_exclude_array = sort { cmp_args_alphanumeric($a, $b) }
+                      keys %comp_pool_exclude_hash;
+for ($p = 0; $p < $num_plexes; $p++)
 {
-    # only print excluded samples that exist in this file
-    if (defined($sample_to_file_col_hash{$sample}))
+    $tmt_plex = $tmt_plex_array[$p];
+
+    for ($ch = 0; $ch < $num_channels; $ch++)
     {
-        printf STDERR "Excluding sample from comp pool:\t%s\n",
-            $sample;
+        $sample  = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
+        $log2_sf = $log2_sf_array[$p][$ch];
+
+        # only print excluded samples that exist in this file
+        if (defined($sample_to_file_col_hash{$sample}) &&
+            defined($comp_pool_exclude_hash{$sample}))
+        {
+            printf STDERR "Excluding sample from comp pool:\t%s\t%s\n",
+                $sample, 2**$log2_sf;
+        }
     }
 }
 
+# if exclude sample list is large, print list of kept samples as well
+if (1 || $num_channels * @temp_exclude_array / $num_samples > 4 - 1E-5)
+{
+    for ($p = 0; $p < $num_plexes; $p++)
+    {
+        $tmt_plex = $tmt_plex_array[$p];
+
+        for ($ch = 0; $ch < $num_channels; $ch++)
+        {
+            $sample  = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
+            $log2_sf = $log2_sf_array[$p][$ch];
+
+            if (!defined($comp_pool_exclude_hash{$sample}))
+            {
+                printf STDERR "Keeping sample for comp pool:\t%s\t%s\n",
+                    $sample, 2**$log2_sf;
+            }
+        }
+    }
+}
 
 
 # must come after iron_samples() now, to support auto ref sample picking
