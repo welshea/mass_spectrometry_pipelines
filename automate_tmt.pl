@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2024-04-02: only print kept computational pool samples if any excluded
 # 2024-03-20: add additional scaling factor criteria for auto-dark detection
 # 2024-02-28: change additional norm channels to be per-plex, not within-plex
 # 2024-02-27: add --iron-ignore-low to untilt flags, add --no-ignore-low flag
@@ -2146,7 +2147,9 @@ for ($p = 0; $p < $num_plexes; $p++)
 }
 
 # if exclude sample list is large, print list of kept samples as well
-if (1 || $num_channels * @temp_exclude_array / $num_samples > 4 - 1E-5)
+# don't print anything if no excluded samples
+if (@temp_exclude_array &&
+    (1 || $num_channels * @temp_exclude_array / $num_samples > 4 - 1E-5))
 {
     for ($p = 0; $p < $num_plexes; $p++)
     {
