@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2024-04-11: change >& to 2>&1> to fix more shell redirection issues
 # 2024-04-02: only print kept computational pool samples if any excluded
 # 2024-03-20: add additional scaling factor criteria for auto-dark detection
 # 2024-02-28: change additional norm channels to be per-plex, not within-plex
@@ -2046,12 +2047,12 @@ $scales_output_init =  0;
 $scales_output_name =  $filename;
 $scales_output_name =~ s/\.txt$//i;
 $scales_output_name =  sprintf "%s_scaling_factors.txt", $scales_output_name;
-`rm \"$scales_output_name\" >& /dev/null`;
+`rm \"$scales_output_name\" 2>&1> /dev/null`;
 
 $row_scales_output_name =  $filename;
 $row_scales_output_name =~ s/\.txt$//i;
 $row_scales_output_name = sprintf "%s_row_scales.txt", $row_scales_output_name;
-`rm \"$row_scales_output_name\" >& /dev/null`;
+`rm \"$row_scales_output_name\" 2>&1> /dev/null`;
 
 $iron_input_name  = sprintf "temp_iron_input_%s.txt", $process_id;
 $iron_output_name = sprintf "temp_iron_output_%s.txt", $process_id;
