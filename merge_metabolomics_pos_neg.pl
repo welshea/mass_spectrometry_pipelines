@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2024-08-05:  hack to auto-strip dates from sample names when needed
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-05-25:  support pos#/neg# at end of sample name (Flores #4160)
 # 2023-04-21:  rename p[ and n[ samples to pos[ and neg[
@@ -158,6 +159,100 @@ sub reformat_sci
     }
     
     return $field;
+}
+
+
+# assume all years are 2000 <= YYYY <= 2099
+#
+# I would be so lucky for someone to need to add support for >= 2100
+# after I'm long dead...
+#
+# For simplicity, any month can have 31 days, since I don't want to code
+# up more complex sanity checking right now.
+#
+sub strip_date
+{
+    my $string_orig = $_[0];
+    my $string;
+    my $month;
+    my $day;
+    my $year;
+    my $ok_flag = 0;
+    
+    $year   = '';
+    $month  = '';
+    $day    = '';
+
+    $string = $string_orig;
+    
+
+    # YYYY-MM-DD at beginning
+    if ($ok_flag == 0)
+    {
+        $string =~ s/^(20[0-9]{2})[-\/]*([0-1][0-9])[-\/]*([0-3][0-9])[- _.\/]+//;
+
+        if ($string ne $string_orig)
+        {
+            $year  = $1;
+            $month = $2;
+            $day   = $3;
+
+            if ($year  >= 2000 && $year  <= 2099 &&
+                $month >=    1 && $month <=   12 &&
+                $day   >=    1 && $day   <=   31)
+            {
+                $ok_flag = 1;
+            }
+        }
+    }
+
+    # MM-DD-YYYY at beginning
+    if ($ok_flag == 0)
+    {
+        $string =~ s/^([0-1][0-9])[-\/]*([0-3][0-9])[-\/]*(20[0-9]{2})[- _.\/]+//;
+
+        if ($string ne $string_orig)
+        {
+            $month = $1;
+            $day   = $2;
+            $year  = $3;
+
+            if ($year  >= 2000 && $year  <= 2099 &&
+                $month >=    1 && $month <=   12 &&
+                $day   >=    1 && $day   <=   31)
+            {
+                $ok_flag = 1;
+            }
+        }
+    }
+
+    # DD-MM-YYYY at beginning
+    if ($ok_flag == 0)
+    {
+        $string =~ s/^([0-3][0-9])[-\/]*([0-1][0-9])[-\/]*(20[0-9]{2})[- _.\/]+//;
+
+        if ($string ne $string_orig)
+        {
+            $day   = $1;
+            $month = $2;
+            $year  = $3;
+
+            if ($year  >= 2000 && $year  <= 2099 &&
+                $month >=    1 && $month <=   12 &&
+                $day   >=    1 && $day   <=   31)
+            {
+                $ok_flag = 1;
+            }
+        }
+    }
+    
+    # return original string
+    if ($ok_flag == 0)
+    {
+        $string = $string_orig;
+    }
+
+    return $string;
 }
 
 
@@ -449,7 +544,6 @@ sub read_in_file
                 $tomerge =~ s/\-+/\-/g;
                 $tomerge =~ s/^[_ -]//;
                 $tomerge =~ s/[_ -]$//;
-
             }
             elsif ($all_neg_start_flag)
             {
@@ -471,9 +565,16 @@ sub read_in_file
             
             # restore spaces in Peak height/area after conforming
             $tomerge =~ s/_Peak_(height|area)/ Peak $1/ig;
-
-
             $tomerge_lc = lc $tomerge;
+
+            # strip dates from sample names
+            if ($fruitful_to_strip_date &&
+                defined($header_to_strip_hash{$tomerge_lc}))
+            {
+                $tomerge    = strip_date($tomerge);
+                $tomerge_lc = lc $tomerge;
+            }
+
             $tomerge_lc_to_origcase_hash{$tomerge_lc}{$tomerge} = 1;
             
             if ($pos_neg eq 'pos')
@@ -529,6 +630,9 @@ $filename_neg     = '';
 $outname_user     = '';    # optional, user-provided sample table filename
 $equal_means_flag = 1;     # shift pos/neg log2 means to be equal
 
+$opt_smart_strip_date_flag = 1;
+$fruitful_to_strip_date    = 0;
+
 $syntax_error_flag = 0;
 $num_files         = 0;
 for ($i = 0; $i < @ARGV; $i++)
@@ -544,6 +648,14 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--no-equal-means/)
         {
             $equal_means_flag = 0;
+        }
+        elsif ($field =~ /^--strip-dates/)
+        {
+            $opt_smart_strip_date_flag = 1;
+        }
+        elsif ($field =~ /^--no-strip-dates/)
+        {
+            $opt_smart_strip_date_flag = 0;
         }
         else
         {
@@ -581,6 +693,8 @@ if ($syntax_error_flag || $num_files < 2)
     printf STDERR "  Options:\n";
     printf STDERR "    --equal-means     scale pos/neg means to be equal (default)\n";
     printf STDERR "    --no-equal-means  disable pos/neg mean scaling\n";
+    printf STDERR "    --strip-dates     \"smart\" strip dates from headers (default)\n";
+    printf STDERR "    --no-strip-dates  disable \"smart\" stripping of dates\n";
 
     exit(1);
 }
@@ -646,6 +760,148 @@ if ($single_file_mode ne 'pos')
 @global_row_id_array     = sort keys %global_row_id_hash;
 @actual_sample_lc_array  = sort keys %actual_sample_lc_hash;
 $num_actual_samples      = @actual_sample_lc_array;
+
+
+# pre-scan for unmatched samples, try stripping dates
+%unmatched_pos_hash     = ();
+%unmatched_neg_hash     = ();
+%strip_pos_hash         = ();
+%strip_neg_hash         = ();
+%header_to_strip_hash   = ();
+%tomerge_to_strip_hash  = ();
+
+if ($opt_smart_strip_date_flag)
+{
+  foreach $header (@global_tomerge_array)
+  {
+    @pos_tomerge_matches = sort keys %{$tomerge_lc_to_origpos_hash{$header}};
+    @neg_tomerge_matches = sort keys %{$tomerge_lc_to_origneg_hash{$header}};
+    $count_pos_matches   = @pos_tomerge_matches;
+    $count_neg_matches   = @neg_tomerge_matches;
+    
+    # try stripping dates
+    if ($single_file_mode eq '')
+    {
+        if (@pos_tomerge_matches == 1)
+        {
+            $header_strip = strip_date($header);
+            $tomerge      = $pos_tomerge_matches[0];
+            $strip_pos_hash{$header_strip}{$tomerge} = 1;
+
+            if ($count_neg_matches == 0)
+            {
+                $unmatched_pos_hash{$header} = 1;
+            }
+        }
+
+        if (@neg_tomerge_matches == 1)
+        {
+            $header_strip = strip_date($header);
+            $tomerge      = $neg_tomerge_matches[0];
+            $strip_neg_hash{$header_strip}{$tomerge} = 1;
+
+            if ($count_pos_matches == 0)
+            {
+                $unmatched_neg_hash{$header} = 1;
+            }
+        }
+    }
+  }
+  
+  @unmatched_pos_array = sort keys %unmatched_pos_hash;
+  @unmatched_neg_array = sort keys %unmatched_neg_hash;
+  $count_rematched_pos = 0;
+  $count_rematched_neg = 0;
+
+  # see if stripping dates can match some more pos
+  foreach $header (@unmatched_pos_array)
+  {
+      $header_strip = strip_date($header);
+
+      if (defined($strip_neg_hash{$header_strip}))
+      {
+          @temp_array = sort keys %{$strip_neg_hash{$header_strip}};
+          
+          if (@temp_array == 1)
+          {
+              $header_to_strip_hash{$header} = 1;
+              $count_rematched_pos++;
+          }
+      }
+  }  
+
+  # see if stripping dates can match some more pos
+  foreach $header (@unmatched_neg_array)
+  {
+      $header_strip = strip_date($header);
+
+      if (defined($strip_pos_hash{$header_strip}))
+      {
+          @temp_array = sort keys %{$strip_pos_hash{$header_strip}};
+          
+          if (@temp_array == 1)
+          {
+              $header_to_strip_hash{$header}                = 1;
+              $count_rematched_neg++;
+          }
+      }
+  }
+  
+  if ($count_rematched_pos && $count_rematched_neg)
+  {
+      $fruitful_to_strip_date = 1;
+
+      printf STDERR
+          "CAUTION -- \"smart\" auto-stripping of dates from beginning of sample names\n";
+  }
+}
+
+
+# re-initialize lots of stuff, read in data again
+if ($fruitful_to_strip_date)
+{
+    @global_concat_header_array = ();
+    $global_concat_header_count = 0;
+    
+    %global_metadata_hash       = ();
+    #@global_metadata_array     = ();
+    %global_row_id_hash         = ();
+    @global_row_id_array        = ();
+    %global_tomerge_hash        = ();
+    @global_tomerge_array       = ();
+
+    %global_data_hash           = ();
+    @global_header_array        = ();
+
+    %actual_sample_lc_hash      = ();
+    @actual_sample_lc_array     = ();
+    $num_actual_samples         = 0;
+
+    if ($single_file_mode ne 'neg')
+    {
+        read_in_file($filename_pos, 'pos');
+    }
+    if ($single_file_mode ne 'pos')
+    {
+        read_in_file($filename_neg, 'neg');
+    }
+
+    @global_header_array     = ();
+    #@global_metadata_array  = sort keys %global_metadata_hash;
+    @global_tomerge_array    = sort keys %global_tomerge_hash;
+    @global_row_id_array     = sort keys %global_row_id_hash;
+    @actual_sample_lc_array  = sort keys %actual_sample_lc_hash;
+    $num_actual_samples      = @actual_sample_lc_array;
+}
+
+
+# purge hashes if not fruitful to strip
+if ($fruitful_to_strip_date == 0)
+{
+    %header_to_strip_hash  = ();
+    %tomerge_to_strip_hash = ();
+}
+
 
 
 # global header order
