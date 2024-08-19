@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2024-08-19  delimit extra annotation fields by | instead of spaces
 # 2024-08-19  strip --- from CRAPome fields prior to sorting
 # 2024-02-28  annotate proteogenomics with RNA identifiers
 # 2024-02-27  map more proteogenomics identifiers to extra fields
@@ -131,6 +132,25 @@ sub bless_delimiter_bar
     
     return $text;
 }
+
+
+sub bless_delimiter_bar_only
+{
+    my $text = $_[0];
+
+    #$text =~ s/\;/\|/g;
+    #$text =~ s/\/\//\|/g;
+    #$text =~ s/,/\|/g;
+    #$text =~ s/\s+/\|/g;
+    $text =~ s/\s+\|/\|/g;
+    $text =~ s/\|\s+/\|/g;
+    $text =~ s/\|+/\|/g;
+    $text =~ s/^\|//;
+    $text =~ s/\|$//;
+    
+    return $text;
+}
+
 
 sub bless_delimiter_space
 {
@@ -1337,7 +1357,7 @@ sub print_probeid_annotation
             }
 
             $value_orig =~ s/^null$//i;
-            $value_orig =  bless_delimiter_bar($value_orig);
+            $value_orig =  bless_delimiter_bar_only($value_orig);
 
             foreach $field (split /\|/, $value_orig)
             {
@@ -1424,7 +1444,7 @@ sub print_probeid_annotation
             $value_str = '---';
         }
 
-        $value_str = bless_delimiter_space($value_str);
+        $value_str = bless_delimiter_bar_only($value_str);
 
         $row_extra_str_by_col_hash{$col} = $value_str;
     }
