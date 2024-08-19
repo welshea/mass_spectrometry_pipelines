@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2024-08-19  strip --- from CRAPome fields prior to sorting
 # 2024-02-28  annotate proteogenomics with RNA identifiers
 # 2024-02-27  map more proteogenomics identifiers to extra fields
 # 2024-01-16  detect CRAPomeScore and output new CRAPomeScoreMax column
@@ -1158,6 +1159,7 @@ sub print_probeid_annotation
         $location          =~ s/^null$//i;
         $description       =~ s/^null$//i;
         $crapome           =~ s/^null$//i;
+        $crapome           =~ s/^\-\-\-$//i;
 
         $accession_rna     = bless_delimiter_bar($accession_rna);
         $accession_protein = bless_delimiter_bar($accession_protein);
