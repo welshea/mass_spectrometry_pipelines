@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-# 2024-08-22:  add Nitro-Y (ni) to known modifications list
+# 2024-08-22:  add Nitro-Y (ny) to known modifications list
 # 2023-11-13:  update single plex channel names to Plex1 instead of TMT01
 # 2023-08-25:  print modification type abbreviations to STDERR
 # 2023-08-24:  replace hard-coded modification types with auto-detection
@@ -745,7 +745,7 @@ elsif ($mod_type =~ /^Gly/i)                     { $mod_type_abbrev = 'gl'; }
 elsif ($mod_type =~ /^Lact/i)                    { $mod_type_abbrev = 'la'; }
 elsif ($mod_type =~ /^Acetyl/i)                  { $mod_type_abbrev = 'ac'; }
 elsif ($mod_type =~ /^Biotin-H/i)                { $mod_type_abbrev = 'bh'; }
-elsif ($mod_type =~ /^Nitro-Y/i)                 { $mod_type_abbrev = 'ni'; }
+elsif ($mod_type =~ /^Nitro-Y/i)                 { $mod_type_abbrev = 'ny'; }
 # use first 2 letters
 else  { $mod_type_abbrev = lc substr $mod_type, 0, 2; };
 
