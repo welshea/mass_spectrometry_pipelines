@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2024-08-22:  add Nitro-Y (ni) to known modifications list
 # 2023-11-13:  update single plex channel names to Plex1 instead of TMT01
 # 2023-08-25:  print modification type abbreviations to STDERR
 # 2023-08-24:  replace hard-coded modification types with auto-detection
@@ -19,6 +20,7 @@ use POSIX;
 #    Dethiobiotin-ATP
 #    GlyGly (K)
 #    Lactylation
+#    Nitro-Y
 #    Oxidation (M)
 #    Phospho (STY)
 
@@ -32,6 +34,7 @@ $prev_seen_mod_type_hash{'Lactylation'}       = 1;
 $prev_seen_mod_type_hash{'Lactylation Heavy'} = 1;
 $prev_seen_mod_type_hash{'Oxidation (M)'}     = 1;
 $prev_seen_mod_type_hash{'Phospho (STY)'}     = 1;
+$prev_seen_mod_type_hash{'Nitro-Y'}           = 1;
 
 
 # first letters of previously seen modifications
@@ -742,6 +745,7 @@ elsif ($mod_type =~ /^Gly/i)                     { $mod_type_abbrev = 'gl'; }
 elsif ($mod_type =~ /^Lact/i)                    { $mod_type_abbrev = 'la'; }
 elsif ($mod_type =~ /^Acetyl/i)                  { $mod_type_abbrev = 'ac'; }
 elsif ($mod_type =~ /^Biotin-H/i)                { $mod_type_abbrev = 'bh'; }
+elsif ($mod_type =~ /^Nitro-Y/i)                 { $mod_type_abbrev = 'ni'; }
 # use first 2 letters
 else  { $mod_type_abbrev = lc substr $mod_type, 0, 2; };
 
