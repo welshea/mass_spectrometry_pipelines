@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2024-09-09:  rescale output to global raw mean, instead of per-row raw mean
 # 2024-02-28:  add --keep-zero-rows flag
 # 2024-02-27:  if no sample columns detected, default to all columns
 # 2024-02-27:  add --iron-ignore-low to untilt flags, --no-ignore-low option
@@ -733,11 +734,20 @@ sub iron_samples
     }
 
 
+    # for rescaling
+    $mean_raw  = 0;
+    $n_raw     = 0;
+    $mean_norm = 0;
+    $n_norm    = 0;
+    $offset    = 0;
+
+
     # open IRON output for reading
     open OUTPUT_FOR_IRON, "$iron_output_name" or die "ABORT -- can't open $iron_output_name\n";
     
     # skip header line
     $line = <OUTPUT_FOR_IRON>;
+
 
     # read in the rest of the data into a new log2 array
     $row = 0;
@@ -756,8 +766,6 @@ sub iron_samples
         }
         
         # mean of original log2 values
-        $mean_raw = 0;
-        $n        = 0;
         for ($i = 0; $i < $num_samples; $i++)
         {
             $sample = $sample_array[$i];
@@ -768,16 +776,10 @@ sub iron_samples
             if (defined($value) && is_number($value) && $value > 0)
             {
                 $mean_raw += log($value);
-                $n++;
+                $n_raw++;
             }
         }
-        if ($n)
-        {
-            $mean_raw /= $n * $log2;
-        }
 
-        $mean_norm = 0;
-        $n         = 0;
         for ($i = 0; $i < $num_samples; $i++)
         {
             $value = $array[$i+1];
@@ -785,25 +787,54 @@ sub iron_samples
             if (defined($value) && is_number($value) && $value > 0)
             {
                 $mean_norm += log($value);
-                $n++;
+                $n_norm++;
             }
         }
-        if ($n)
-        {
-            $mean_norm /= $n * $log2;
-        }
-        
-        # amount to shift normalized data so it has same log2 mean as raw
-        $offset = 0;
-        if ($mean_raw > 0 && $mean_norm > 0)
-        {
-            $offset = $mean_raw - $mean_norm;
-        }
-        
+
         for ($i = 0; $i < $num_samples; $i++)
         {
             $value = $array[$i+1];
             
+            # paranoia for log taking
+            if (is_number($value) && $value > 0)
+            {
+                $iron_normalized_array[$row][$i] = $value;
+            }
+            else
+            {
+                $iron_normalized_array[$row][$i] = '';
+            }
+        }
+        
+        $row++;
+    }
+    $num_rows = $row;
+    close OUTPUT_FOR_IRON;
+
+
+    # amount to shift normalized data so it has same log2 mean as raw
+    $offset = 0;
+    if ($n_raw)
+    {
+        $mean_raw  /= $n_raw  * $log2;
+    }
+    if ($n_norm)
+    {
+        $mean_norm /= $n_norm * $log2;
+    }
+    if ($mean_raw > 0 && $mean_norm > 0)
+    {
+        $offset = $mean_raw - $mean_norm;
+    }
+
+    # rescale the data
+    printf STDERR "FOOBAR\t%s\n", $offset;
+    for ($row = 0; $row < $num_rows; $row++)
+    {
+        for ($i = 0; $i < $num_samples; $i++)
+        {
+            $value = $iron_normalized_array[$row][$i];
+
             # paranoia for log taking
             if (is_number($value) && $value > 0)
             {
@@ -816,10 +847,7 @@ sub iron_samples
             
             $iron_normalized_array[$row][$i] = $value;
         }
-        
-        $row++;
     }
-    close OUTPUT_FOR_IRON;
 }
 
 
