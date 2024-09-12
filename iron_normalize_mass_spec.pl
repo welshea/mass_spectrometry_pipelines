@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2024-09-12:  remove leftover STDERR debugging
 # 2024-09-09:  rescale output to global raw mean, instead of per-row raw mean
 # 2024-02-28:  add --keep-zero-rows flag
 # 2024-02-27:  if no sample columns detected, default to all columns
@@ -828,7 +829,6 @@ sub iron_samples
     }
 
     # rescale the data
-    printf STDERR "FOOBAR\t%s\n", $offset;
     for ($row = 0; $row < $num_rows; $row++)
     {
         for ($i = 0; $i < $num_samples; $i++)
