@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2024-09-13:  detect whether logged or not, determines missing criteria
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 
 
@@ -260,10 +261,12 @@ $batch_string = join "\n", @batch_array;
 printf STDERR "Found %s batches:\n%s\n", $num_batches, $batch_string;
 
 
+$header_line = '';
+
 %skip_col_hash = ();
 if (@data_col_headers)
 {
-    printf "%s", $data_col_headers[0];
+    $header_line .= sprintf "%s", $data_col_headers[0];
 }
 # by default, skip columns not present in batch file
 for ($i = 1; $i < @data_col_headers; $i++)
@@ -284,32 +287,88 @@ for ($i = 1; $i < @data_col_headers; $i++)
         }
     }
     
-    printf "\t%s", $sample;
+    $header_line .= sprintf "\t%s", $sample;
 }
-printf "\n";
+$header_line .= sprintf "\n";
+
+print "$header_line";
+
 
 # assume first column is row identifier, all other columns are samples
-$num_total = 0;
-$num_kept  = 0;
+$row       = 0;
+$max       = -9E99;
 while(defined($line=<DATA_FILE>))
 {
-    $num_total++;
-
-    $line =~ s/[\r\n]+//g;
-    
-    @array = split /\t/, $line;
+    @array = split /\t/, $line, -1;
 
     for ($i = 0; $i < @array; $i++)
     {
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
     }
-    
+
+    $value = $array[0];
+    if (defined($value) && $value =~ /[A-Za-z0-9]/)
+    {
+        for ($i = 0; $i < @array; $i++)
+        {
+            # skip columns we don't want
+            if (defined($skip_col_hash{$i}))
+            {
+                next;
+            }
+
+            $value = $array[$i];
+            
+            if (defined($value))
+            {
+                $data_array[$row][$i] = $value;
+                
+                if ($i > 0 && is_number($value))
+                {
+                    if ($value > $max)
+                    {
+                        $max = $value;
+                    }
+                }
+            }
+        }
+        
+        $row++;
+    }
+}
+close DATA_FILE;
+
+$num_total = $row;
+$num_rows  = $row;
+
+
+# guess whether the data is logged or not
+$log_flag = 0;
+if ($max < 100)
+{
+    $log_flag = 1;
+
+    printf STDERR "Assuming logged data, <= 0 treated as present\n";
+}
+else
+{
+    printf STDERR "Assuming unlogged data, <= 0 treated as missing\n";
+}
+
+
+
+# assume first column is row identifier, all other columns are samples
+$num_kept  = 0;
+for ($row = 0; $row < $num_rows; $row++)
+{
     # clear batch counts
     foreach $batch (@batch_array)
     {
         $temp_batch_counts_hash{$batch} = 0;
     }
+    
+    @array = @{$data_array[$row]};
     
     # count observations per batch
     $happy_batch_count = 0;
@@ -320,14 +379,18 @@ while(defined($line=<DATA_FILE>))
         
         if (!defined($batch))
         {
+            $discarded_row_hash{$row} = 1;
             next;
         }
         
         $value = $array[$i];
-        
-        if (is_number($value) && $value > 0)
+
+        if (is_number($value))
         {
-            $temp_batch_counts_hash{$batch} += 1;
+            if ($log_flag || $value > 0)
+            {
+                $temp_batch_counts_hash{$batch} += 1;
+            }
         }
     }
     
@@ -365,6 +428,30 @@ while(defined($line=<DATA_FILE>))
         
         $num_kept++;
     }
+    else
+    {
+        $discarded_row_hash{$row} = 1;
+    }
 }
 
 printf STDERR "Kept\t%d\tout of\t%d\trows\n", $num_kept, $num_total;
+
+
+# export table of discard rows, for us to merge back in later
+open OUTFILE, ">deleted_rows_due_to_missing_batches.txt" or die "can't open deleted rows file for writing\n";
+if ($num_kept != $num_total)
+{
+    print OUTFILE "$header_line";
+
+    @temp_row_array = sort {$a <=> $b} keys %discarded_row_hash;
+    
+    foreach $row (@temp_row_array)
+    {
+        @array = @{$data_array[$row]};
+        
+        $line_new = join "\t", @array;
+        
+        print OUTFILE "$line_new\n";
+    }
+}
+close OUTFILE;
