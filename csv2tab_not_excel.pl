@@ -1,6 +1,12 @@
 #!/usr/bin/perl -w
 
-# 2024-03-20  fix csv2tsv edge cases such as ,"a b"  text,
+# 2024-10-17  escape all $delim within regular expressions
+# 2024-10-16  add --semicolon option for semicolon-delimited
+# 2024-07-12  add Usage statement
+# 2024-03-20  replace line wrapped EOL with spaces or empty
+# 2024-03-19  add --escape-dq flag
+# 2024-03-19  add support for line wraps with new --unwrap flag
+# 2024-03-19  fix edge cases such as ^"a,b" text$ counting as enclosed field
 # 2022-10-24  fix "commments" typo in 2022-07-12 changelog (oh, the irony)
 # 2022-07-12  minor typo corrections in documentation comments
 # 2021-12-09  minor typo corrections in documentation comments
@@ -14,6 +20,8 @@
 # 2020-07-31  more improvements to robustness and optimizations
 # 2020-07-28  speed up by replacing more quick and easy cases first
 # 2020-07-24  bugfix, was condensing multiple tabs ahead of quoted field
+
+use File::Basename;
 
 
 # This function was written to handle invalid CSV escaping in a consistent
@@ -70,10 +78,16 @@
 # etc., and probably most Unix-based tools in general.  Wrapped lines could be
 # reordered or filtered so that they are no longer sequential with their
 # original line-wrapped partner lines or ordered for correct unwrapping.
-# Thus, we do not support embedded newlines in CSV files.  If you wish to
-# handle them, you will need to write a separate function to undo the line
-# wrap and escape the embedded newlines as something such as \r or \n or \r\n
-# prior to passing the results to this function.
+#
+# This function now supports embedded newlines as an option, unwrapping
+# and escaping (\r\n) EOL characters, and should handle them similarly to
+# Excel/Python on correctly quoted/escaped fields.  However, the output will
+# strip the wrapped enclosing quotes as best it can, which, combined with
+# the escaped \r\n EOL, may still cause unexpected behavior in Excel if any
+# malformed fields (lone double quotes) are left.  The output is meant
+# to be read by software that doesn't support embedded newlines, but should
+# still be parsed properly by Excel/Python as long as there aren't any
+# malformed fields (lone double quotes) left to confuse them.
 #
 # CRLF in 2) is not enforced, since we expect to receive data from Unix text
 # files, which end in LF instead of CRLF.  Since 2), 3), and 4) are no longer
@@ -156,6 +170,10 @@
 #      issues.  This behavior can be disabled by commenting out a single
 #      substitution line in the function below.
 #
+#      Embedded newlines are, optionally, unwrapped and escaped, removing
+#      their enclosed quotes similarly to as if Excel had parsed them.
+#      This may trigger downstream false-positive line wraps in Excel.
+#
 #      Feel free to modify the handling of embedded tabs at the bottom of the
 #      function below if you desire different tab handling behavior.
 #
@@ -198,12 +216,38 @@
 #   "wor      many conversion websites, truncation is just plain wrong
 #   "word"    this function, which I think handles it the most reasonably
 #
-sub csv2tsv_not_excel
+
 {
-    my $line = $_[0];
+  # wrap the sub in outer {} to implement static variables local to the {}
+  # "state" declarations require perl >= v5.10.0,
+  #  so the outer {} hack is more compatible
+  $open_quotes_flag = 0;
+  $prev_eol = '';    # EOL at end of previous line wrap line
+  $prev_ws  = '';    # whitespace at end of previous line wrap line
+
+  sub csv2tsv_not_excel
+  {
+    my $line    = $_[0];
+    my $opt_lw  = $_[1];    # detect and unwrap input line wraps
+    my $opt_edq = $_[2];    # escape output double quotes
+    my $delim   = $_[3];    # delimiter to use instead of comma
+    my $c;
     my $i;
+    my $j;
+    my $k;
     my $n;
-    my @temp_array;
+    my $strip_flag;
+    my $eol;
+    my @temp_array;        # only used for splitting on unenclosed fields
+    my @temp_array2;
+    my $quote_count;
+    my $i_first_quotes;    # -1 if not line-wrapped
+    my $i_last_quotes;     # @temp_array + 1 if not line-wrapped
+
+    if (!defined($delim))
+    {
+        $delim = ',';
+    }
 
     # placeholder strings unlikely to ever be encountered normally
     #    my $tab = '___TaBChaR___';
@@ -235,37 +279,329 @@ sub csv2tsv_not_excel
     $line =~ s/[\r\n]+(?!$)/$tab/g;
     
     # further escape ""
-    $line =~ s/""/$dq/g;
+    $line =~ s/\"\"/$dq/g;
+
+    # line-wrapped, delayed insert of escaped EOL from previous line
+    # delay in order to not add escaped EOL to final line
+    if ($open_quotes_flag)
+    {
+        # replace EOL with space, otherwise leave empty
+        if ($prev_ws eq '' && !($line =~ /^\s/))
+        {
+            print " ";
+            
+            # insert a space into the book keeping too
+            $prev_ws .= ' ';
+        }
+
+        #print $prev_eol;
+    }
 
     # only apply slow tab expansion to lines still containing quotes
-    if ($line =~ /"/)
+    @temp_array     = ();
+    $i_last_quotes  = @temp_array + 1;
+    $i_first_quotes = -1;
+    
+    if ($line =~ /\"/)
     {
-        # convert commas only if they are not within double quotes
-        # incrementing $i within array access for minor speed increase
-        #   requires initializing things to -2
-        #@temp_array = split /((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))/, $line;
-        @temp_array = split /((?:^|(?<=,))[ $tab$dq]*\"[^\t"]+\"[ $tab$dq\r\n]*(?:$|(?=,)))/, $line, -1;
-        $n = @temp_array - 2;
-        for ($i = -2; $i < $n;)
-        {
-            $temp_array[$i += 2] =~ tr/,/\t/;
-        }
-        $line = join '', @temp_array;
-        
         # slightly faster than split loop on rows with many quoted fields,
         #  but *much* slower on lines containing very few quoted fields
+        # also cannot deal with line-wraps
         # use split loop instead
         #
         # /e to evaluate code to handle different capture cases correctly
-        #$line =~ s/(,?)((?<![^, $tab$dq])"[^\t"]+"(?![^, $tab$dq\r\n]))|(,)/defined($3) ? "\t" : ((defined($1) && $1 ne '') ? "\t$2" : $2)/ge;
-    }
-    else
-    {
-        $line =~ tr/,/\t/;
-    }
+        #$line =~ s/(\Q$delim\E?)((?<![^\Q$delim\E $tab$dq])"[^\t"]+"(?![^\Q$delim\E $tab$dq\r\n]))|(\Q$delim\E)/defined($3) ? "\t" : ((defined($1) && $1 ne '') ? "\t$2" : $2)/ge;
 
+        # convert commas only if they are not within double quotes
+        # incrementing $i within array access for minor speed increase
+        #   requires initializing things to -2
+        #@temp_array    = split /((?<![^\Q$delim\E $tab$dq])"[^\t"]+"(?![^\Q$delim\E $tab$dq\r\n]))/, $line, -1;
+        #@temp_array    = split /((?:(?<=^)|(?<=\Q$delim\E))[ $tab$dq]*\"[^\t"]+\"[ $tab$dq\r\n]*(?=(?:\Q$delim\E|$)))/, $line, -1;
+        @temp_array    = split /((?:^|(?<=\Q$delim\E))[ $tab$dq]*\"[^\t"]+\"[ $tab$dq\r\n]*(?:$|(?=\Q$delim\E)))/, $line, -1;
+        $n             = @temp_array - 2;
+        $i_last_quotes = @temp_array + 1;
+        
+        if ($opt_lw)
+        {
+          # scan for first quotes
+          if ($open_quotes_flag)
+          {
+            for ($i = -1; $i < @temp_array - 1;)
+            {
+                if ($temp_array[$i += 1] =~ /\"/)
+                {
+                    $i_first_quotes = $i;
+                    last;
+                }
+            }
+          }
+
+          # scan for potential line wrap
+          for ($i = @temp_array - 1; $i >= 0; $i -= 2)
+          {
+            # abort, field is at or before closing quotes from earlier line
+            if ($open_quotes_flag && $i < $i_first_quotes)
+            {
+                last;
+            }
+          
+            # at or before field enclosed in quotes, abort line wrap check
+            if ($i < @temp_array - 1 &&
+                $temp_array[$i+1] =~ /\"/)
+            {
+                last;
+            }
+            
+            if ($temp_array[$i] =~ /\"/)
+            {
+                # only accept valid escaped end fields
+                if ($temp_array[$i] =~ /(^|(?:\Q$delim\E)[ $tab$dq]*)\"[^\"]+$/)
+                {
+                    # only a single " on entire line
+                    # will be used to close a line-wrap; end check
+                    @temp_array2 = split /\"/, $temp_array[$i], -1;
+                    if ($i <= $i_first_quotes && @temp_array2 < 2)
+                    {
+                        last;
+                    }
+
+                    $i_last_quotes = $i;
+                }
+
+                # stop scaning after first encountered bare "
+                last;
+            }
+          }
+        }
+
+        # convert all commas to tabs, no special line-wrap cases
+        # this avoids costly checks inside the loop
+        if ($open_quotes_flag == 0 && $i_last_quotes > @temp_array)
+        {
+            if ($delim eq ',')
+            {
+                for ($i = -2; $i < $n;)
+                {
+                    $temp_array[$i += 2] =~ tr/\,/\t/;
+                }
+            }
+            elsif ($delim eq ';')
+            {
+                for ($i = -2; $i < $n;)
+                {
+                    $temp_array[$i += 2] =~ tr/\;/\t/;
+                }
+            }
+            else
+            {
+                for ($i = -2; $i < $n;)
+                {
+                    $temp_array[$i += 2] =~ s/\Q$delim\E/\t/g;
+                }
+            }
+        }
+        # deal with line wraps
+        # lines within line-wraps, but without ", passed through as-is
+        elsif ($line =~ /\"/)
+        {
+            $strip_flag = 1;
+
+            for ($i = 0; $i < @temp_array; $i += 2)
+            {
+                # check for valid quotes in adjacent field
+                if ($i < $i_first_quotes && $temp_array[$i+1] =~ /\"/)
+                {
+                    @temp_array2 = split /\"/, $temp_array[$i+1], -1;
+
+                    # stop protecting commas after first " field,
+                    # whether it was validly escaped or not
+                    $open_quotes_flag = 0;
+                    $strip_flag       = 0;
+
+                    # convert the commas after the first quote
+                    if ($delim eq ',')
+                    {
+                        for ($j = 1; $j < @temp_array2; $j++)
+                        {
+                            $temp_array2[$j] =~ tr/\,/\t/;
+                        }
+                    }
+                    elsif ($delim eq ';')
+                    {
+                        for ($j = 1; $j < @temp_array2; $j++)
+                        {
+                            $temp_array2[$j] =~ tr/\;/\t/;
+                        }
+                    }
+                    else
+                    {
+                        for ($j = 1; $j < @temp_array2; $j++)
+                        {
+                            $temp_array2[$j] =~ s/\Q$delim\E/\t/g;
+                        }
+                    }
+
+                    $temp_array[$i+1] = join '"', @temp_array2;
+                    
+                    # remove the first quote
+                    $temp_array[$i+1] =~ s/\"//;
+                    
+                    next;
+                }
+
+                # convert any fields not within line-wrap boundaries
+                if ($open_quotes_flag == 0 &&
+                    $i > $i_first_quotes && $i < $i_last_quotes)
+                {
+                    if ($delim eq ',')
+                    {
+                        $temp_array[$i] =~ tr/\,/\t/;
+                    }
+                    elsif ($delim eq ';')
+                    {
+                        $temp_array[$i] =~ tr/\;/\t/;
+                    }
+                    else
+                    {
+                        $temp_array[$i] =~ s/\Q$delim\E/\t/g;
+                    }
+                }
+                # convert commas within line-wrap boundaries
+                elsif ($temp_array[$i] =~ /\"/)
+                {
+                    @temp_array2 = split /\"/, $temp_array[$i], -1;
+
+                    # stop protecting commas after first " field,
+                    # whether it was validly escaped or not
+                    if ($open_quotes_flag)
+                    {
+                        $open_quotes_flag = 0;
+                        $strip_flag       = 1;
+                    }
+                    else
+                    {
+                        # begin converting up to new opening quotes
+                        if ($i <= $i_last_quotes)
+                        {
+                            if ($i < $i_last_quotes || 0 < @temp_array2 - 1)
+                            {
+                                if ($delim eq ',')
+                                {
+                                    $temp_array2[0] =~ tr/\,/\t/;
+                                }
+                                elsif ($delim eq ';')
+                                {
+                                    $temp_array2[0] =~ tr/\;/\t/;
+                                }
+                                else
+                                {
+                                    $temp_array2[0] =~ s/\Q$delim\E/\t/g;
+                                }
+                            }
+                        }
+                    }
+
+                    # continue converting, handle new opening quotes
+                    for ($j = 1; $j < @temp_array2; $j++)
+                    {
+                        # open new line wrap
+                        if ($i == $i_last_quotes && $j == @temp_array2 - 1)
+                        {
+                            # remove opening " from line-wrap
+                            if (@temp_array2 > 1)
+                            {
+                                $k = @temp_array2 - 2;
+                                $temp_array2[$k] .= $temp_array2[$k+1];
+                                delete $temp_array2[$k+1];
+                            }
+                            $temp_array[$i] = join '"', @temp_array2;
+                        }
+                        # convert commas to tabs
+                        elsif ($i < $i_last_quotes || $j < @temp_array2 - 1)
+                        {
+                            if ($delim eq ',')
+                            {
+                                $temp_array2[$j] =~ tr/\,/\t/;
+                            }
+                            elsif ($delim eq ';')
+                            {
+                                $temp_array2[$j] =~ tr/\;/\t/;
+                            }
+                            if ($delim eq ',')
+                            {
+                                $temp_array2[$j] =~ s/\Q$delim\E/\t/g;
+                            }
+                        }
+                    }
+
+                    $temp_array[$i] = join '"', @temp_array2;
+                }
+            }
+            
+            # remove proper line wrap terminating enclosing quotes
+            if ($strip_flag)
+            {
+                $temp_array[0] =~ s/\"([ $tab$dq]*(?:\t|$))/$1/;
+            }
+        }
+
+        # set next line to deal with line-wrap
+        if ($i_last_quotes <= @temp_array)
+        {
+            $open_quotes_flag = 1;
+        }
+        
+        $line = join '', @temp_array;
+    }
+    elsif ($open_quotes_flag == 0)
+    {
+        if ($delim eq ',')
+        {
+            $line =~ tr/\,/\t/;
+        }
+        elsif ($delim eq ';')
+        {
+            $line =~ tr/\;/\t/;
+        }
+        else
+        {
+            $line =~ s/\Q$delim\E/\t/g;
+        }
+    }
+    
+    # escape EOL if line-wrapped
+    if ($open_quotes_flag)
+    {
+        $prev_eol = '';
+        if ($line =~ s/([\r\n]+)$//)
+        {
+            $prev_eol = $1;
+            $prev_eol =~ s/\r/\\\\\\r/g;
+            $prev_eol =~ s/\n/\\\\\\n/g;
+        }
+        
+        # previously wrapped, all whitespace: append to whitespace
+        if ($i_first_quotes >= 0 && !($line =~ /\S/))
+        {
+            if ($line =~ /([\s$tab]+)$/)
+            {
+                $prev_ws .= $1;
+            }
+        }
+        # replace previous whitespace
+        else
+        {
+            $prev_ws = '';
+
+            if ($line =~ /([\s$tab]+)$/)
+            {
+                $prev_ws = $1;
+            }
+        }
+    }
+    
     # unescape ""
-    $line =~ s/$dq/""/g;
+    $line =~ s/$dq/\"\"/g;
 
     # finish dealing with embedded tabs
     # remove tabs entirely, preserving surrounding whitespace
@@ -298,21 +634,139 @@ sub csv2tsv_not_excel
     $line =~ s/(?:(?<=\t)|^)( *)"([^\t]+)"( *)(?=\t|[\r\n]*$)/$2/g;
 
     # unescape escaped double-quotes
-    $line =~ s/""/"/g;
+    $line =~ s/\"\"/\"/g;
 
+    # Escape all final quotes to prevent Excel from misinterpreting them.
+    #
+    # Escape first/last fields of line wraps, since figuring out if there
+    # are any final double quotes within multiple lines of wrapping isn't
+    # simple.
+    if ($opt_edq &&
+        ($line           =~ /\"/ ||
+         $i_first_quotes >= 0    ||
+         $i_last_quotes  <= @temp_array))
+    {
+        # remove the terminal EOL character(s)
+        $eol = '';
+        if ($line =~ s/([\r\n]+)$//)
+        {
+            $eol = $1;
+        }
+        
+        @temp_array2 = split /\t/, $line, -1;
+        for ($i = 0; $i < @temp_array2; $i++)
+        {
+            # first field of newly ended line wrap
+            if ($i_first_quotes >= 0 && $i == 0)
+            {
+                $temp_array2[$i] =~ s/\"/\"\"/g;
+                $temp_array2[$i] = $temp_array2[$i] . '"';
+            }
+            # last field of newly opened line wrap
+            elsif ($i_last_quotes <= @temp_array && $i == @temp_array2 - 1)
+            {
+                $temp_array2[$i] =~ s/\"/\"\"/g;
+                $temp_array2[$i] = '"' . $temp_array2[$i];
+            }
+            # all other fields with quotes in them
+            elsif ($temp_array2[$i] =~ s/\"/\"\"/g)
+            {
+                $temp_array2[$i] = '"' . $temp_array2[$i] . '"';
+            }
+        }
+        
+        # add the EOL back in after enclosing in ""
+        $temp_array2[@temp_array2 - 1] .= $eol;
+
+        $line = join "\t", @temp_array2;
+    }
     
     return $line;
+  }
 }
 
 
-$filename = shift;
+
+# begin main()
+
+$opt_delim     = ',';
+$opt_line_wrap = 0;
+$opt_escape_dq = 0;
+
+$error_flag    = 0;
+
+# read in command line arguments
+$num_files = 0;
+for ($i = 0; $i < @ARGV; $i++)
+{
+    $field = $ARGV[$i];
+
+    if ($field =~ /^--/)
+    {
+        if ($field =~ /^--unwrap/i)
+        {
+            $opt_line_wrap = 1;
+        }
+        elsif ($field =~ /^--escape-dq/i)
+        {
+            $opt_escape_dq = 1;
+        }
+        elsif ($field =~ /^--semicolon/i)
+        {
+            $opt_delim = ';';
+        }
+        else
+        {
+            $error_flag = 1;
+        }
+    }
+    else
+    {
+        if ($num_files == 0)
+        {
+            $filename = $field;
+            $num_files++;
+        }
+    }
+}
+
+
+if ($error_flag)
+{
+    $program_name = basename($0);
+    
+    printf STDERR "Usage: $program_name [options] input.csv\n";
+    printf STDERR "  Options:\n";
+    printf STDERR "    --escape-dq    escape \" for better Excel compatability\n";
+    printf STDERR "    --semicolon    use semicolon as input delimiter instead of comma\n";
+    printf STDERR "    --unwrap       unwrap lines with embedded newlines\n";
+    
+    exit(1);
+}
+
+
+# default to stdin if no filename given
+if ($num_files == 0)
+{
+    $filename = '-';
+    $num_files = 1;
+}
+
 
 open FILE, "$filename" or die "ABORT -- can't open file $filename\n";
 
 while(defined($line=<FILE>))
 {
-    $line_new = csv2tsv_not_excel($line);
+    $line_new = csv2tsv_not_excel($line, $opt_line_wrap, $opt_escape_dq,
+                                  $opt_delim);
     
     print "$line_new";
+    
 }
 close FILE;
+
+# print terminal EOL if the line-wrap was never closed
+if ($open_quotes_flag)
+{
+    print "\n";
+}
