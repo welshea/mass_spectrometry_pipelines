@@ -1,0 +1,1 @@
+/share/dept_bbsr/Projects/Welsh_Eric/mass_spectrometry_pipelines/hmdb_ccs.txt
