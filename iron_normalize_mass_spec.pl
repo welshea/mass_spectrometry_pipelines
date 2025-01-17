@@ -3,6 +3,8 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2025-01-17:  preserve transcript* fields
+# 2024-09-12:  preserve Symbol field
 # 2024-09-12:  remove leftover STDERR debugging
 # 2024-09-09:  rescale output to global raw mean, instead of per-row raw mean
 # 2024-02-28:  add --keep-zero-rows flag
@@ -413,6 +415,17 @@ sub read_in_data_file
         for ($i = $id_col + 1; $i < @array; $i++)
         {
             $field = $array[$i];
+            
+            if ($field =~ /Symbol/i)
+            {
+                printf STDERR "Treating %s column as non-data\n", $field;
+                next;
+            }
+            if ($field =~ /^transcript/i)
+            {
+                printf STDERR "Treating %s column as non-data\n", $field;
+                next;
+            }
 
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
@@ -827,6 +840,14 @@ sub iron_samples
     {
         $offset = $mean_raw - $mean_norm;
     }
+    
+    
+    # do not scale the data after all
+    if ($rescale_flag == 0)
+    {
+        $offset = 0;
+    }
+    
 
     # rescale the data
     for ($row = 0; $row < $num_rows; $row++)
@@ -978,6 +999,7 @@ $first_flag              = 0;   # assume first sample is pool
 $ignore_low_flag         = 1;   # ignore values < 1 during training
 $keep_zero_rows_flag     = 0;   # keep all-zero rows
 $global_metabolomics_flag = 0;
+$rescale_flag            = 1;   # rescale normalized data to mean raw data
 
 
 for ($i = 0; $i < @ARGV; $i++)
@@ -1054,6 +1076,14 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $keep_zero_rows_flag = 1;
         }
+        elsif ($field =~ /^--rescale/)
+        {
+            $rescale_flag = 1;
+        }
+        elsif ($field =~ /^--no-rescale/)
+        {
+            $rescale_flag = 0;
+        }
         else
         {
             printf "ABORT -- unknown option %s\n", $field;
@@ -1085,6 +1115,9 @@ if ($syntax_error_flag || $num_files == 0)
     printf STDERR "    --iron-untilt                 account for relative dynamic range\n";
     printf STDERR "    --iron-exclusions=filename    identifiers to exclude from training\n";
     printf STDERR "    --iron-spikeins=filename      list of spikein identifiers\n";
+    printf STDERR "\n";
+    printf STDERR "    --rescale                     rescale output to raw log2 mean (default)\n";
+    printf STDERR "    --no-rescale                  do not rescale normalized output\n";
     printf STDERR "\n";
     printf STDERR "    --keep-zero-rows              keep rows with all-zero data\n";
     printf STDERR "    --log2                        output log2 abundances [default]\n";
