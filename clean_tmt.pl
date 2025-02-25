@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-02-25: add --counts --omit-trypsin --no-omit-trypsin flags
 # 2023-11-13: support TMT-2
 # 2023-11-13: support iTRAQ-4 and iTRAQ-8
 # 2023-08-17: properly sort sample names containing text before Plex
@@ -27,6 +28,8 @@
 
 
 use POSIX;
+use File::Basename;
+
 
 sub bless_delimiter_space
 {
@@ -311,28 +314,58 @@ $pep_cutoff  = 0.05;
 $mass_err_cutoff = 5;		# discard if > $mass_err_cutoff
 
 
-$infile = shift;
-$skip_trypsin_opt = shift;
-
+# read in command line arguments
+$num_files = 0;
+$syntax_error_flag = 0;
 $skip_trypsin_flag = 1;
-if (defined($skip_trypsin_opt))
+$use_counts_flag   = 0;
+
+for ($i = 0; $i < @ARGV; $i++)
 {
-    if ($skip_trypsin_opt =~ /keep/i)
+    $field = $ARGV[$i];
+
+    if ($field =~ /^--/)
     {
-        $skip_trypsin_flag = 0;
+        if ($field eq '--skip-trypsin')
+        {
+            $skip_trypsin_flag = 1;
+        }
+        elsif ($field eq '--no-skip-trypsin')
+        {
+            $skip_trypsin_flag = 0;
+        }
+        elsif ($field eq '--counts')
+        {
+            $use_counts_flag = 1;
+        }
+        else
+        {
+            printf "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
     }
-    elsif ($skip_trypsin_opt =~ /omit/i)
+    else
     {
-        $skip_trypsin_flag = 1;
+        if ($num_files == 0)
+        {
+            $infile = $field;
+            $num_files++;
+        }
     }
-    elsif ($skip_trypsin_opt =~ /skip/i)
-    {
-        $skip_trypsin_flag = 1;
-    }
-    elsif ($skip_trypsin_opt =~ /discard/i)
-    {
-        $skip_trypsin_flag = 1;
-    }
+}
+
+if ($num_files == 0 || $syntax_error_flag)
+{
+    $program_name = basename($0);
+
+    printf STDERR "Usage: $program_name [options] tab_delimited_input.txt\n";
+    printf STDERR "  Options:\n";
+    printf STDERR "    --counts              use count columns instead of intensity columns;\n";
+    printf STDERR "                          does not currently support Proteome Discoverer\n";
+    printf STDERR "\n";
+    printf STDERR "    --skip-trypsin        remove  rows matching trypsin (default)\n";
+    printf STDERR "    --no-skip-trypsin     include rows matching trypsin\n";
+    exit(1);
 }
 
 
@@ -783,9 +816,10 @@ foreach $header (keys %header_to_col_hash)
     }
 
     # skip counts
-    if ($header =~ /^Reporter intensity count/i ||
-        $header =~ / Count$/i ||
-        $header =~ /^Experiment /i)
+    if ($use_counts_flag == 0 &&
+        ($header =~ /^Reporter intensity count/i ||
+         $header =~ / Count$/i ||
+         $header =~ /^Experiment /i))
     {
         $strip_col_flags{$header_to_col_hash{$header}} = 1;
     }
@@ -824,6 +858,14 @@ foreach $header (keys %header_to_col_hash)
 }
 
 
+$c_or_i_str = 'intensity';
+if ($use_counts_flag)
+{
+    # use counts instead of intensities
+    $c_or_i_str = 'intensity count';
+}
+
+
 @intensities_col_hash = ();
 foreach $header (sort keys %header_to_col_hash)
 {
@@ -831,7 +873,7 @@ foreach $header (sort keys %header_to_col_hash)
     
     # previous blessing script may have already addressed 1-plex issues
     # so don't require this check to only be applied to multi-plex
-    if ($header =~ /^Reporter intensity (\d+) (.*?)$/i)
+    if ($header =~ /^Reporter $c_or_i_str (\d+) (.*?)$/i)
     {
         $channel_number = $1;
         $plex           = $2;
@@ -881,7 +923,7 @@ foreach $header (sort keys %header_to_col_hash)
         $intensities_col_hash{$header_to_col_hash{$header}} = $sample_name;
     }
     # use the summary columns instead
-    if ($multi_plex_flag == 0 && $header =~ /^Reporter intensity (\d+)$/i)
+    if ($multi_plex_flag == 0 && $header =~ /^Reporter $c_or_i_str (\d+)$/i)
     {
         $channel_number = $1;
         $plex           = 'Plex1';
@@ -923,6 +965,7 @@ foreach $header (sort keys %header_to_col_hash)
     }
     
     # Proteome Discoverer
+    # does not yet support using counts instead of intensities
     if ($header =~ /^Abundances \(Grouped\):\s*([0-9NC]+)/)
     {
         $channel_orig = $1;
@@ -963,6 +1006,20 @@ foreach $header (sort keys %header_to_col_hash)
     }
 }
 @intensities_col_array = sort {$a<=>$b} keys %intensities_col_hash;
+
+
+# strip any remaining Reporter columns
+# could be left over intensity columns from my lazy counts implementation
+for ($col = 0; $col < @array; $col++)
+{
+    $header = $array[$col];
+    
+    if ($header =~ /^Reporter /)
+    {
+        $strip_col_flags{$col} = 1;
+    }
+}
+
 
 
 # Scan for missing channels
