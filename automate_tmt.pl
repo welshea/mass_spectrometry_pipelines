@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2025-02-25: BUGFIX: --output-unlog was outputting unnormalized data
 # 2024-04-11: change >& to 2>&1> to fix more shell redirection issues
 # 2024-04-02: only print kept computational pool samples if any excluded
 # 2024-03-20: add additional scaling factor criteria for auto-dark detection
@@ -1703,6 +1704,10 @@ sub output_final_data
                 if ($no_log2_flag == 0)
                 {
                     $orig_data_array[$row][$col] = log($value) / log(2.0);
+                }
+                else
+                {
+                    $orig_data_array[$row][$col] = $value;
                 }
             }
             else
