@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-02-25:  sum ___# intensity count columns as well
 # 2023-07-31:  disable removal of oxidation site columns
 # 2023-06-08:  prevent split from truncating lines due to empty end fields
 # 2023-05-18:  replace fields that are purely semicolons with blanks
@@ -372,11 +373,11 @@ for ($col = 0; $col < @header_col_array; $col++)
         next;
     }
     
-    # skip types of columns we don't want
-    if ($field =~ / intensity count /i)
-    {
-        next;
-    }
+    ## skip types of columns we don't want
+    #if ($field =~ / intensity count /i)
+    #{
+    #    next;
+    #}
 
 
     if ($field =~ /___[123]$/)
