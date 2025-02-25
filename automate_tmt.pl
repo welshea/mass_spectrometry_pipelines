@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2025-02-25: better handle combinations of auto pool, --no-iron, --no-debatch
 # 2025-02-25: BUGFIX: --output-unlog was outputting unnormalized data
 # 2024-04-11: change >& to 2>&1> to fix more shell redirection issues
 # 2024-04-02: only print kept computational pool samples if any excluded
@@ -1514,6 +1515,28 @@ sub iron_samples
         else
         {
             `cp $iron_input_name $iron_output_name`;
+
+            # automatically pick the best sample per plex, can be different
+            # we still need to do this even if we aren't running IRON,
+            # so that the pool channels are initialized properly
+            if ($auto_single_variable_pool_flag)
+            {
+                # find the median sample
+                $cmd_string = sprintf "findmedian --pearson --spreadsheet \"%s\" 2>/dev/null | tail -2 | head -1 | cut -f 4",
+                    $iron_input_name;
+                $median_sample = `$cmd_string`;
+                $median_sample =~ s/[\r\n]+//;
+                
+                $pool_ch1   = $temp_ch_hash{$median_sample};
+                $pool_samp1 = $tmt_plex_hash{$tmt_plex}{$channel_array[$pool_ch1]};
+                $pool_s1    = $sample_to_condensed_col_hash{$pool_samp1};
+                
+                $plex_pool_channels[$p][0] = $pool_ch1;
+                $plex_pool_channels[$p][1] = '';
+                $plex_pool_channels[$p][2] = '';
+
+                printf STDERR "POOL\t%s\t%s\n", $tmt_plex, $pool_samp1;
+            }
         }
 
 
@@ -1801,11 +1824,13 @@ sub output_final_data
     }
 
     # output file containing the row-scales
-    $log2 = log(2.0);
-    open OUTFILE_ROW_SCALES, ">$row_scales_output_name" or die "ABORT -- can't open output row scales file $row_scales_output_name\n";
-    printf OUTFILE_ROW_SCALES "%s\t%s\t%s\n", 'Identifier', 'RowScale', 'Log2Scale';
-    for ($row = 0; $row < $num_rows; $row++)
+    if ($no_debatch_flag == 0)
     {
+      $log2 = log(2.0);
+      open OUTFILE_ROW_SCALES, ">$row_scales_output_name" or die "ABORT -- can't open output row scales file $row_scales_output_name\n";
+      printf OUTFILE_ROW_SCALES "%s\t%s\t%s\n", 'Identifier', 'RowScale', 'Log2Scale';
+      for ($row = 0; $row < $num_rows; $row++)
+      {
         if (defined($bad_row_hash{$row}))
         {
             next;
@@ -1816,6 +1841,7 @@ sub output_final_data
         
         printf OUTFILE_ROW_SCALES "%s\t%s\t%f\n",
             $sample, $scale, log($scale) / $log2;
+      }
     }
 }
 
