@@ -1,5 +1,13 @@
 #!/usr/bin/perl -w
 
+# 2025-03-21  bugfix --escape-dq
+# 2025-03-21  fix enclosing and line wrap dequoting/despacing
+# 2025-03-20  more support for unicode EOL-like and unicode spaces
+# 2025-03-20  improve default unwrap spacing
+# 2025-03-20  better handle potential presence/absence of [\r\n] in $ regex
+# 2025-03-19  bugfix: line unwrapped returned string matches stdout output now
+# 2025-03-19  add --escape-eol, improve default unwrap spacing
+# 2025-03-18  --unwrap now handles lone closing " on line followed by EOL
 # 2024-10-17  escape all $delim within regular expressions
 # 2024-10-16  add --semicolon option for semicolon-delimited
 # 2024-07-12  add Usage statement
@@ -79,15 +87,18 @@ use File::Basename;
 # reordered or filtered so that they are no longer sequential with their
 # original line-wrapped partner lines or ordered for correct unwrapping.
 #
-# This function now supports embedded newlines as an option, unwrapping
-# and escaping (\r\n) EOL characters, and should handle them similarly to
-# Excel/Python on correctly quoted/escaped fields.  However, the output will
-# strip the wrapped enclosing quotes as best it can, which, combined with
-# the escaped \r\n EOL, may still cause unexpected behavior in Excel if any
-# malformed fields (lone double quotes) are left.  The output is meant
-# to be read by software that doesn't support embedded newlines, but should
-# still be parsed properly by Excel/Python as long as there aren't any
-# malformed fields (lone double quotes) left to confuse them.
+# This function now supports embedded newlines as a non-default option, and
+# should handle them similarly to Excel/Python on correctly quoted/escaped
+# fields.  However, the output will strip the wrapped enclosing quotes as best
+# it can, which may cause unexpected behavior in Excel if any malformed fields
+# (lone double quotes) are left.  The output is meant to be read by software
+# that doesn't support embedded newlines, but should still be parsed properly
+# by Excel/Python as long as there aren't any malformed fields (lone double
+# quotes) left to confuse them.  There is now also an option to escape double
+# quotes and line-wrapped fields for improved Excel/Python compatability.
+# Default settings replace embedded EOL with blanks or whitespace as
+# appropriate to prevent non- whitespace from abutting, but can be set to
+# output escaped (\\\r, \\\n) EOL instead.
 #
 # CRLF in 2) is not enforced, since we expect to receive data from Unix text
 # files, which end in LF instead of CRLF.  Since 2), 3), and 4) are no longer
@@ -222,8 +233,8 @@ use File::Basename;
   # "state" declarations require perl >= v5.10.0,
   #  so the outer {} hack is more compatible
   $open_quotes_flag = 0;
-  $prev_eol = '';    # EOL at end of previous line wrap line
-  $prev_ws  = '';    # whitespace at end of previous line wrap line
+  $prev_eol  = '';    # EOL at end of previous line wrap line
+  $prev_estr = '';    # x or space depending on end of growing line unwrap
 
   sub csv2tsv_not_excel
   {
@@ -231,6 +242,7 @@ use File::Basename;
     my $opt_lw  = $_[1];    # detect and unwrap input line wraps
     my $opt_edq = $_[2];    # escape output double quotes
     my $delim   = $_[3];    # delimiter to use instead of comma
+    my $opt_eol = $_[4];    # escape EOL instead of strip/whitespace
     my $c;
     my $i;
     my $j;
@@ -241,6 +253,7 @@ use File::Basename;
     my @temp_array;        # only used for splitting on unenclosed fields
     my @temp_array2;
     my $quote_count;
+    my $prepend_line;
     my $i_first_quotes;    # -1 if not line-wrapped
     my $i_last_quotes;     # @temp_array + 1 if not line-wrapped
 
@@ -276,25 +289,48 @@ use File::Basename;
     $line =~ s/\t/$tab/g;
     
     # HACK -- handle internal \r and \n the same way we handle tabs
-    $line =~ s/[\r\n]+(?!$)/$tab/g;
+    if ($opt_eol == 0)
+    {
+        # \v is vertical spacing, includes \r\n and other unicode:
+        #   [\n\cK\f\r\x85\x{2028}\x{2029}]
+        $line =~ s/[\v]+(?!$)/$tab/g;
+    }
+    # escape embedded EOL
+    else
+    {
+        $line =~ s/\r(?!$)/\\\\\\r/g;
+        $line =~ s/\n(?!$)/\\\\\\n/g;
+
+        # replace remaining EOL-like characters as per usual
+        # \v is vertical spacing, includes \r\n and other unicode:
+        #   [\n\cK\f\r\x85\x{2028}\x{2029}]
+        $line =~ s/[\v]+(?!$)/$tab/g;
+    }
     
     # further escape ""
     $line =~ s/\"\"/$dq/g;
 
     # line-wrapped, delayed insert of escaped EOL from previous line
     # delay in order to not add escaped EOL to final line
+    $prepend_line = '';
     if ($open_quotes_flag)
     {
-        # replace EOL with space, otherwise leave empty
-        if ($prev_ws eq '' && !($line =~ /^\s/))
+        # replace EOL with space if growing text would abut
+        # leave $dq out of the checks intentionally
+        if ($opt_eol == 0 &&
+            $prev_estr =~ /\S$/ && $line =~ /^\S/ &&
+            !($line =~ /^[ $tab]*\"[ $tab]*(\Q$delim\E|[\r\n]*$)/))
         {
-            print " ";
+            $prepend_line .= " ";
             
-            # insert a space into the book keeping too
-            $prev_ws .= ' ';
+            # line end book keeping string now ends in a space
+            $prev_estr = ' ';
         }
 
-        #print $prev_eol;
+        if ($opt_eol)
+        {
+            $prepend_line .= $prev_eol;
+        }
     }
 
     # only apply slow tab expansion to lines still containing quotes
@@ -317,7 +353,8 @@ use File::Basename;
         #   requires initializing things to -2
         #@temp_array    = split /((?<![^\Q$delim\E $tab$dq])"[^\t"]+"(?![^\Q$delim\E $tab$dq\r\n]))/, $line, -1;
         #@temp_array    = split /((?:(?<=^)|(?<=\Q$delim\E))[ $tab$dq]*\"[^\t"]+\"[ $tab$dq\r\n]*(?=(?:\Q$delim\E|$)))/, $line, -1;
-        @temp_array    = split /((?:^|(?<=\Q$delim\E))[ $tab$dq]*\"[^\t"]+\"[ $tab$dq\r\n]*(?:$|(?=\Q$delim\E)))/, $line, -1;
+        #@temp_array    = split /((?:^|(?<=\Q$delim\E))[ $tab$dq]*\"[^\t"]+\"[ $tab$dq\r\n]*(?:$|(?=\Q$delim\E)))/, $line, -1;
+        @temp_array    = split /((?:^|(?<=\Q$delim\E))[ $tab]*[$dq]*\"[^\t"]+\"[$dq]*[ $tab]*[\r\n]*(?:$|(?=\Q$delim\E)))/, $line, -1;
         $n             = @temp_array - 2;
         $i_last_quotes = @temp_array + 1;
         
@@ -331,6 +368,11 @@ use File::Basename;
                 if ($temp_array[$i += 1] =~ /\"/)
                 {
                     $i_first_quotes = $i;
+
+                    # these quotes close an existing line wrap
+                    # reset the line end book keeping string
+                    $prev_estr = '';
+
                     last;
                 }
             }
@@ -355,14 +397,22 @@ use File::Basename;
             if ($temp_array[$i] =~ /\"/)
             {
                 # only accept valid escaped end fields
-                if ($temp_array[$i] =~ /(^|(?:\Q$delim\E)[ $tab$dq]*)\"[^\"]+$/)
+                if ($temp_array[$i] =~ /(^|(?:\Q$delim\E))[ $tab]*[$dq]*\"[^\"]*$/)
                 {
                     # only a single " on entire line
                     # will be used to close a line-wrap; end check
                     @temp_array2 = split /\"/, $temp_array[$i], -1;
-                    if ($i <= $i_first_quotes && @temp_array2 < 2)
+                    if ($i <= $i_first_quotes && @temp_array2 <= 2)
                     {
-                        last;
+                        # either " closes the field and nothing comes
+                        #  afterwards (@temp_array2 <= 1)
+                        # or " followed by EOL character (@temp_array2 == 2)
+                        if (@temp_array2 <= 1 ||
+                            (@temp_array2 == 2 &&
+                             $temp_array2[1] =~ /^[$dq]*[ $tab]*[\r\n]*$/))
+                        {
+                            last;
+                        }
                     }
 
                     $i_last_quotes = $i;
@@ -399,6 +449,10 @@ use File::Basename;
                     $temp_array[$i += 2] =~ s/\Q$delim\E/\t/g;
                 }
             }
+
+            # reset the line end book keeping string
+            # should have no impact on output, reset out of paranoia
+            $prev_estr = '';
         }
         # deal with line wraps
         # lines within line-wraps, but without ", passed through as-is
@@ -507,10 +561,20 @@ use File::Basename;
                         # open new line wrap
                         if ($i == $i_last_quotes && $j == @temp_array2 - 1)
                         {
+                            # reset the line end book keeping string
+                            # should already be reset, but reset just in case
+                            $prev_estr = '';
+
                             # remove opening " from line-wrap
                             if (@temp_array2 > 1)
                             {
                                 $k = @temp_array2 - 2;
+                                
+                                # remove padding spaces before opening "
+                                $temp_array2[$k] =~ s/[ $tab]+([$dq]*)$/$1/;
+                                
+                                # remove opening " by tacking on remaining,
+                                # then deleting remaining
                                 $temp_array2[$k] .= $temp_array2[$k+1];
                                 delete $temp_array2[$k+1];
                             }
@@ -541,7 +605,7 @@ use File::Basename;
             # remove proper line wrap terminating enclosing quotes
             if ($strip_flag)
             {
-                $temp_array[0] =~ s/\"([ $tab$dq]*(?:\t|$))/$1/;
+                $temp_array[0] =~ s/\"([$dq]*)[ $tab]*((?:\t|[\r\n]*$))/$1$2/;
             }
         }
 
@@ -567,11 +631,16 @@ use File::Basename;
         {
             $line =~ s/\Q$delim\E/\t/g;
         }
+
+        # reset the line end book keeping string
+        # should have no impact on output, reset out of paranoia
+        $prev_estr = '';
     }
     
     # escape EOL if line-wrapped
     if ($open_quotes_flag)
     {
+        # strip EOL, escape it and save it for potential future use later
         $prev_eol = '';
         if ($line =~ s/([\r\n]+)$//)
         {
@@ -580,24 +649,19 @@ use File::Basename;
             $prev_eol =~ s/\n/\\\\\\n/g;
         }
         
-        # previously wrapped, all whitespace: append to whitespace
-        if ($i_first_quotes >= 0 && !($line =~ /\S/))
+        # line end book keeping string now ends in a space
+        if ($line =~ /[ $tab]$/)
         {
-            if ($line =~ /([\s$tab]+)$/)
-            {
-                $prev_ws .= $1;
-            }
+            $prev_estr = " ";
         }
-        # replace previous whitespace
-        else
-        {
-            $prev_ws = '';
 
-            if ($line =~ /([\s$tab]+)$/)
-            {
-                $prev_ws = $1;
-            }
+        # line end book keeping string now ends in not-whitespace
+        if ($line =~ /\S$/)
+        {
+            $prev_estr = "x";
         }
+        
+        # lines ending in control character whitespace don't alter book keeping
     }
     
     # unescape ""
@@ -607,31 +671,43 @@ use File::Basename;
     # remove tabs entirely, preserving surrounding whitespace
     $line =~ s/(\s|^)($tab)+/$1/g;
     $line =~ s/($tab)+(\s|$)/$2/g;
-    # replace remaining tabs with spaces so text doesn't abutt together
+    # replace remaining tabs with spaces so text doesn't abut together
     $line =~ s/($tab)+/ /g;
 
-    # Special case "" in a field by itself.
-    #
-    # This generally results from lazily-coded csv writers that enclose
-    #  every single field in "", even empty fields, whether they need them
-    #  or not.
-    #
-    # \K requires Perl >= v5.10.0 (2007-12-18)
-    #   (?: *)\K is faster than replacing ( *) with $1
-    $line =~ s/(?:(?<=\t)|^)(?: *)\K""( *)(?=\t)/$1/g;  # start|tabs "" tabs
-    $line =~    s/(?<=\t)(?: *)\K""( *)(?=\t|$)/$1/g;   # tabs  "" tabs|end
-    $line =~          s/^(?: *)\K""( *)$/$1/g;          # start "" end
+    # clean up spaces around quotes, handle single "" on entire line
+    # only apply to non- line wrapped fields
+    if ($line =~ /\"/)
+    {
+      # line is part of a line wrap
+      if ($open_quotes_flag ||
+          $i_first_quotes >= 0 ||
+          $i_last_quotes  <= @temp_array)
+      {
+        @temp_array2 = split /\t/, $line, -1;
+        for ($i = 0; $i < @temp_array2; $i++)
+        {
+            # skip first field of newly ended  line wrap
+            # skip last  field of newly opened line wrap
+            # skip when entire line is part of a line wrap
+            if (!(($i_last_quotes  <= @temp_array && $i == @temp_array2 - 1) ||
+                  ($i_first_quotes >= 0           && $i == 0)  ||
+                  ($open_quotes_flag              && @temp_array2 == 1)))
+            {
+                # remove enclosing spaces and quotes
+                $temp_array2[$i] =~ s/^ *\"(.*?)\" *$/$1/;
+            }
+        }
+        
+        $line = join "\t", @temp_array2;
+      }
 
-    # strip enclosing double-quotes, preserve leading/trailing spaces
-    #
-    # \K requires Perl >= v5.10.0 (2007-12-18)
-    #   (?: *)\K is faster than replacing ( *) with $1
-    #
-    #$line =~ s/(?:(?<=\t)|^)(?: *)\K"([^\t]+)"( *)(?=\t|[\r\n]*$)/$1$2/g;
-
-    # remove enclosing spaces, to support space-justified quoted fields
-    #   ( *) might be faster without () grouping, but left in for clarity
-    $line =~ s/(?:(?<=\t)|^)( *)"([^\t]+)"( *)(?=\t|[\r\n]*$)/$2/g;
+      # regular line, not part of a line wrap
+      else
+      {
+          # remove enclosing spaces and quotes
+          $line =~ s/(?:(?<=\t)|^) *\"([^\t]*?)\" *(?=\t|$)/$1/g;
+      }
+    }
 
     # unescape escaped double-quotes
     $line =~ s/\"\"/\"/g;
@@ -668,6 +744,12 @@ use File::Basename;
                 $temp_array2[$i] =~ s/\"/\"\"/g;
                 $temp_array2[$i] = '"' . $temp_array2[$i];
             }
+            # entire line is within a line wrap
+            elsif ($open_quotes_flag && @temp_array2 == 1)
+            {
+                # only escape the double quotes, don't enclose them
+                $temp_array2[$i] =~ s/\"/\"\"/g;
+            }
             # all other fields with quotes in them
             elsif ($temp_array2[$i] =~ s/\"/\"\"/g)
             {
@@ -675,11 +757,35 @@ use File::Basename;
             }
         }
         
+        # closing lone " on a line by itself
+        if (@temp_array2 == 0 && $i_first_quotes >= 0)
+        {
+            $temp_array2[0] = '"';
+        }
+        # opening lone " on a line by itself
+        if (@temp_array2 == 0 && $i_last_quotes <= @temp_array)
+        {
+            $temp_array2[0] = '"';
+        }
+        
+        # instantiate $temp_array2[0] if it doesn't exist,
+        # so that adding the EOL won't write out of bounds
+        if (@temp_array2 == 0)
+        {
+            $temp_array2[0] = '';
+        }
+        
         # add the EOL back in after enclosing in ""
+        #
+        # should be faster to add EOL to last field before joining
+        # instead of adding it to the end of the joined line
         $temp_array2[@temp_array2 - 1] .= $eol;
 
         $line = join "\t", @temp_array2;
     }
+    
+    # prepend any line wrap related characters from previous line(s)
+    $line = $prepend_line . $line;
     
     return $line;
   }
@@ -689,11 +795,12 @@ use File::Basename;
 
 # begin main()
 
-$opt_delim     = ',';
-$opt_line_wrap = 0;
-$opt_escape_dq = 0;
+$opt_delim      = ',';
+$opt_line_wrap  = 0;
+$opt_escape_dq  = 0;
+$opt_escape_eol = 0;
 
-$error_flag    = 0;
+$error_flag     = 0;
 
 # read in command line arguments
 $num_files = 0;
@@ -710,6 +817,10 @@ for ($i = 0; $i < @ARGV; $i++)
         elsif ($field =~ /^--escape-dq/i)
         {
             $opt_escape_dq = 1;
+        }
+        elsif ($field =~ /^--escape-eol/i)
+        {
+            $opt_escape_eol = 1;
         }
         elsif ($field =~ /^--semicolon/i)
         {
@@ -738,6 +849,7 @@ if ($error_flag)
     printf STDERR "Usage: $program_name [options] input.csv\n";
     printf STDERR "  Options:\n";
     printf STDERR "    --escape-dq    escape \" for better Excel compatability\n";
+    printf STDERR "    --escape-eol   escape embedded EOL with \\\\\\\n";
     printf STDERR "    --semicolon    use semicolon as input delimiter instead of comma\n";
     printf STDERR "    --unwrap       unwrap lines with embedded newlines\n";
     
@@ -758,7 +870,7 @@ open FILE, "$filename" or die "ABORT -- can't open file $filename\n";
 while(defined($line=<FILE>))
 {
     $line_new = csv2tsv_not_excel($line, $opt_line_wrap, $opt_escape_dq,
-                                  $opt_delim);
+                                  $opt_delim, $opt_escape_eol);
     
     print "$line_new";
     
