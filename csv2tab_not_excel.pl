@@ -673,7 +673,7 @@ use File::Basename;
 
     # clean up spaces around quotes, handle single "" on entire line
     # only apply to non- line wrapped fields
-    if ($line =~ /\"/)
+    if ($line =~ /[\"$dq]/)
     {
       # line is part of a line wrap
       if ($open_quotes_flag ||
@@ -690,6 +690,9 @@ use File::Basename;
                   ($i_first_quotes >= 0           && $i == 0)  ||
                   ($open_quotes_flag              && @temp_array2 == 1)))
             {
+                # remove "" by itself
+                $temp_array2[$i] =~ s/^ *$dq *$//;
+            
                 # remove enclosing spaces and quotes
                 $temp_array2[$i] =~
                     s/^ *([$dq]*)\"(.*?)\"([$dq]*) *$/$1$2$3/;
@@ -702,6 +705,9 @@ use File::Basename;
       # regular line, not part of a line wrap
       else
       {
+          # remove "" by itself
+          $line =~ s/(?:(?<=\t)|^) *$dq *(?=\t|$)//g;
+
           # remove enclosing spaces and quotes
           $line =~
             s/(?:(?<=\t)|^) *([$dq]*)\"([^\t]*?)\"([$dq]*) *(?=\t|$)/$1$2$3/g;
