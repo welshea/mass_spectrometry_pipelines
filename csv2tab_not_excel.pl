@@ -664,9 +664,6 @@ use File::Basename;
         # lines ending in control character whitespace don't alter book keeping
     }
     
-    # unescape ""
-    $line =~ s/$dq/\"\"/g;
-
     # finish dealing with embedded tabs
     # remove tabs entirely, preserving surrounding whitespace
     $line =~ s/(\s|^)($tab)+/$1/g;
@@ -694,7 +691,8 @@ use File::Basename;
                   ($open_quotes_flag              && @temp_array2 == 1)))
             {
                 # remove enclosing spaces and quotes
-                $temp_array2[$i] =~ s/^ *\"(.*?)\" *$/$1/;
+                $temp_array2[$i] =~
+                    s/^ *([$dq]*)\"(.*?)\"([$dq]*) *$/$1$2$3/;
             }
         }
         
@@ -705,9 +703,13 @@ use File::Basename;
       else
       {
           # remove enclosing spaces and quotes
-          $line =~ s/(?:(?<=\t)|^) *\"([^\t]*?)\" *(?=\t|$)/$1/g;
+          $line =~
+            s/(?:(?<=\t)|^) *([$dq]*)\"([^\t]*?)\"([$dq]*) *(?=\t|$)/$1$2$3/g;
       }
     }
+
+    # unescape ""
+    $line =~ s/$dq/\"\"/g;
 
     # unescape escaped double-quotes
     $line =~ s/\"\"/\"/g;
