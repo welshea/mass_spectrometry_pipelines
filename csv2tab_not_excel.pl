@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-03-25  speed up quote/space stripping
 # 2025-03-22  slower, but more correct, malformed fields quote/space stripping
 # 2025-03-21  bugfix --escape-dq
 # 2025-03-21  fix enclosing and line wrap dequoting/despacing
@@ -259,6 +260,8 @@ use File::Basename;
     my $i_last_quotes;     # @temp_array + 1 if not line-wrapped
     my $len1;
     my $len2;
+    my $i_start;
+    my $i_end;
 
     if (!defined($delim))
     {
@@ -674,98 +677,106 @@ use File::Basename;
     # replace remaining tabs with spaces so text doesn't abut together
     $line =~ s/($tab)+/ /g;
 
-    # unescape ""
-    $line =~ s/$dq/\"\"/g;
-
     # clean up spaces around quotes, handle single "" on entire line
     # only apply to non- line wrapped fields
-    if ($line =~ /\"[^\"]*\"/)
+    if ($line =~ /[\"$dq]/)
     {
-      #if ($open_quotes_flag ||
-      #    $i_first_quotes >= 0 ||
-      #    $i_last_quotes  <= @temp_array)
-
-      # we need to handle it field by field
-      if (1)
+      if ($open_quotes_flag ||
+          $i_first_quotes >= 0 ||
+          $i_last_quotes  <= @temp_array)
       {
+        # unescape "" before space/quotes removal
+        $line =~ s/$dq/\"\"/g;
+
         @temp_array2 = split /\t/, $line, -1;
-        for ($i = 0; $i < @temp_array2; $i++)
+
+        $eol = '';
+        if ($temp_array2[@temp_array2 - 1] =~ s/([\r\n]+)$//)
         {
-            # skip first field of newly ended  line wrap
-            # skip last  field of newly opened line wrap
-            # skip when entire line is part of a line wrap
-            if (!(($i_last_quotes  <= @temp_array && $i == @temp_array2 - 1) ||
-                  ($i_first_quotes >= 0           && $i == 0)  ||
-                  ($open_quotes_flag              && @temp_array2 == 1)))
+            $eol = $1;
+        }
+        
+
+        # skip when entire line is part of a line wrap
+        $i_start = 0;
+        $i_end   = @temp_array2;
+        if ($open_quotes_flag && @temp_array2 == 1)
+        {
+            $i_end = -1;
+        }
+        # skip only the portion within a line wrap
+        else
+        {
+            # skip first field of newly ended line wrap
+            if ($i_first_quotes >= 0)
             {
-                # find start run of quotes
-                if ($temp_array2[$i] =~ /^ *(\"+)/)
+                $i_start = 1;
+            }
+
+            # skip last field of newly opened line wrap
+            if ($i_last_quotes <= @temp_array)
+            {
+                $i_end--;
+            }
+        }
+        
+
+        for ($i = $i_start; $i < $i_end; $i++)
+        {
+            # find start run of quotes
+            if ($temp_array2[$i] =~ /^ *(\"+)/)
+            {
+                $len1 = length $1;
+                
+                # find end run of quotes
+                #
+                # slightly faster to reverse then search forwards
+                # than to search for match from end of string
+
+                if (reverse($temp_array2[$i]) =~ /^ *(\"+)/)
                 {
-                    $len1 = length $1;
-                    
-                    # find end run of quotes
-                    #
-                    # slightly faster to reverse then search forwards
-                    # than to search for match from end of string
+                    $len2 = length $1;
 
-                    # field ends in EOL
-                    if ($temp_array2[$i] =~ s/([\r\n]+)$//)
+                    # remove enclosing spaces and quotes
+                    # considered enclosed if both start/end are odd
+                    if (($len1 & 1) && ($len2 & 1))
                     {
-                        $eol = $1;
-                    
-                        if (reverse($temp_array2[$i]) =~ /^ *(\"+)/)
-                        {
-                            $len2 = length $1;
-
-                            # remove enclosing spaces and quotes
-                            # considered enclosed if both start/end are odd
-                            # or if entire field is even number of quotes
-                            if ((($len1 % 2) != 0 && ($len2 % 2) != 0) ||
-                                $temp_array2[$i] =~ /^ *(?:\"\")+ *$/)
-                            {
-                                # .*? isn't needed here
-                                # since we have an end-matching constraint
-                                $temp_array2[$i] =~ s/^ *\"(.*)\" *$/$1/;
-                            }
-                        }
-                        
-                        $temp_array2[$i] .= $eol;
+                        # .*? isn't needed here
+                        # since we have an end-matching constraint
+                        $temp_array2[$i] =~ s/^ *\"(.*)\" *$/$1/;
                     }
-                    # field does not end in EOL
+                    # or if entire field is even number of quotes
+                    # must be even at this point due to first check
                     else
                     {
-                        if (reverse($temp_array2[$i]) =~ /^ *(\"+)/)
-                        {
-                            $len2 = length $1;
-
-                            # replace lone "" with empty
-                            # since the below check won't treat it as enclosed
-                            $temp_array2[$i] =~ s/^ *\"\" *$//;
-
-                            # remove enclosing spaces and quotes
-                            # considered enclosed if both start/end are odd
-                            # or if entire field is even number of quotes
-                            if ((($len1 % 2) != 0 && ($len2 % 2) != 0) ||
-                                $temp_array2[$i] =~ /^ *(?:\"\")+ *$/)
-                            {
-                                # .*? isn't needed here
-                                # since we have an end-matching constraint
-                                $temp_array2[$i] =~ s/^ *\"(.*)\" *$/$1/;
-                            }
-                        }
+                        # .*? isn't needed here
+                        # since we have an end-matching constraint
+                        $temp_array2[$i] =~ s/^ *\"(\"*)\" *$/$1/;
                     }
                 }
             }
+        }
+
+        # add EOL back to end of line
+        if ($eol ne '')
+        {
+            $temp_array2[@temp_array2 - 1] .= $eol;
         }
         
         $line = join "\t", @temp_array2;
       }
 
-      # whole-line regex won't handle malformed edge cases correctly
+      # safe to strip entire line at once
       else
       {
-          # remove enclosing spaces and quotes
-          $line =~ s/(?:(?<=\t)|^) *\"([^\t]*?)\" *(?=\t|$)/$1/g;
+        # remove enclosing spaces and quotes
+        $line =~ s/(?:(?<=\t)|^) *([$dq]*)\"([^\t]*?)\" *(?=\t|[\r\n]*$)/$1$2/g;
+
+        # unescape "" after first pass of space/quotes removal
+        $line =~ s/$dq/\"\"/g;
+
+        # remove enclosing spaces and quotes from all-quotes fields
+        $line =~ s/(?:(?<=\t)|^) *\"(\"*?)\" *(?=\t|[\r\n]*$)/$1/g;
       }
     }
 
