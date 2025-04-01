@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2025-04-01:  detect ORIEN Avatar SL###### format sample identifiers
 # 2025-01-17:  preserve transcript* fields
 # 2024-09-12:  preserve Symbol field
 # 2024-09-12:  remove leftover STDERR debugging
@@ -398,6 +399,24 @@ sub read_in_data_file
 
             if ($field =~ /\s+Intensity$/i &&
                 !($field =~ /\s+MaxLFQ\s+Intensity$/i))
+            {
+                $sample_to_file_col_hash{$field} = $i;
+                $sample_array[$num_samples++] = $field;
+                
+                $intensity_at_end_flag = 1;
+            }
+        }
+    }
+
+
+    # still didn't find any, maybe it is ORIEN Avatar SLIDs
+    if ($num_samples == 0)
+    {
+        for ($i = 0; $i < @array; $i++)
+        {
+            $field = $array[$i];
+
+            if ($field =~ /^SL[0-9]{6}$/)
             {
                 $sample_to_file_col_hash{$field} = $i;
                 $sample_array[$num_samples++] = $field;
