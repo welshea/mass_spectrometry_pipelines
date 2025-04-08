@@ -1809,9 +1809,10 @@ foreach $mz_maldi (@maldi_mz_array)
         }
 
         #$match_str = join ";", @kept_match_array;
-        printf STDERR "%.4f\t%s\t%s\t%s\n",
-            $mz_maldi, $ppm_tol_kept, $matched_on_ccs_pass_flag,
-            $count;
+        
+        #printf STDERR "%.4f\t%s\t%s\t%s\n",
+        #    $mz_maldi, $ppm_tol_kept, $matched_on_ccs_pass_flag,
+        #    $count;
     }
 }
 
