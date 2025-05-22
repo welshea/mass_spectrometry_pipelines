@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-05-22:  allow debatching with --iron-auto-ch --comp-pool
 # 2023-08-29:  document new flags
 # 2023-08-29:  add --comp-pool-exclusions-first --comp-pool-exclusions-last
 # 2023-08-23:  flag proteogenomics mutant-only peptides
@@ -141,7 +142,7 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $auto_single_variable_pool_flag = 1;
             $iron_ref_sample = '';
-            $no_debatch_flag = 1;
+            #$no_debatch_flag = 1;
         }
         elsif ($field =~ /^--iron-ref=(.*)/)
         {
@@ -182,7 +183,8 @@ for ($i = 0; $i < @ARGV; $i++)
 
 
 # force --no-debatch if different ref channels are used per-plex
-if ($auto_single_variable_pool_flag)
+# unless we are using a computational pool
+if ($auto_single_variable_pool_flag && $comp_pool_flag == 0)
 {
     $no_debatch_flag = 1;
 
