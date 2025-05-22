@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-05-22: more robust sorting of unexpected plex name/replicate formats
 # 2025-02-25: add --counts --omit-trypsin --no-omit-trypsin flags
 # 2023-11-13: support TMT-2
 # 2023-11-13: support iTRAQ-4 and iTRAQ-8
@@ -29,6 +30,47 @@
 
 use POSIX;
 use File::Basename;
+
+
+# sort numeric parts as numbers, not strings
+sub cmp_args_alphanumeric
+{
+    my @array_a = split /([0-9]+)/, $_[0];
+    my @array_b = split /([0-9]+)/, $_[1];
+    my $count_a = @array_a;
+    my $count_b = @array_b;
+    my $min_count;
+    my $i;
+    my $j;
+    
+    $min_count = $count_a;
+    if ($count_b < $min_count)
+    {
+        $min_count = $count_b;
+    }
+    
+    for ($i = 0; $i < $min_count; $i += 2)
+    {
+        # even fields sort alphabetically
+        if ($array_a[$i] lt $array_b[$i]) { return -1; }
+        if ($array_a[$i] gt $array_b[$i]) { return  1; }
+        
+        # odd fields sort numerically
+        $j = $i + 1;
+        if ($j < $min_count)
+        {
+            if ($array_a[$j] < $array_b[$j]) { return -1; }
+            if ($array_a[$j] > $array_b[$j]) { return  1; }
+        }
+    }
+
+    # sort shorter remaining portion first
+    if ($count_a < $count_b) { return -1; }
+    if ($count_a > $count_b) { return  1; }
+
+    # this shouldn't ever trigger
+    return $_[0] cmp $_[1];
+}
 
 
 sub bless_delimiter_space
@@ -107,8 +149,6 @@ sub cmp_renamed_header_cols
     my $plex_b        = '';
     my $plex_a_prefix = '';
     my $plex_b_prefix = '';
-    my $plex_a_num    = '';
-    my $plex_b_num    = '';
 
     my $ch_a          = '';
     my $ch_b          = '';
@@ -117,6 +157,8 @@ sub cmp_renamed_header_cols
 
     my $run_a         = '';
     my $run_b         = '';
+
+    my $cmp;
 
 
     # may contain a _run1 or _run2 after the plex
@@ -131,7 +173,6 @@ sub cmp_renamed_header_cols
         if ($plex_a =~ /(.*Plex)*([0-9]+)/i)
         {
             $plex_a_prefix = $1;
-            $plex_a_num    = $2;
             
             if (!defined($plex_a_prefix))
             {
@@ -150,7 +191,6 @@ sub cmp_renamed_header_cols
         if ($plex_b =~ /(.*Plex)*([0-9]+)/i)
         {
             $plex_b_prefix = $1;
-            $plex_b_num    = $2;
             
             if (!defined($plex_b_prefix))
             {
@@ -176,28 +216,11 @@ sub cmp_renamed_header_cols
         if ($plex_a_prefix gt $plex_b_prefix) { return  1; }
     }
     
-    # sort samples by plex number
-    if ($plex_a_num ne '' && $plex_b_num ne '')
+    # sort samples alphanumerically by plex
+    if ($plex_a ne '' && $plex ne '')
     {
-        if ($plex_a_num < $plex_b_num) { return -1; }
-        if ($plex_a_num > $plex_b_num) { return  1; }
-    }
-    
-    # sort samples by injection replicate
-    if ($header_a =~ /[^A-Za-z0-9]run([0-9]+)_/)
-    {
-        $run_a = $1;
-    }
-    if ($header_b =~ /[^A-Za-z0-9]run([0-9]+)_/)
-    {
-        $run_b = $1;
-    }
-    if ($run_a eq '' && $run_b ne '') { return -1; }
-    if ($run_b eq '' && $run_a ne '') { return  1; }
-    if ($run_a ne '' && $run_b ne '')
-    {
-        if ($run_a < $run_b)          { return -1; }
-        if ($run_a > $run_b)          { return  1; }
+        $cmp = cmp_args_alphanumeric($plex_a, $plex_b);
+        if ($cmp) { return $cmp; }
     }
     
     # sort samples by channel
@@ -903,6 +926,20 @@ foreach $header (sort keys %header_to_col_hash)
 #            $plex = sprintf "TMT_%d", $replicate;
 #            $plex = sprintf "TMT%d", $replicate;
             $plex = sprintf "Plex1_run%d", $replicate;
+        }
+        
+        # reformat unusual multi-plex replicate formats
+        if ($plex =~ /^(\d+).*?[^\d](\d+)$/)
+        {
+            $plex_num  = $1;
+            $replicate = $2;
+
+            $plex      = sprintf "Plex%d_run%d", $plex_num, $replicate;
+        }
+        # reformat single-number plexes
+        elsif ($plex =~ /^[0-9]/)
+        {
+            $plex = sprintf "Plex%d", $plex;
         }
 
         # iTRAQ
