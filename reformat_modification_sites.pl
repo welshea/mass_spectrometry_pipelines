@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# 2025-06-24:  refactor modification abbreviation code for maintainability
+# 2025-06-24:  add DBIA (db) to known modifications list
 # 2025-02-14;  add Methyl (me) and Trimethyl (tm) sites
 # 2024-08-22:  add Nitro-Y (ny) to known modifications list
 # 2023-11-13:  update single plex channel names to Plex1 instead of TMT01
@@ -14,43 +16,57 @@ use POSIX;
 
 
 # Modifications we've seen before:
-#    Acetyl (K)
-#    ATP
-#    Biotin-HPDP
-#    Desthiobiotin-ATP
-#    Dethiobiotin-ATP
-#    GlyGly (K)
-#    Lactylation
-#    Nitro-Y
-#    Oxidation (M)
-#    Phospho (STY)
+#    Acetyl (K)          (a) (ac)
+#    Biotin-HPDP         (b) (bh)
+#    Lactylation         (c) (la)
+#    ATP                 (d) (de)
+#    Desthiobiotin-ATP   (d) (de)
+#    Dethiobiotin-ATP    (d) (de)
+#    GlyGly (K)          (g) (gl)
+#    DBIA                (i) (db)
+#    Oxidation (M)       (o) (ox)
+#    Methyl (KR)         (m) (me)
+#    Nitro-Y             (n) (ny)
+#    Phospho (STY)       (p) (ph)
+#    Trimethyl (K)       (t) (tm)
 
-$prev_seen_mod_type_hash{'Acetyl (K)'}        = 1;
-$prev_seen_mod_type_hash{'ATP'}               = 1;
-$prev_seen_mod_type_hash{'Biotin-HPDP'}       = 1;
-$prev_seen_mod_type_hash{'Desthiobiotin-ATP'} = 1;
-$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}  = 1;
-$prev_seen_mod_type_hash{'GlyGly (K)'}        = 1;
-$prev_seen_mod_type_hash{'Lactylation'}       = 1;
-$prev_seen_mod_type_hash{'Lactylation Heavy'} = 1;
-$prev_seen_mod_type_hash{'Oxidation (M)'}     = 1;
-$prev_seen_mod_type_hash{'Phospho (STY)'}     = 1;
-$prev_seen_mod_type_hash{'Nitro-Y'}           = 1;
-$prev_seen_mod_type_hash{'Methyl (KR)'}       = 1;
-$prev_seen_mod_type_hash{'Trimethyl (K)'}     = 1;
+$prev_seen_mod_type_hash{'Acetyl (K)'}{2}        = 'ac';
+$prev_seen_mod_type_hash{'Acetyl (K)'}{1}        = 'a';
+$prev_seen_mod_type_hash{'ATP'}{2}               = 'de';
+$prev_seen_mod_type_hash{'ATP'}{1}               = 'd';
+$prev_seen_mod_type_hash{'Desthiobiotin-ATP'}{2} = 'de';
+$prev_seen_mod_type_hash{'Desthiobiotin-ATP'}{1} = 'd';
+$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}{2}  = 'de';
+$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}{1}  = 'd';
+$prev_seen_mod_type_hash{'Biotin-HPDP'}{2}       = 'bh';
+$prev_seen_mod_type_hash{'Biotin-HPDP'}{1}       = 'b';
+$prev_seen_mod_type_hash{'DBIA'}{2}              = 'db';
+$prev_seen_mod_type_hash{'DBIA'}{1}              = 'i';
+$prev_seen_mod_type_hash{'GlyGly (K)'}{2}        = 'gl';
+$prev_seen_mod_type_hash{'GlyGly (K)'}{1}        = 'g';
+$prev_seen_mod_type_hash{'Lactylation'}{2}       = 'la';
+$prev_seen_mod_type_hash{'Lactylation'}{1}       = 'c';
+$prev_seen_mod_type_hash{'Lactylation Heavy'}{2} = 'lh';
+$prev_seen_mod_type_hash{'Lactylation Heavy'}{1} = 'c';
+$prev_seen_mod_type_hash{'Oxidation (M)'}{2}     = 'ox';
+$prev_seen_mod_type_hash{'Oxidation (M)'}{1}     = 'o';
+$prev_seen_mod_type_hash{'Phospho (STY)'}{2}     = 'ph';
+$prev_seen_mod_type_hash{'Phospho (STY)'}{1}     = 'p';
+$prev_seen_mod_type_hash{'Nitro-Y'}{2}           = 'ny';
+$prev_seen_mod_type_hash{'Nitro-Y'}{1}           = 'n';
+$prev_seen_mod_type_hash{'Methyl (KR)'}{2}       = 'me';
+$prev_seen_mod_type_hash{'Methyl (KR)'}{1}       = 'm';
+$prev_seen_mod_type_hash{'Trimethyl (K)'}{2}     = 'tm';
+$prev_seen_mod_type_hash{'Trimethyl (K)'}{1}     = 't';
 
 
-# first letters of previously seen modifications
-foreach $temp_mod_type (sort keys %prev_seen_mod_type_hash)
+# seen single letter abbreviations
+foreach $mod_type (sort keys %prev_seen_mod_type_hash)
 {
-    $c = lc substr $temp_mod_type, 0, 1;
-
+    $c = $prev_seen_mod_type_hash{$mod_type}{1};
+    
     $prev_seen_mod_type_char_hash{$c} = 1;
 }
-
-# we also use 'c' for Lactylation and Lactylation Heavy
-$prev_seen_mod_type_char_hash{'c'} = 1;
-
 
 
 sub cmp_mod_types
@@ -689,6 +705,7 @@ $diffSTY_col    = $header1_hash{$header_diffs};
 $mod_type_char  = lc substr $mod_type, 0, 1;
 
 # warning for previously unseen modification types
+$prev_seen_mod_type_flag = 0;
 if (!defined($prev_seen_mod_type_hash{$mod_type}))
 {
     printf STDERR "WARNING -- previously unknown modification type:  %s\n",
@@ -696,63 +713,59 @@ if (!defined($prev_seen_mod_type_hash{$mod_type}))
     printf STDERR "WARNING -- contact developer to vet auto-abbreviations\n";
 }
 
-# assume ATP is Desthiobiotin, use 'd' instead of 'a'
-if ($mod_type_char ne 'd' &&
-    $mod_type =~ /(^ATP\b|\bATP$)/)
+# already in abbreviation list, use current abbreviations
+if (defined($prev_seen_mod_type_hash{$mod_type}))
 {
-    $mod_type_char = 'd';
+    $mod_type_char = $prev_seen_mod_type_hash{$mod_type}{1};
+    $prev_seen_mod_type_flag = 1;
 }
 
-# use 'c' for Lactylation and Lactylation Heavy
-if ($mod_type =~ /^Lactylation/i)
+# warn if current hard-coded single letter abbreviation is a poor choice
+$already_l_flag = 0;
+if ($prev_seen_mod_type_flag && $mod_type_char eq 'l')
 {
-    $mod_type_char = 'c';
+    $already_l_flag = 1;
 }
 
 # lowercase 'l' looks too much like capital 'I' in many fonts
 # use something else, so that they aren't confused with Isoleucine
-if ($mod_type_char eq 'l')
+# same code is used for assigning single letters to unknown modifications
+if ($mod_type_char eq 'l' || $prev_seen_mod_type_flag == 0)
 {
     # try to pick a letter not used by other types we've seen before
     # if none found, default to 'x'
     $mod_type_char = 'x';
 
-    if (1)
+    $len_mod_type  = length $mod_type;
+    for ($i = 0; $i < $len_mod_type; $i++)
     {
-        $len_mod_type  = length $mod_type;
-        for ($i = 0; $i < $len_mod_type; $i++)
-        {
-            $c = substr lc $mod_type, $i, 1;
+        $c = substr lc $mod_type, $i, 1;
 
-            # we've already used this letter for another modification type
-            if ($c ne 'l' && !defined($prev_seen_mod_type_char_hash{$c}))
-            {
-                $mod_type_char = $c;
-                last;
-            }
+        # we've already used this letter for another modification type
+        if ($c ne 'l' && !defined($prev_seen_mod_type_char_hash{$c}))
+        {
+            $mod_type_char = $c;
+            last;
         }
     }
     
-    printf STDERR "CAUTION -- %s 'l' looks too much like 'I', using '%s' instead\n",
-        $mod_type, $mod_type_char;
+    if ($already_l_flag)
+    {
+        printf STDERR "CAUTION -- %s 'l' looks too much like 'I', using '%s' instead\n",
+            $mod_type, $mod_type_char;
+    }
 }
 
-# abbreviations for ModificationID
-# 2-letter abbreviations are still hard-coded
-# unspported types will fall back to single letter
-$mod_type_abbrev = $mod_type_char;
-if ($mod_type =~ /^Phospho/i)                    { $mod_type_abbrev = 'ph'; }
-elsif ($mod_type =~ /^Oxidation/i)               { $mod_type_abbrev = 'ox'; }
-elsif ($mod_type =~ /(^Des*thio|^ATP\b|\bATP$)/) { $mod_type_abbrev = 'de'; }
-elsif ($mod_type =~ /^Gly/i)                     { $mod_type_abbrev = 'gl'; }
-elsif ($mod_type =~ /^Lact/i)                    { $mod_type_abbrev = 'la'; }
-elsif ($mod_type =~ /^Acetyl/i)                  { $mod_type_abbrev = 'ac'; }
-elsif ($mod_type =~ /^Biotin-H/i)                { $mod_type_abbrev = 'bh'; }
-elsif ($mod_type =~ /^Nitro-Y/i)                 { $mod_type_abbrev = 'ny'; }
-elsif ($mod_type =~ /^Methyl \(/i)               { $mod_type_abbrev = 'me'; }
-elsif ($mod_type =~ /^Trimethyl \(/i)            { $mod_type_abbrev = 'tm'; }
-# use first 2 letters
-else  { $mod_type_abbrev = lc substr $mod_type, 0, 2; };
+# 2-letter abbreviations for ModificationID
+# unknown types will fall back to first 2 characters
+if (defined($prev_seen_mod_type_hash{$mod_type}))
+{
+    $mod_type_abbrev = $prev_seen_mod_type_hash{$mod_type}{2};
+}
+else
+{
+    $mod_type_abbrev = lc substr $mod_type, 0, 2;
+}
 
 printf STDERR "Modification type:\t%s\t%s\t%s\n",
     $mod_type, $mod_type_abbrev, $mod_type_char;
