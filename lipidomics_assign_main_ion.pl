@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+# 2025-07-03:  merge in Isomer from LipidSearch summary file
+# 2025-07-03:  add --no-strip flag to disable column/zero stripping
+# 2025-07-03:  only convert zeros to blanks within sample columns
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-05-26:  more _ vs / inconsistency within LipidSearch
 # 2023-05-25:  disabled various isomer group related debug messages
@@ -409,6 +412,7 @@ sub read_in_lipidsearch_summary_file
     $lipid_molec_col = $header_col_hash{'LipidMolec'};
     $base_rt_col     = $header_col_hash{'BaseRt'};
     $main_ion_col    = $header_col_hash{'MainIon'};
+    $isomer_col      = $header_col_hash{'Isomer'};
     
     if (!defined($lipid_molec_col))
     {
@@ -425,6 +429,12 @@ sub read_in_lipidsearch_summary_file
     if (!defined($main_ion_col))
     {
         printf STDERR "ABORT -- MainIon column not found in summary file %s\n",
+            $summary_filename;
+        die(2);
+    }
+    if (!defined($isomer_col))
+    {
+        printf STDERR "ABORT -- Isomer column not found in summary file %s\n",
             $summary_filename;
         die(2);
     }
@@ -448,6 +458,13 @@ sub read_in_lipidsearch_summary_file
         $lipid_molec = $array[$lipid_molec_col];
         $base_rt     = $array[$base_rt_col];
         $main_ion    = $array[$main_ion_col];
+        $isomer      = $array[$isomer_col];
+        
+        # this should never happen, but I'll check anyways
+        if (!defined($isomer))
+        {
+            $isomer = '';
+        }
 
         # mergedResult.txt can be inconsistent with _ vs /
         # store everything as / for consistency of lookups
@@ -463,6 +480,8 @@ sub read_in_lipidsearch_summary_file
                 $main_ion;
             $lipidsearch_summary_hash{$lipid_molec}{$main_id}{rt} =
                 $base_rt;
+            $lipidsearch_summary_hash{$lipid_molec}{$main_id}{isomer} =
+                $isomer;
             
             # read in a valid LipidSearch summary main ion data row
             $valid_summary_flag = 1;
@@ -473,10 +492,13 @@ sub read_in_lipidsearch_summary_file
 
 
 
+# begin main()
+
 $num_files            = 0;
 $valid_summary_flag   = 0;
 $adduct_minus2h_count = 0;    # these should have been filtered out already
 $tscore_detected_flag = 0;    # may only be present in incorrect exports?
+$strip_flag           = 1;    # strip comment lines and sample zeroes
 
 for ($i = 0; $i < @ARGV; $i++)
 {
@@ -484,8 +506,15 @@ for ($i = 0; $i < @ARGV; $i++)
 
     if ($field =~ /^--/)
     {
-        printf STDERR "ABORT -- unknown option %s\n", $field;
-        $syntax_error_flag = 1;
+        if ($field eq '--no-strip')
+        {
+            $strip_flag = 0;
+        }
+        else
+        {
+            printf STDERR "ABORT -- unknown option %s\n", $field;
+            $syntax_error_flag = 1;
+        }
     }
     else
     {
@@ -536,6 +565,12 @@ while($line=<INFILE>)
     # skip comment lines
     if ($line =~ /^#/)
     {
+        # print the comment lines
+        if ($strip_flag == 0)
+        {
+            print "$line\n";
+        }
+        
         next;
     }
 
@@ -543,6 +578,12 @@ while($line=<INFILE>)
     if ($line =~ /\S/)
     {
         last;
+    }
+    
+    # print remaining pre-header lines
+    if ($strip_flag == 0)
+    {
+        print "$line\n";
     }
 }
 
@@ -909,15 +950,19 @@ while(defined($line=<INFILE>))
         
         # set missing or non-numeric abundance data to blank
         # assume that zero data is missing as well, even if input is logged
-        if (defined($sample_col_hash{$col}) &&
-            !is_number($field))
+        if ($strip_flag)
         {
-            $field = '';
-        }
-        
-        if (is_number($field) && $field == 0.0)
-        {
-            $field = '';
+            if (defined($sample_col_hash{$col}) &&
+                !is_number($field))
+            {
+                $field = '';
+            }
+
+            if (defined($sample_col_hash{$col}) &&
+                is_number($field) && $field == 0.0)
+            {
+                $field = '';
+            }
         }
         
         $row_data_array[$row][$col] = $field;
@@ -1254,6 +1299,7 @@ foreach $fattyacid_base (@fattyacid_base_array)
         {
             $adduct_ls = $lipidsearch_summary_hash{$fa_base_slash}{$main_id}{adduct};
             $rt_ls     = $lipidsearch_summary_hash{$fa_base_slash}{$main_id}{rt};
+            $isomer_ls = $lipidsearch_summary_hash{$fa_base_slash}{$main_id}{isomer};
             
             $best_row     = '';
             $best_rt_diff = 9E99;
@@ -1277,7 +1323,8 @@ foreach $fattyacid_base (@fattyacid_base_array)
             # flag row as identified as main ion by LipidSearch
             if ($best_row ne '')
             {
-                $fattyacid_hash{$fattyacid_base}{$best_row}{main_ls} = 'main';
+                $fattyacid_hash{$fattyacid_base}{$best_row}{isomer_ls} = $isomer_ls;
+                $fattyacid_hash{$fattyacid_base}{$best_row}{main_ls}   = 'main';
             }
         }
     }
@@ -1345,6 +1392,7 @@ printf "\t%s", 'IsomerBBSR';
 printf "\t%s", 'MainIonBBSR';
 if ($valid_summary_flag)
 {
+    printf "\t%s", 'IsomerLipidSearch';
     printf "\t%s", 'MainIonLipidSearch';
 }
 printf "\t%s", 'MeanRt';
@@ -1399,10 +1447,15 @@ foreach $fattyacid_base (@fattyacid_base_array)
             $main = '';
         }
 
-        $main_ls = $fattyacid_hash{$fattyacid_base}{$row}{main_ls};
+        $main_ls   = $fattyacid_hash{$fattyacid_base}{$row}{main_ls};
+        $isomer_ls = $fattyacid_hash{$fattyacid_base}{$row}{isomer_ls};
         if (!defined($main_ls))
         {
             $main_ls = '';
+        }
+        if (!defined($isomer_ls))
+        {
+            $isomer_ls = '';
         }
 
         $lipid_class = $fattyacid_base;
@@ -1451,6 +1504,7 @@ foreach $fattyacid_base (@fattyacid_base_array)
         printf "\t%s",     $main;
         if ($valid_summary_flag)
         {
+            printf "\t%s", $isomer_ls;
             printf "\t%s", $main_ls;
         }
         printf "\t%s",     $rt_avg;
