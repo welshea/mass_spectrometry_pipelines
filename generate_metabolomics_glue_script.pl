@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-07-07:  change merged file name to reflect --no-log2 --no-iron flags
 # 2023-10-05:  add --iron-untilt to address rare dynamic range compression
 # 2023-08-07:  change --norm-none to --no-iron for consistency with other .pl
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
@@ -307,6 +308,30 @@ $sample_qc_filename           = sprintf "%s_sample_qc_table.txt",
                                    $output_root_name;
 $blank_bg_filename            = sprintf "%s_iron_log2_merged_blank-bg.txt",
                                    $output_root_name;
+
+
+if ($no_log2_flag)
+{
+    $merged_filename = sprintf "%s_iron_no-log2_merged.txt",
+                               $output_root_name;
+
+    if ($no_iron_flag)
+    {
+        $merged_filename = sprintf "%s_no-iron_no-log2_merged.txt",
+                                   $output_root_name;
+    }
+}
+else
+{
+    $merged_filename = sprintf "%s_iron_log2_merged.txt",
+                               $output_root_name;
+
+    if ($no_iron_flag)
+    {
+        $merged_filename = sprintf "%s_no-iron_log2_merged.txt",
+                                   $output_root_name;
+    }
+}
 
 
 # options to pass to strip_metabolomics_columns.pl
