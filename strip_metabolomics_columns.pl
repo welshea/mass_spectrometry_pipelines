@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-07-08:  fix quanitation typo in STDERR message
 # 2025-07-08:  add --prefer-height --prefer-area
 # 2023-10-30:  comment out unused p[] and n[] back-naming book keeping
 # 2023-09-25:  add p[] and n[] detection from merge_metabolomics_pos_neg.pl
@@ -958,11 +959,11 @@ if ($peak_height_flag == 0 && $peak_area_flag == 1)
 
 if ($height_or_area_str eq 'h')
 {
-    printf STDERR "Using peak height for quanitation\n";
+    printf STDERR "Using peak height for quantitation\n";
 }
 if ($height_or_area_str eq 'a')
 {
-    printf STDERR "Using peak area for quanitation\n";
+    printf STDERR "Using peak area for quantitation\n";
 }
 
 
