@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-07-08:  --no-iron now also disables pos/neg mean equalization
 # 2025-07-08:  add --prefer-height --prefer-area
 # 2025-07-07:  change merged file name to reflect --no-log2 --no-iron flags
 # 2023-10-05:  add --iron-untilt to address rare dynamic range compression
@@ -236,7 +237,8 @@ if ($syntax_error_flag ||
     printf STDERR "    --heavy-spikein            heavy rows are spikeins, leave unscaled (default)\n";
     printf STDERR "    --heavy-tracer             heavy rows are biological, normalize them\n";
     printf STDERR "    --iron-untilt              account for relative dynamic range\n";
-    printf STDERR "    --no-iron                  disable normalization; use on targeted panels\n";
+    printf STDERR "    --no-iron                  disable normalization; use on targeted panels;\n";
+    printf STDERR "                               also disables equalization of pos/neg means\n";
     printf STDERR "    --no-log2                  disable log2 transform of output data\n";
     printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
     printf STDERR "\n";
@@ -610,10 +612,20 @@ else
                              'metabolite_database_latest.txt';
 }
 
+
+$merge_options_str = '';
+if ($no_iron_flag)
+{
+    # disable pos/neg mean equalization if IRON normalization is disabled
+    $merge_options_str = '--no-equal-means';
+}
+
+
 if ($single_file_mode eq '')
 {
-    $cmd_str_merge = sprintf "%s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
+    $cmd_str_merge = sprintf "%s %s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
+                         $merge_options_str,
                          $pos_iron_filename,
                          $neg_iron_filename,
                          $sample_table_filename,
@@ -622,8 +634,9 @@ if ($single_file_mode eq '')
 }
 elsif ($single_file_mode eq 'pos')
 {
-    $cmd_str_merge = sprintf "%s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
+    $cmd_str_merge = sprintf "%s %s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
+                         $merge_options_str,
                          $pos_iron_filename,
                          'NULL',
                          $sample_table_filename,
@@ -632,8 +645,9 @@ elsif ($single_file_mode eq 'pos')
 }
 elsif ($single_file_mode eq 'neg')
 {
-    $cmd_str_merge = sprintf "%s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
+    $cmd_str_merge = sprintf "%s %s \"%s\" \"%s\" \"%s\" %s > \"%s\"",
                          'merge_metabolomics_pos_neg.pl',
+                         $merge_options_str,
                          'NULL',
                          $neg_iron_filename,
                          $sample_table_filename,
