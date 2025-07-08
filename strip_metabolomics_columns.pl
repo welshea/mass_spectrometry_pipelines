@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-07-08:  remove unimplemented --ppm flag
 # 2025-07-08:  fix quanitation typo in STDERR message
 # 2025-07-08:  add --prefer-height --prefer-area
 # 2023-10-30:  comment out unused p[] and n[] back-naming book keeping
@@ -639,7 +640,6 @@ if (!defined($filename) || $syntax_error_flag)
     printf STDERR "\n";
     printf STDERR "    --heavy-spikein            treat heavy rows as spike-ins\n";
     printf STDERR "    --heavy-tracer             treat heavy rows as biological\n";
-    printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
     printf STDERR "\n";
     printf STDERR "    --discard-heavy            discard heavy labeled rows\n";
     printf STDERR "    --discard-unidentified     discard unidentified rows\n";
