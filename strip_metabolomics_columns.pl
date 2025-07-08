@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-07-08:  print non-blank samples with highest LOWSIGNAL counts
 # 2025-07-08:  remove unimplemented --ppm flag
 # 2025-07-08:  fix quanitation typo in STDERR message
 # 2025-07-08:  add --prefer-height --prefer-area
@@ -1713,6 +1714,12 @@ while(defined($line=<INFILE>))
             else
             {
                 $too_low_non_blank_count++;
+                
+                if (!defined($low_signal_hash{$col}))
+                {
+                    $low_signal_hash{$col} = 0;
+                }
+                $low_signal_hash{$col} += 1;
             }
         }
     
@@ -1768,6 +1775,31 @@ if ($too_low_non_blank_count)
 {
     printf STDERR "LOWSIGNAL -- %d value(s) < %d were floored to zero in non-blank samples\n",
         $too_low_non_blank_count, $floor_cutoff;
+
+    @temp_col_array = sort {$a <=> $b} keys %low_signal_hash;
+
+    $temp_max_count = 0;
+    foreach $col (@temp_col_array)
+    {
+        $count = $low_signal_hash{$col};
+        
+        if ($count > $temp_max_count)
+        {
+            $temp_max_count = $count;
+        }
+    }
+    
+    foreach $col (@temp_col_array)
+    {
+        $count = $low_signal_hash{$col};
+        
+        if ($count >= floor(0.5 * $temp_max_count + 0.5))
+        {
+            printf STDERR "LOWSIGNAL --  %4d  %s\n",
+                $low_signal_hash{$col},
+                $header_col_array[$col];
+        }
+    }
 }
 
 
