@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-07-08:  add --prefer-height --prefer-area
 # 2023-10-30:  comment out unused p[] and n[] back-naming book keeping
 # 2023-09-25:  add p[] and n[] detection from merge_metabolomics_pos_neg.pl
 # 2023-08-18:  new (D#) rule for matching heavy label text at end of name
@@ -549,6 +550,7 @@ sub conform_formula
 }
 
 
+$height_or_area_str        = 'h';     # prefer peak height unless overridden
 $keep_single_pregap_flag   = 0;
 $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
@@ -591,6 +593,14 @@ for ($i = 0; $i < @ARGV; $i++)
         {
             $scale_heavy_flag = 0;
         }
+        elsif ($field =~ /^--prefer-height$/)
+        {
+            $height_or_area_str = 'h';
+        }
+        elsif ($field =~ /^--prefer-area$/)
+        {
+            $height_or_area_str = 'a';
+        }
         else
         {
             printf STDERR "ABORT -- unknown option %s\n", $field;
@@ -623,6 +633,9 @@ if (!defined($filename) || $syntax_error_flag)
     printf STDERR "Usage: strip_mzmine_columns.pl [options] mzmine_tab_delimited.txt [unidentified.txt spikeins.txt]\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
+    printf STDERR "    --prefer-height            keep peak height over peak area (default)\n";
+    printf STDERR "    --prefer-area              keep peak area over peak height\n";
+    printf STDERR "\n";
     printf STDERR "    --heavy-spikein            treat heavy rows as spike-ins\n";
     printf STDERR "    --heavy-tracer             treat heavy rows as biological\n";
     printf STDERR "    --ppm N                    override default m/z PPM tolerance\n";
@@ -931,6 +944,28 @@ if ($peak_height_flag == 0 && $peak_area_flag == 0)
 }
 
 
+# sanity check preference of peak height or area
+# for one or the other if one is missing
+if ($peak_height_flag == 1 && $peak_area_flag == 0)
+{
+    $height_or_area_str = 'h';
+}
+if ($peak_height_flag == 0 && $peak_area_flag == 1)
+{
+    $height_or_area_str = 'a';
+}
+
+
+if ($height_or_area_str eq 'h')
+{
+    printf STDERR "Using peak height for quanitation\n";
+}
+if ($height_or_area_str eq 'a')
+{
+    printf STDERR "Using peak area for quanitation\n";
+}
+
+
 # we're going to use the compound names to identify spikeins
 # and signal/background peaks
 $rowid_col = $header_col_hash{'row ID'};
@@ -1038,15 +1073,16 @@ for ($col = 0; $col < @header_col_array; $col++)
         $field =~ /row comment/ ||
         $field =~ /^Area[,[]/i)
     {
-        # always keep peak height
-        if ($field =~ / Peak height$/i ||
-            $field =~ /^Height[,[]/i)
+        # keep peak height
+        if ($height_or_area_str eq 'h' &&
+            ($field =~ / Peak height$/i ||
+             $field =~ /^Height[,[]/i))
         {
             next;
         }
 
-        # only keep peak area if no peak height
-        if ($peak_height_flag == 0 &&
+        # keep peak area
+        if ($height_or_area_str eq 'a' &&
             ($field =~ / Peak area$/i ||
              $field =~ /^Area[,[]/i))
         {
