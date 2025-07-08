@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-07-08:  add --prefer-height --prefer-area
 # 2025-07-07:  change merged file name to reflect --no-log2 --no-iron flags
 # 2023-10-05:  add --iron-untilt to address rare dynamic range compression
 # 2023-08-07:  change --norm-none to --no-iron for consistency with other .pl
@@ -39,6 +40,7 @@ use File::Spec;
 use File::Basename;
 
 
+$height_or_area_str        = 'h';  # prefer peak height unless overridden
 $keep_single_pregap_flag   = 1;
 $discard_unidentified_flag = 0;
 $discard_heavy_flag        = 0;
@@ -182,6 +184,14 @@ for ($i = 0; $i < @ARGV; $i++)
                 $syntax_error_flag = 1;
             }
         }
+        elsif ($field =~ /^--prefer-height$/)
+        {
+            $height_or_area_str = 'h';
+        }
+        elsif ($field =~ /^--prefer-area$/)
+        {
+            $height_or_area_str = 'a';
+        }
         else
         {
             printf STDERR "ABORT -- unknown option %s\n", $field;
@@ -220,6 +230,9 @@ if ($syntax_error_flag ||
     printf STDERR "Usage: generate_metabolomics_glue_script.pl [options] mzmine_pos.csv mzmine_neg.csv [output_prefix [lipidsearch_summary.txt]]\n";
     printf STDERR "\n";
     printf STDERR "Options:\n";
+    printf STDERR "    --prefer-height            keep peak height over peak area (default)\n";
+    printf STDERR "    --prefer-area              keep peak area over peak height\n";
+    printf STDERR "\n";
     printf STDERR "    --heavy-spikein            heavy rows are spikeins, leave unscaled (default)\n";
     printf STDERR "    --heavy-tracer             heavy rows are biological, normalize them\n";
     printf STDERR "    --iron-untilt              account for relative dynamic range\n";
@@ -336,6 +349,14 @@ else
 
 # options to pass to strip_metabolomics_columns.pl
 $strip_options_str = '';
+if ($height_or_area_str eq 'h')
+{
+    $strip_options_str .= ' --prefer-height';
+}
+elsif ($height_or_area_str eq 'a')
+{
+    $strip_options_str .= ' --prefer-area';
+}
 if ($keep_single_pregap_flag)
 {
     $strip_options_str .= ' --keep-single-pregap';
