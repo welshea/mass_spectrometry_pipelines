@@ -917,31 +917,31 @@ sub score_substring_mismatch
         $align_length = 1;
     }
     
-    # match score and penalties optimized for use with elocal alignments
+    # match score and penalties optimized for use with overlap alignments
     #
     # penalize less-end-anchored overhang        in numerator
     # penalize alignment length + sqrt(overhang) in denominator
     #
-    # elocal:
+    # overlap:
     #   
-    #       AAAAAccee       0.714286
+    #       AAAAAccee       0.382222
     #       AAAAAggjj
     #
-    #     ccAAAAAee         0.428571
+    #     ccAAAAAee         0.286914
     #     ggAAAAAjj
     #
-    #       AAAAAccee       0.402712
+    #       AAAAAccee       0.359506
     #     ggAAAAAjj
     #
-    #       AAAAAccee       0.127740
+    #       AAAAAccee       0.308642
     #   ggjjAAAAA
     #
     #
     # potentially problematic examples:
-    #   ABCD1         ABCD1-DEFGHI2       0.653958
-    #   cysgly        lcysteinylglycine   0.351221
-    #   fumarate13c4  succinated4         0.0  (global/overlap align too much)
-    #   fumarate      succinate           0.550510
+    #   ABCD1        ABCD1-DEFGHI2     0.416667
+    #   cysgly       lcysteinylglycine 0.182353
+    #   fumarate13c4 succinated4       0.123333 (global/overlap align too much)
+    #   fumarate     succinate         0.195556
     #     [check for < 50% coverage to zero it after returning]
     #
     # I may want to consider zeroing out the score at < 50% coverage here,
@@ -955,6 +955,7 @@ sub score_substring_mismatch
 
     # fraction of actual score over maximum possible score
     $my_score  = $score_adj / ($match_score * $min_len);
+
     # further penalize alignments that aren't end-anchored
     $penalty = ($min_len - min($left_overhang, $right_overhang)) / $min_len;
 
@@ -963,7 +964,7 @@ sub score_substring_mismatch
     {
         $my_score = 0;
     }
-    
+
     # since either can be zero, only multiply after we floor one to zero
     # otherwise, if both are negative, they'll result in positive,
     # which is not the behavior we want
