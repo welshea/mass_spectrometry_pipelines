@@ -1,6 +1,8 @@
 #!/usr/bin/perl -w
 
 
+# 2025-08-01:  add --no-discard-any and --no-discard-entirely flags
+# 2025-07-29:  detect Name col in data file, output conformed name
 # 2023-06-27:  add 3C/3D match types, any m/z to alternative names
 # 2023-06-27:  ignore [M...] ... adduct of ... identifications
 # 2023-06-27:  fix divide by zero error on unmatched rows
@@ -1071,6 +1073,8 @@ sub conform_name
 
 # begin main()
 
+$discard_entirely_flag     = 1;
+$discard_any_flag          = 1;
 $syntax_error_flag         = 0;
 $num_files                 = 0;
 
@@ -1080,8 +1084,17 @@ for ($i = 0; $i < @ARGV; $i++)
 
     if ($field =~ /^--/)
     {
+        if ($field eq '--no-discard-entirely')
+        {
+            $discard_entirely_flag = 0;
+        }
+        elsif ($field eq '--no-discard-any')
+        {
+            $discard_any_flag = 0;
+        }
+    
         # override default PPM tolerance
-        if ($field eq '--ppm' ||
+        elsif ($field eq '--ppm' ||
             $field =~ /^--ppm\=/)
         {
             $ppm_arg = '';
@@ -1141,7 +1154,9 @@ if (!defined($data_filename) || !defined($annotation_filename) ||
     print STDERR "Usage: annotate_metabolomics.pl identifier_mapping.txt cleaned_mzmine.txt\n";
     print STDERR "\n";
     print STDERR "Options:\n";
-    print STDERR "    --ppm N          override default m/z PPM tolerance\n";
+    print STDERR "    --ppm N                 override default m/z PPM tolerance\n";
+    print STDERR "    --no-discard-any        do not discard any poor m/z matches at all\n";
+    print STDERR "    --no-discard-entirely   keep IDs in rows with no good m/z matches\n";
     exit(1);
 }
 
@@ -1875,6 +1890,15 @@ if (!defined($data_name_col))
     }
 }
 
+if (!defined($data_name_col))
+{
+    $data_name_col = $data_header_col_hash{'Name'};
+}
+if (!defined($data_name_col))
+{
+    $data_name_col = $data_header_col_hash{'name'};
+}
+
 
 if (!defined($data_mz_col))
 {
@@ -1907,6 +1931,7 @@ for ($i = 0; $i < @data_header_col_array; $i++)
     if ($i == $data_name_col)
     {
         printf "\t%s", 'Identity Mapped';
+        printf "\t%s", 'Conformed name';
         printf "\t%s", 'Mapping Type';
         printf "\t%s", 'FormulaMapped';
         printf "\t%s", 'KEGG';
@@ -2009,6 +2034,10 @@ while(defined($line=<DATA>))
     $has_good_mz_flag      = 0;
     $name_not_adduct_flag  = 0;
 
+    # support multiple ;-delimited names per data row
+    $name_delim = $name;
+    $name_delim = bless_delimiter_bar_metabolomics($name_delim);
+    @name_array = split /\|/, $name_delim;
 
     # scan for match(es) in annotation database
     # skip heavy labeled metabolites
@@ -2095,11 +2124,6 @@ while(defined($line=<DATA>))
         @row_mz_pos_neg_array =
             sort cmp_rows keys %candidate_row_mz_pos_neg_hash;
         
-        # support multiple ;-delimited names per data row
-        $name_delim = $name;
-        $name_delim = bless_delimiter_bar_metabolomics($name_delim);
-        @name_array = split /\|/, $name_delim;
-
         # checks in less confident order:
         #
         #   1:  conformed name,     original + pos/neg m/z
@@ -3243,8 +3267,9 @@ while(defined($line=<DATA>))
 
     # remove originally bad MZMine identifications
     $name_corrected = $name;
-    if (($has_good_mz_flag && $has_bad_mz_flag) ||
-        ($has_not_trash_mz_flag == 0 && $has_trash_mz_flag))
+    if ($discard_any_flag &&
+        (($has_good_mz_flag && $has_bad_mz_flag) ||
+         ($has_not_trash_mz_flag == 0 && $has_trash_mz_flag)))
     {
         # remove hit from original name field
         @name_array_new = ();
@@ -3263,41 +3288,55 @@ while(defined($line=<DATA>))
         if ($name_corrected eq '')
         {
             $name_corrected = '(all ids removed)';
-        }
 
-        printf STDERR "CORRECTION -- remove poor ids:\t%s\t%s --> %s\n",
-            $first_field, $name, $name_corrected;
-        
-        # convert clean | delimited text back to ; delimited
-        $name_corrected =~ s/\|/\;/g;
-        
-        # overwrite original field with new field
-        $array[$data_name_col] = $name_corrected;
-
-
-
-        # remove matches to removed identification
-        @new_matched_row_array  = ();
-        @new_matched_type_array = ();
-        $j = 0;
-        for ($i = 0; $i < $num_matches; $i++)
-        {
-            $row = $matched_row_array[$i];
-
-            # store only good matches
-            if (!defined($bad_mz_row_hash{$row}))
+            # keep original
+            if ($discard_entirely_flag == 0)
             {
-                $new_matched_row_array[$j]  = $row;
-                $new_matched_type_array[$j] = $matched_type_array[$i];
-
-                $j++;
+                $name_corrected = $name;
             }
         }
-        @matched_row_array  = @new_matched_row_array;
-        @matched_type_array = @new_matched_type_array;
-        $num_matches        = $j;
+
+        if ($name_corrected ne $name)
+        {
+            printf STDERR "CORRECTION -- remove poor ids:\t%s\t%s --> %s\n",
+                $first_field, $name, $name_corrected;
+            
+            # convert clean | delimited text back to ; delimited
+            $name_corrected =~ s/\|/\;/g;
+            
+            # overwrite original field with new field
+            $array[$data_name_col] = $name_corrected;
+
+
+            # remove matches to removed identification
+            @new_matched_row_array  = ();
+            @new_matched_type_array = ();
+            $j = 0;
+            for ($i = 0; $i < $num_matches; $i++)
+            {
+                $row = $matched_row_array[$i];
+
+                # store only good matches
+                if (!defined($bad_mz_row_hash{$row}))
+                {
+                    $new_matched_row_array[$j]  = $row;
+                    $new_matched_type_array[$j] = $matched_type_array[$i];
+
+                    $j++;
+                }
+            }
+            @matched_row_array  = @new_matched_row_array;
+            @matched_type_array = @new_matched_type_array;
+            $num_matches        = $j;
+        }
     }
-    
+
+    @name_array_conformed = @name_array;
+    for ($i = 0; $i < @name_array_conformed; $i++)
+    {
+        $name_array_conformed[$i] = conform_name($name_array_conformed[$i]);
+    }
+    $name_conformed_str = join '|', @name_array_conformed;
     
     # output new line
     # insert new annotation immediately after identity/name column
@@ -3393,6 +3432,7 @@ while(defined($line=<DATA>))
 
 
             printf "\t%s", $name_db_str;
+            printf "\t%s", $name_conformed_str;
             printf "\t%s", $match_type_str;
             printf "\t%s", $formula_str;
             printf "\t%s", $kegg_str;
