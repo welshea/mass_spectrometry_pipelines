@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
 
+# 2025-08-04:  fix potential bugs caused by missing or multiple m/z per row
+# 2025-08-04:  output Identity alternative from internal library
+# 2025-08-01:  don't include drugbank, charge, class in tie-breaking columns
 # 2025-08-01:  add --no-discard-any and --no-discard-entirely flags
 # 2025-07-29:  detect Name col in data file, output conformed name
 # 2023-06-27:  add 3C/3D match types, any m/z to alternative names
@@ -1202,6 +1205,7 @@ for ($i = 0; $i < @array; $i++)
     $annotation_header_col_hash{$field} = $i;
     # $annotation_header_col_array[$i] = $field;
 }
+@annotation_header_array = @array;
 
 # important annotation column headers
 for ($i = 0; $i < @array; $i++)
@@ -1436,6 +1440,10 @@ while(defined($line=<ANNOTATION>))
     {
         $name_orig = $array[$annotation_name_orig_col];
     }
+    if (!defined($name_orig) || !($name_orig =~ /[A-Za-z0-9]/))
+    {
+        $name_orig = $name;
+    }
 
     $kegg        = '';
     $kegg_map    = '';
@@ -1479,14 +1487,15 @@ while(defined($line=<ANNOTATION>))
         $rt  = '';
     }
     
-    if (!defined($mz))       { $mz       = ''; }
-    if (!defined($formula))  { $formula  = ''; }
-    if (!defined($name))     { $name     = ''; }
-    if (!defined($kegg))     { $kegg     = ''; }
-    if (!defined($kegg_map)) { $kegg_map = ''; }
-    if (!defined($hmdb))     { $hmdb     = ''; }
-    if (!defined($pubchem))  { $pubchem  = ''; }
-    if (!defined($pubchem))  { $rt       = ''; }
+    if (!defined($mz))        { $mz        = ''; }
+    if (!defined($formula))   { $formula   = ''; }
+    if (!defined($name))      { $name      = ''; }
+    if (!defined($name_orig)) { $name_orig = ''; }
+    if (!defined($kegg))      { $kegg      = ''; }
+    if (!defined($kegg_map))  { $kegg_map  = ''; }
+    if (!defined($hmdb))      { $hmdb      = ''; }
+    if (!defined($pubchem))   { $pubchem   = ''; }
+    if (!defined($pubchem))   { $rt        = ''; }
 
     # skip bad rows
     if (!($name =~ /\S/))    { next; }
@@ -1496,8 +1505,21 @@ while(defined($line=<ANNOTATION>))
     $count = 0;
     for ($col = 0; $col < @array; $col++)
     {
+        $header = $annotation_header_array[$col];
+    
+        # skip DrugBank
+        # since it break ties in favor of a drug isomer instead of the
+        # natural product isomer we care about
+        #
+        # skip charges
+        # skip "class" since some may not have sub-classes
         if (!defined($annotation_no_count_col_hash{$col}) &&
-            $array[$col] =~ /\S/)
+            $array[$col] =~ /\S/ &&
+            defined($header) &&
+            $header =~ /\S/ &&
+            !($header =~ /charge/i) &&
+            !($header =~ /class/i) &&
+            !($header =~ /Drug[^A-Za-z]*Bank/i))
         {
             $count++;
         }
@@ -1542,6 +1564,22 @@ while(defined($line=<ANNOTATION>))
     }
     @synonym_array = sort keys %synonym_hash;
 
+
+    # store annotation for row, whether it has a good m/z or not
+      $annotation_hash{$row}{formula}   = $formula;
+      $annotation_hash{$row}{name}      = $name;
+      $annotation_hash{$row}{name_orig} = $name_orig;
+    @{$annotation_hash{$row}{syn_arr}}  = @synonym_array;
+      $annotation_hash{$row}{kegg}      = $kegg;
+      $annotation_hash{$row}{kegg_map}  = $kegg_map;
+      $annotation_hash{$row}{hmdb}      = $hmdb;
+      $annotation_hash{$row}{pubchem}   = $pubchem;
+      $annotation_hash{$row}{rt}        = $rt;
+      $annotation_hash{$row}{mz}        = $mz;
+      $annotation_hash{$row}{col_count} = $count;
+      $annotation_hash{$row}{fsanity}   = $fsanity;
+
+
     $mz = bless_delimiter_bar_metabolomics($mz);
     @mz_array = split /\|/, $mz;
     foreach $mz (@mz_array)
@@ -1549,19 +1587,6 @@ while(defined($line=<ANNOTATION>))
         # skip bad m/z
         if (!($mz =~ /[0-9]/)) { next; }
 
-          $annotation_hash{$row}{formula}   = $formula;
-          $annotation_hash{$row}{name}      = $name;
-          $annotation_hash{$row}{name_orig} = $name_orig;
-        @{$annotation_hash{$row}{syn_arr}}  = @synonym_array;
-          $annotation_hash{$row}{kegg}      = $kegg;
-          $annotation_hash{$row}{kegg_map}  = $kegg_map;
-          $annotation_hash{$row}{hmdb}      = $hmdb;
-          $annotation_hash{$row}{pubchem}   = $pubchem;
-          $annotation_hash{$row}{rt}        = $rt;
-          $annotation_hash{$row}{mz}        = $mz;
-          $annotation_hash{$row}{col_count} = $count;
-          $annotation_hash{$row}{fsanity}   = $fsanity;
-        
         # bin m/z for rapid scanning later
         # largest m/z we see is 900
         # +/-1 is ~1000 ppm, which is *way* over our 10 ppm tolerance
@@ -1668,19 +1693,6 @@ while(defined($line=<ANNOTATION>))
             # skip bad m/z
             if (!($mz =~ /[0-9]/)) { next; }
 
-              $annotation_hash{$row}{formula}   = $formula;
-              $annotation_hash{$row}{name}      = $name;
-              $annotation_hash{$row}{name_orig} = $name_orig;
-            @{$annotation_hash{$row}{syn_arr}}  = @synonym_array;
-              $annotation_hash{$row}{kegg}      = $kegg;
-              $annotation_hash{$row}{kegg_map}  = $kegg_map;
-              $annotation_hash{$row}{hmdb}      = $hmdb;
-              $annotation_hash{$row}{pubchem}   = $pubchem;
-              $annotation_hash{$row}{rt}        = $rt;
-              $annotation_hash{$row}{mz}        = $mz;
-              $annotation_hash{$row}{col_count} = $count;
-              $annotation_hash{$row}{fsanity}   = $fsanity;
-
             if ($pos_flag == 1 && $neg_flag == 0)
             {
                 $annotation_hash{$row}{pos_neg} = 'pos';
@@ -1735,10 +1747,10 @@ while(defined($line=<ANNOTATION>))
                     $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
                 }
             }
-
-            $row++;
         }
     }
+
+    $row++;
 }
 #$row_count = $row;
 
@@ -1748,14 +1760,15 @@ while(defined($line=<ANNOTATION>))
 
 
 # bogus row for unmapped hits
-$annotation_hash{$bad_row_id}{mz}       = '';
-$annotation_hash{$bad_row_id}{formula}  = '';
-$annotation_hash{$bad_row_id}{name}     = '';
-$annotation_hash{$bad_row_id}{kegg}     = '';
-$annotation_hash{$bad_row_id}{kegg_map} = '';
-$annotation_hash{$bad_row_id}{hmdb}     = '';
-$annotation_hash{$bad_row_id}{pubchem}  = '';
-$annotation_hash{$bad_row_id}{rt}       = '';
+$annotation_hash{$bad_row_id}{mz}        = '';
+$annotation_hash{$bad_row_id}{formula}   = '';
+$annotation_hash{$bad_row_id}{name}      = '';
+$annotation_hash{$bad_row_id}{name_orig} = '';
+$annotation_hash{$bad_row_id}{kegg}      = '';
+$annotation_hash{$bad_row_id}{kegg_map}  = '';
+$annotation_hash{$bad_row_id}{hmdb}      = '';
+$annotation_hash{$bad_row_id}{pubchem}   = '';
+$annotation_hash{$bad_row_id}{rt}        = '';
 
 
 # read in data file
@@ -1931,6 +1944,7 @@ for ($i = 0; $i < @data_header_col_array; $i++)
     if ($i == $data_name_col)
     {
         printf "\t%s", 'Identity Mapped';
+        printf "\t%s", 'Identity alternative';
         printf "\t%s", 'Conformed name';
         printf "\t%s", 'Mapping Type';
         printf "\t%s", 'FormulaMapped';
@@ -2160,6 +2174,7 @@ while(defined($line=<DATA>))
                 foreach $row (@row_mz_pos_neg_array)
                 {
                     $name_db           = $annotation_hash{$row}{name};
+                    $name_db_alt       = $annotation_hash{$row}{name_orig};
                     $name_db_lc        = lc $name_db;
                     $name_db_conformed = $conformed_name_hash{$name_db};
 
@@ -2271,7 +2286,8 @@ while(defined($line=<DATA>))
                 foreach $row (@row_mz_pos_neg_array)
                 {
                     $name_db           = $annotation_hash{$row}{name_orig};
-                    if ($name_db eq '')
+                    $name_db_alt       = $annotation_hash{$row}{name_orig};
+                    if (!defined($name_db) || $name_db eq '')
                     {
                         next;
                     }
@@ -2400,6 +2416,7 @@ while(defined($line=<DATA>))
                 {
                     @synonym_array     = @{$annotation_hash{$row}{syn_arr}};
                     $name_db           = $annotation_hash{$row}{name};
+                    $name_db_alt       = $annotation_hash{$row}{name_orig};
                     $name_db_lc        = lc $name_db;
                     $name_db_conformed = $conformed_name_hash{$name_db};
                 
@@ -2525,6 +2542,7 @@ while(defined($line=<DATA>))
                     }
 
                     $name_db           = $annotation_hash{$row}{name};
+                    $name_db_alt       = $annotation_hash{$row}{name_orig};
                     $name_db_lc        = lc $name_db;
                     $name_db_conformed = $conformed_name_hash{$name_db};
                 
@@ -2662,6 +2680,7 @@ while(defined($line=<DATA>))
                     }
 
                     $name_db           = $annotation_hash{$row}{name_orig};
+                    $name_db_alt       = $annotation_hash{$row}{name_orig};
                     $name_db_lc        = lc $name_db;
                     $name_db_conformed = $conformed_name_hash{$name_db};
                 
@@ -2799,6 +2818,7 @@ while(defined($line=<DATA>))
 
                     @synonym_array     = @{$annotation_hash{$row}{syn_arr}};
                     $name_db           = $annotation_hash{$row}{name};
+                    $name_db_alt       = $annotation_hash{$row}{name_orig};
                     $name_db_lc        = lc $name_db;
                     $name_db_conformed = $conformed_name_hash{$name_db};
                 
@@ -2932,6 +2952,7 @@ while(defined($line=<DATA>))
                 foreach $row (@row_mz_pos_neg_array)
                 {
                     $name_db           = $annotation_hash{$row}{name};
+                    $name_db_alt       = $annotation_hash{$row}{name_orig};
                     $name_db_lc        = lc $name_db;
                     $name_db_conformed = $conformed_name_hash{$name_db};
 
@@ -3116,7 +3137,8 @@ while(defined($line=<DATA>))
                     
                         if ($delta <= $rt_tol)
                         {
-                            $name_db = $annotation_hash{$row}{name};
+                            $name_db     = $annotation_hash{$row}{name};
+                            $name_db_alt = $annotation_hash{$row}{name_orig};
 
                             $rt_ok_hash{$name_db} = 1;
                         }
@@ -3129,8 +3151,9 @@ while(defined($line=<DATA>))
 
                     if (is_number($rt_db))
                     {
-                        $delta   = abs($rt_db - $rt_data);
-                        $name_db = $annotation_hash{$row}{name};
+                        $delta       = abs($rt_db - $rt_data);
+                        $name_db     = $annotation_hash{$row}{name};
+                        $name_db_alt = $annotation_hash{$row}{name_orig};
                     
                         if ($delta > $rt_tol &&
                             !defined($rt_ok_hash{$name_db}))
@@ -3204,25 +3227,28 @@ while(defined($line=<DATA>))
         {
             $row     = $matched_row_array[$i];
 
-            $name_db = '';
-            $formula = '';
-            $kegg    = '';
-            $hmdb    = '';
-            $pubchem = '';
+            $name_db     = '';
+            $name_db_alt = '';
+            $formula     = '';
+            $kegg        = '';
+            $hmdb        = '';
+            $pubchem     = '';
 
             if (defined($annotation_hash{$row}))
             {
-                $name_db = $annotation_hash{$row}{name};
-                $formula = $annotation_hash{$row}{formula};
-                $kegg    = $annotation_hash{$row}{kegg};
-                $hmdb    = $annotation_hash{$row}{hmdb};
-                $pubchem = $annotation_hash{$row}{pubchem};
+                $name_db     = $annotation_hash{$row}{name};
+                $name_db_alt = $annotation_hash{$row}{name_orig};
+                $formula     = $annotation_hash{$row}{formula};
+                $kegg        = $annotation_hash{$row}{kegg};
+                $hmdb        = $annotation_hash{$row}{hmdb};
+                $pubchem     = $annotation_hash{$row}{pubchem};
 
-                if (!defined($name_db)) { $name_db    = ''; }
-                if (!defined($formula)) { $formula_db = ''; }
-                if (!defined($kegg))    { $kegg_db    = ''; }
-                if (!defined($hmdb))    { $hmdb_db    = ''; }
-                if (!defined($pubchem)) { $pubchem_db = ''; }
+                if (!defined($name_db))     { $name_db     = ''; }
+                if (!defined($name_db_alt)) { $name_db_alt = ''; }
+                if (!defined($formula))     { $formula_db  = ''; }
+                if (!defined($kegg))        { $kegg_db     = ''; }
+                if (!defined($hmdb))        { $hmdb_db     = ''; }
+                if (!defined($pubchem))     { $pubchem_db  = ''; }
             }
 
 
@@ -3356,25 +3382,27 @@ while(defined($line=<DATA>))
         # insert new annotation columns
         if ($col == $data_name_col)
         {
-            $name_db_str    = '';
-            $match_type_str = '';
-            $formula_str    = '';
-            $kegg_str       = '';
-            $hmdb_str       = '';
-            $pubchem_str    = '';
+            $name_db_str     = '';
+            $name_db_alt_str = '';
+            $match_type_str  = '';
+            $formula_str     = '';
+            $kegg_str        = '';
+            $hmdb_str        = '';
+            $pubchem_str     = '';
 
             #concatenate multiple annotation entries
             for ($i = 0; $i < @matched_row_array; $i++)
             {
                 $row = $matched_row_array[$i];
 
-                $name_db    = $annotation_hash{$row}{name};
-                $match_type = $matched_type_array[$i];
-                $formula    = $annotation_hash{$row}{formula};
-                $kegg       = $annotation_hash{$row}{kegg};
-                $hmdb       = $annotation_hash{$row}{hmdb};
-                $pubchem    = $annotation_hash{$row}{pubchem};
-                
+                $name_db     = $annotation_hash{$row}{name};
+                $name_db_alt = $annotation_hash{$row}{name_orig};
+                $match_type  = $matched_type_array[$i];
+                $formula     = $annotation_hash{$row}{formula};
+                $kegg        = $annotation_hash{$row}{kegg};
+                $hmdb        = $annotation_hash{$row}{hmdb};
+                $pubchem     = $annotation_hash{$row}{pubchem};
+
                 if (!defined($formula)) { $formula_db = ''; }
                 if (!defined($kegg))    { $kegg_db    = ''; }
                 if (!defined($hmdb))    { $hmdb_db    = ''; }
@@ -3391,29 +3419,32 @@ while(defined($line=<DATA>))
                 # any matches after the first one
                 if ($i)
                 {
-                    $name_db_str    .= '|';
-                    $match_type_str .= '|';
-                    $formula_str    .= '|';
-                    $kegg_str       .= '|';
-                    $hmdb_str       .= '|';
-                    $pubchem_str    .= '|';
+                    $name_db_str     .= '|';
+                    $name_db_alt_str .= '|';
+                    $match_type_str  .= '|';
+                    $formula_str     .= '|';
+                    $kegg_str        .= '|';
+                    $hmdb_str        .= '|';
+                    $pubchem_str     .= '|';
                 }
 
-                $name_db_str    .= $name_db;
-                $match_type_str .= $match_type;
-                $formula_str    .= $formula;
-                $kegg_str       .= $kegg;
-                $hmdb_str       .= $hmdb;
-                $pubchem_str    .= $pubchem;
+                $name_db_str     .= $name_db;
+                $name_db_alt_str .= $name_db_alt;
+                $match_type_str  .= $match_type;
+                $formula_str     .= $formula;
+                $kegg_str        .= $kegg;
+                $hmdb_str        .= $hmdb;
+                $pubchem_str     .= $pubchem;
             }
             
             # blank multiple match fields without any mappings
-            if (!($name_db_str    =~ /[^|]/)) { $name_db_str    = ''; }
-            if (!($match_type_str =~ /[^|]/)) { $match_type_str = ''; }
-            if (!($formula_str    =~ /[^|]/)) { $formula_str    = ''; }
-            if (!($kegg_str       =~ /[^|]/)) { $kegg_str       = ''; }
-            if (!($hmdb_str       =~ /[^|]/)) { $hmdb_str       = ''; }
-            if (!($pubchem_str    =~ /[^|]/)) { $pubchem_str    = ''; }
+            if (!($name_db_str     =~ /[^|]/)) { $name_db_str     = ''; }
+            if (!($name_db_alt_str =~ /[^|]/)) { $name_db_alt_str = ''; }
+            if (!($match_type_str  =~ /[^|]/)) { $match_type_str  = ''; }
+            if (!($formula_str     =~ /[^|]/)) { $formula_str     = ''; }
+            if (!($kegg_str        =~ /[^|]/)) { $kegg_str        = ''; }
+            if (!($hmdb_str        =~ /[^|]/)) { $hmdb_str        = ''; }
+            if (!($pubchem_str     =~ /[^|]/)) { $pubchem_str     = ''; }
 
 
             # no matches found for this row
@@ -3432,6 +3463,7 @@ while(defined($line=<DATA>))
 
 
             printf "\t%s", $name_db_str;
+            printf "\t%s", $name_db_alt_str;
             printf "\t%s", $name_conformed_str;
             printf "\t%s", $match_type_str;
             printf "\t%s", $formula_str;
