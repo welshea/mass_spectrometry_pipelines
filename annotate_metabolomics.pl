@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2025-08-05:  move various new output columns into --extra-fields flag
 # 2025-08-04:  fix potential bugs caused by missing or multiple m/z per row
 # 2025-08-04:  output Identity alternative from internal library
 # 2025-08-01:  don't include drugbank, charge, class in tie-breaking columns
@@ -1076,8 +1077,9 @@ sub conform_name
 
 # begin main()
 
-$discard_entirely_flag     = 1;
-$discard_any_flag          = 1;
+$opt_extra_fields_flag     = 0;
+$opt_discard_entirely_flag = 1;
+$opt_discard_any_flag      = 1;
 $syntax_error_flag         = 0;
 $num_files                 = 0;
 
@@ -1089,11 +1091,15 @@ for ($i = 0; $i < @ARGV; $i++)
     {
         if ($field eq '--no-discard-entirely')
         {
-            $discard_entirely_flag = 0;
+            $opt_discard_entirely_flag = 0;
         }
         elsif ($field eq '--no-discard-any')
         {
-            $discard_any_flag = 0;
+            $opt_discard_any_flag = 0;
+        }
+        elsif ($field eq '--extra-fields')
+        {
+            $opt_extra_fields_flag = 1;
         }
     
         # override default PPM tolerance
@@ -1157,6 +1163,7 @@ if (!defined($data_filename) || !defined($annotation_filename) ||
     print STDERR "Usage: annotate_metabolomics.pl identifier_mapping.txt cleaned_mzmine.txt\n";
     print STDERR "\n";
     print STDERR "Options:\n";
+    print STDERR "    --extra-fields          output some extra annotation fields if present\n";
     print STDERR "    --ppm N                 override default m/z PPM tolerance\n";
     print STDERR "    --no-discard-any        do not discard any poor m/z matches at all\n";
     print STDERR "    --no-discard-entirely   keep IDs in rows with no good m/z matches\n";
@@ -1283,6 +1290,11 @@ for ($i = 0; $i < @array; $i++)
            $header =~ /retention time/i)
     {
         $annotation_rt_col = $i;
+    }
+    elsif (!defined($annotation_notes_col) &&
+           $header =~ /^notes/i)
+    {
+        $annotation_notes_col = $i;
     }
 }
 
@@ -1476,6 +1488,10 @@ while(defined($line=<ANNOTATION>))
     {
         $pubchem  = $array[$annotation_pubchem_col];
     }
+    if (defined($annotation_notes_col))
+    {
+        $notes    = $array[$annotation_notes_col];
+    }
     
     # retention time sanity checks, if available
     if (defined($annotation_rt_col))
@@ -1496,6 +1512,7 @@ while(defined($line=<ANNOTATION>))
     if (!defined($hmdb))      { $hmdb      = ''; }
     if (!defined($pubchem))   { $pubchem   = ''; }
     if (!defined($pubchem))   { $rt        = ''; }
+    if (!defined($notes))     { $notes     = ''; }
 
     # skip bad rows
     if (!($name =~ /\S/))    { next; }
@@ -1517,6 +1534,8 @@ while(defined($line=<ANNOTATION>))
             $array[$col] =~ /\S/ &&
             defined($header) &&
             $header =~ /\S/ &&
+            !($header =~ /^Identity alt/i) &&
+            !($header =~ /^Notes/i) &&
             !($header =~ /charge/i) &&
             !($header =~ /class/i) &&
             !($header =~ /Drug[^A-Za-z]*Bank/i))
@@ -1578,6 +1597,7 @@ while(defined($line=<ANNOTATION>))
       $annotation_hash{$row}{mz}        = $mz;
       $annotation_hash{$row}{col_count} = $count;
       $annotation_hash{$row}{fsanity}   = $fsanity;
+      $annotation_hash{$row}{notes}     = $notes;
 
 
     $mz = bless_delimiter_bar_metabolomics($mz);
@@ -1944,13 +1964,29 @@ for ($i = 0; $i < @data_header_col_array; $i++)
     if ($i == $data_name_col)
     {
         printf "\t%s", 'Identity Mapped';
-        printf "\t%s", 'Identity alternative';
-        printf "\t%s", 'Conformed name';
+
+        if ($opt_extra_fields_flag)
+        {
+            if (defined($annotation_name_orig_col))
+            {
+                printf "\t%s", 'Identity alternative';
+            }
+            printf "\t%s", 'Conformed name';
+        }
+        
         printf "\t%s", 'Mapping Type';
         printf "\t%s", 'FormulaMapped';
         printf "\t%s", 'KEGG';
         printf "\t%s", 'HMDB';
         printf "\t%s", 'PubChem';
+
+        if ($opt_extra_fields_flag)
+        {
+            if (defined($annotation_notes_col))
+            {
+                printf "\t%s", 'NotesDB';
+            }
+        }
     }
     
     $tab_flag = 1;
@@ -3293,7 +3329,7 @@ while(defined($line=<DATA>))
 
     # remove originally bad MZMine identifications
     $name_corrected = $name;
-    if ($discard_any_flag &&
+    if ($opt_discard_any_flag &&
         (($has_good_mz_flag && $has_bad_mz_flag) ||
          ($has_not_trash_mz_flag == 0 && $has_trash_mz_flag)))
     {
@@ -3316,7 +3352,7 @@ while(defined($line=<DATA>))
             $name_corrected = '(all ids removed)';
 
             # keep original
-            if ($discard_entirely_flag == 0)
+            if ($opt_discard_entirely_flag == 0)
             {
                 $name_corrected = $name;
             }
@@ -3389,6 +3425,7 @@ while(defined($line=<DATA>))
             $kegg_str        = '';
             $hmdb_str        = '';
             $pubchem_str     = '';
+            $notes_str       = '';
 
             #concatenate multiple annotation entries
             for ($i = 0; $i < @matched_row_array; $i++)
@@ -3402,11 +3439,13 @@ while(defined($line=<DATA>))
                 $kegg        = $annotation_hash{$row}{kegg};
                 $hmdb        = $annotation_hash{$row}{hmdb};
                 $pubchem     = $annotation_hash{$row}{pubchem};
+                $notes       = $annotation_hash{$row}{notes};
 
                 if (!defined($formula)) { $formula_db = ''; }
                 if (!defined($kegg))    { $kegg_db    = ''; }
                 if (!defined($hmdb))    { $hmdb_db    = ''; }
                 if (!defined($pubchem)) { $pubchem_db = ''; }
+                if (!defined($notes))   { $notes      = ''; }
                 
                 $formula_new = conform_formula($formula);
                 if ($formula_new ne $formula)
@@ -3426,6 +3465,7 @@ while(defined($line=<DATA>))
                     $kegg_str        .= '|';
                     $hmdb_str        .= '|';
                     $pubchem_str     .= '|';
+                    $notes_str       .= '|';
                 }
 
                 $name_db_str     .= $name_db;
@@ -3435,6 +3475,7 @@ while(defined($line=<DATA>))
                 $kegg_str        .= $kegg;
                 $hmdb_str        .= $hmdb;
                 $pubchem_str     .= $pubchem;
+                $notes_str       .= $notes;
             }
             
             # blank multiple match fields without any mappings
@@ -3445,6 +3486,7 @@ while(defined($line=<DATA>))
             if (!($kegg_str        =~ /[^|]/)) { $kegg_str        = ''; }
             if (!($hmdb_str        =~ /[^|]/)) { $hmdb_str        = ''; }
             if (!($pubchem_str     =~ /[^|]/)) { $pubchem_str     = ''; }
+            if (!($notes_str       =~ /[^|]/)) { $notes_str       = ''; }
 
 
             # no matches found for this row
@@ -3463,13 +3505,29 @@ while(defined($line=<DATA>))
 
 
             printf "\t%s", $name_db_str;
-            printf "\t%s", $name_db_alt_str;
-            printf "\t%s", $name_conformed_str;
+
+            if ($opt_extra_fields_flag)
+            {
+                if (defined($annotation_name_orig_col))
+                {
+                    printf "\t%s", $name_db_alt_str;
+                }
+                printf "\t%s", $name_conformed_str;
+            }
+
             printf "\t%s", $match_type_str;
             printf "\t%s", $formula_str;
             printf "\t%s", $kegg_str;
             printf "\t%s", $hmdb_str;
             printf "\t%s", $pubchem_str;
+
+            if ($opt_extra_fields_flag)
+            {
+                if (defined($annotation_notes_col))
+                {
+                    printf "\t%s", $notes_str;
+                }
+            }
         }
         
         $tab_flag = 1;
