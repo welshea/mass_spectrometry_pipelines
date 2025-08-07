@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
 
+# 2025-08-07:  lots of changes to fix using generated HMDB adduct table
+# 2025-08-06:  suport potential matches to different mw+adduct combos
+# 2025-08-06:  more support for db rows with missing m/z
 # 2025-08-05:  move various new output columns into --extra-fields flag
 # 2025-08-04:  fix potential bugs caused by missing or multiple m/z per row
 # 2025-08-04:  output Identity alternative from internal library
@@ -94,13 +97,19 @@ use Scalar::Util qw(looks_like_number);
 use POSIX;
 use align_text;    # text string alignment module
 
+# force lines to be flushed
+# otherwise, STDOUT and STDERR can blend together on same output line...
+select(STDERR); $| = 1;
+select(STDOUT); $| = 1;
+
+
 $mz_tol_ppm   = 10;       # 10 ppm
 
 # Used to catch blatantly bad MZmine assignments.
 # Currently set high to allow through issues with my own adduct
 #  generation when matching against HMDB database.
 #
-# 36000 for cholates / cholines
+# 48000 for cholates / cholines (was previously 36000)
 # 25000 for N-Acetyl-D-Mannosamine
 #  6300 for carnintines
 #  3800 for thiamine
@@ -165,6 +174,46 @@ sub is_number
 }
 
 
+sub cmp_args_alphanumeric
+{
+    my @array_a = split /([0-9]+)/, $_[0];
+    my @array_b = split /([0-9]+)/, $_[1];
+    my $count_a = @array_a;
+    my $count_b = @array_b;
+    my $min_count;
+    my $i;
+    my $j;
+    
+    $min_count = $count_a;
+    if ($count_b < $min_count)
+    {
+        $min_count = $count_b;
+    }
+    
+    for ($i = 0; $i < $min_count; $i += 2)
+    {
+        # even fields sort alphabetically
+        if ($array_a[$i] lt $array_b[$i]) { return -1; }
+        if ($array_a[$i] gt $array_b[$i]) { return  1; }
+        
+        # odd fields sort numerically
+        $j = $i + 1;
+        if ($j < $min_count)
+        {
+            if ($array_a[$j] < $array_b[$j]) { return -1; }
+            if ($array_a[$j] > $array_b[$j]) { return  1; }
+        }
+    }
+
+    # sort shorter remaining portion first
+    if ($count_a < $count_b) { return -1; }
+    if ($count_a > $count_b) { return  1; }
+
+    # this shouldn't ever trigger
+    return $_[0] cmp $_[1];
+}
+
+
 # handle heavy elements as well
 sub cmp_elements
 {
@@ -215,17 +264,35 @@ sub cmp_rows
 {
     my $value_a;
     my $value_b;
+    my $compare;
     
+    
+    # rows with missing m/z may not have any annotation stored
     $value_a = $annotation_hash{$a}{name};
     $value_b = $annotation_hash{$b}{name};
+    if ( defined($value_a) && !defined($value_b)) { return -1; }
+    if (!defined($value_a) &&  defined($value_b)) { return  1; }
+    if (!defined($value_a) && !defined($value_b)) { return ($a <=> $b) };
+    
+    # sort alphabetically by name
     if ($value_a lt $value_b) { return -1; }
     if ($value_a gt $value_b) { return  1; }
 
+
+    # rows with missing m/z may not have any annotation stored
     $value_a = $annotation_hash{$a}{mz};
     $value_b = $annotation_hash{$b}{mz};
-    if ($value_a < $value_b) { return -1; }
-    if ($value_a > $value_b) { return  1; }
+    if ( defined($value_a) && !defined($value_b)) { return -1; }
+    if (!defined($value_a) &&  defined($value_b)) { return  1; }
+    if (!defined($value_a) && !defined($value_b)) { return ($a <=> $b) };
+
+    # sort alphanumerically by m/z
+    # adducts derived from HMDB may have multiple m/z listed
+    $compare = cmp_args_alphanumeric($value_a, $value_b);
+    if ($compare) { return $compare; }
+
     
+    # sort by original row order
     return ($a <=> $b);
 }
 
@@ -1083,6 +1150,8 @@ $opt_discard_any_flag      = 1;
 $syntax_error_flag         = 0;
 $num_files                 = 0;
 
+$mass_2p = 2.0145529331578;    # mass of 2 protons
+
 for ($i = 0; $i < @ARGV; $i++)
 {
     $field = $ARGV[$i];
@@ -1230,6 +1299,16 @@ for ($i = 0; $i < @array; $i++)
     {
         $annotation_mz_col = $i;
     }
+    elsif (!defined($annotation_mz_pos_col) &&
+        $header =~ /m\/z.*pos/i)
+    {
+        $annotation_mz_pos_col = $i;
+    }
+    elsif (!defined($annotation_mz_neg_col) &&
+        $header =~ /m\/z.*neg/i)
+    {
+        $annotation_mz_neg_col = $i;
+    }
     elsif (!defined($annotation_formula_col) &&
            $header =~ /formula/i)
     {
@@ -1305,8 +1384,14 @@ if (defined($annotation_header_col_hash{'name'}))
 }
 
 $annotation_adduct_flag   = 0;
-$annotation_mz_pos_col    = $annotation_header_col_hash{'m/z_pos'};
-$annotation_mz_neg_col    = $annotation_header_col_hash{'m/z_neg'};
+if (!defined($annotation_mz_pos_col))
+{
+    $annotation_mz_pos_col    = $annotation_header_col_hash{'m/z_pos'};
+}
+if (!defined($annotation_mz_neg_col))
+{
+    $annotation_mz_neg_col    = $annotation_header_col_hash{'m/z_neg'};
+}
 $annotation_mono_mass_col = $annotation_header_col_hash{'mono_mass'};
 $annotation_acc_col       = $annotation_header_col_hash{'accession'};
 
@@ -1594,14 +1679,52 @@ while(defined($line=<ANNOTATION>))
       $annotation_hash{$row}{hmdb}      = $hmdb;
       $annotation_hash{$row}{pubchem}   = $pubchem;
       $annotation_hash{$row}{rt}        = $rt;
-      $annotation_hash{$row}{mz}        = $mz;
       $annotation_hash{$row}{col_count} = $count;
       $annotation_hash{$row}{fsanity}   = $fsanity;
       $annotation_hash{$row}{notes}     = $notes;
 
+    
+    # determine pos/neg ionization mode
+    $pos_flag = 0;
+    $neg_flag = 0;
+    if (defined($annotation_pos_neg_col))
+    {
+        $pos_neg = $array[$annotation_pos_neg_col];
 
+        if ($pos_neg =~ /pos/i) { $pos_flag = 1; }
+        if ($pos_neg =~ /neg/i) { $neg_flag = 1; }
+    }
+
+    if ($annotation_adduct_flag)
+    {
+        $pos_flag = 0;
+        $neg_flag = 0;
+
+        if ($annotation_mz_col == $annotation_mz_pos_col)
+        {
+            $pos_flag = 1;
+        }
+        if ($annotation_mz_col == $annotation_mz_neg_col)
+        {
+            $neg_flag = 1;
+        }
+    }
+
+    $pos_neg = 'unk';
+    if ($pos_flag == 1 && $neg_flag == 0)
+    {
+        $pos_neg = 'pos';
+    }
+    if ($pos_flag == 0 && $neg_flag == 1)
+    {
+        $pos_neg = 'neg';
+    }
+
+
+    $annotation_hash{$row}{mz}{$pos_neg} = $mz;
     $mz = bless_delimiter_bar_metabolomics($mz);
     @mz_array = split /\|/, $mz;
+
     foreach $mz (@mz_array)
     {
         # skip bad m/z
@@ -1612,83 +1735,52 @@ while(defined($line=<ANNOTATION>))
         # +/-1 is ~1000 ppm, which is *way* over our 10 ppm tolerance
         # bins are too large, but are very simple to code up
         #
-        # also factor in +/- 2.014552 (pos - neg) difference
+        # also factor in +/- 2.0145529331578 (pos - neg) difference
         #
         $ppm_offset = $mz_tol_ppm * $mz / 1000000;
         $mz_floor   = floor($mz);
         $mz_minus1  = floor($mz - $ppm_offset);
         $mz_plus1   = floor($mz + $ppm_offset);
         
-        $mz_row_bins_hash{$mz_minus1}{$row} = 1;
-        $mz_row_bins_hash{$mz_floor}{$row}  = 1;
-        $mz_row_bins_hash{$mz_plus1}{$row}  = 1;
+        $mz_row_bins_hash{$mz_minus1}{$pos_neg}{$row} = 1;
+        $mz_row_bins_hash{$mz_floor}{$pos_neg}{$row}  = 1;
+        $mz_row_bins_hash{$mz_plus1}{$pos_neg}{$row}  = 1;
 
-        # determine pos/neg ionization mode
-        $pos_flag = 0;
-        $neg_flag = 0;
-        if (defined($annotation_pos_neg_col))
+        if ($annotation_adduct_flag == 0)
         {
-            $pos_neg = $array[$annotation_pos_neg_col];
+            $mz_minus3 = floor($mz - $mass_2p - $ppm_offset);
+            $mz_minus2 = floor($mz - $mass_2p + $ppm_offset);
+            $mz_plus2  = floor($mz + $mass_2p - $ppm_offset);
+            $mz_plus3  = floor($mz + $mass_2p + $ppm_offset);
 
-            if ($pos_neg =~ /pos/i) { $pos_flag = 1; }
-            if ($pos_neg =~ /neg/i) { $neg_flag = 1; }
-        }
-
-        if ($annotation_adduct_flag)
-        {
-            $pos_flag = 0;
-            $neg_flag = 0;
-
-            if ($annotation_mz_col == $annotation_mz_pos_col)
-            {
-                $pos_flag = 1;
-            }
-            if ($annotation_mz_col == $annotation_mz_neg_col)
-            {
-                $neg_flag = 1;
-            }
-        }
-        
-        if ($pos_flag == 1 && $neg_flag == 0)
-        {
-            $annotation_hash{$row}{pos_neg} = 'pos';
-        }
-        if ($pos_flag == 0 && $neg_flag == 1)
-        {
-            $annotation_hash{$row}{pos_neg} = 'neg';
-        }
-
-        if (1 || $annotation_adduct_flag == 0)
-        {
-            $mz_minus3 = floor($mz - 2.014552 - $ppm_offset);
-            $mz_minus2 = floor($mz - 2.014552 + $ppm_offset);
-            $mz_plus2  = floor($mz + 2.014552 - $ppm_offset);
-            $mz_plus3  = floor($mz + 2.014552 + $ppm_offset);
-
-            # include -2.014552 if pos
+            # include -2.0145529331578 if pos
             if ($pos_flag)
             {
-                $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-                $mz_row_bins_hash{$mz_minus2}{$row} = 1;
+                $mz_row_bins_hash{$mz_minus3}{'neg'}{$row} = 1;
+                $mz_row_bins_hash{$mz_minus2}{'neg'}{$row} = 1;
             }
-            # include +2.014552 if neg
+            # include +2.0145529331578 if neg
             if ($neg_flag)
             {
-                $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-                $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+                $mz_row_bins_hash{$mz_plus2}{'pos'}{$row}  = 1;
+                $mz_row_bins_hash{$mz_plus3}{'pos'}{$row}  = 1;
             }
 
             # if neither, include both
-            if ($pos_flag == 0 && $neg_flag == 0)
+            if (0 && $pos_flag == 0 && $neg_flag == 0)
             {
-                $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-                $mz_row_bins_hash{$mz_minus2}{$row} = 1;
-                $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-                $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
+                $mz_row_bins_hash{$mz_minus3}{'pos'}{$row} = 1;
+                $mz_row_bins_hash{$mz_minus2}{'pos'}{$row} = 1;
+                $mz_row_bins_hash{$mz_plus2}{'pos'}{$row}  = 1;
+                $mz_row_bins_hash{$mz_plus3}{'pos'}{$row}  = 1;
+
+                $mz_row_bins_hash{$mz_minus3}{'neg'}{$row} = 1;
+                $mz_row_bins_hash{$mz_minus2}{'neg'}{$row} = 1;
+                $mz_row_bins_hash{$mz_plus2}{'neg'}{$row}  = 1;
+                $mz_row_bins_hash{$mz_plus3}{'neg'}{$row}  = 1;
             }
         }
 
-        $row++;
     }
 
     # assume one of the pos/neg mz cols was already stored
@@ -1705,68 +1797,42 @@ while(defined($line=<ANNOTATION>))
             $neg_flag    = 1;
         }
         $mz = $array[$annotation_mz_neg_col];
+
+        $pos_neg = 'unk';
+        if ($pos_flag == 1 && $neg_flag == 0)
+        {
+            $pos_neg = 'pos';
+        }
+        if ($pos_flag == 0 && $neg_flag == 1)
+        {
+            $pos_neg = 'neg';
+        }
     
+        $annotation_hash{$row}{mz}{$pos_neg} = $mz;
         $mz = bless_delimiter_bar_metabolomics($mz);
         @mz_array = split /\|/, $mz;
+
         foreach $mz (@mz_array)
         {
             # skip bad m/z
             if (!($mz =~ /[0-9]/)) { next; }
 
-            if ($pos_flag == 1 && $neg_flag == 0)
-            {
-                $annotation_hash{$row}{pos_neg} = 'pos';
-            }
-            if ($pos_flag == 0 && $neg_flag == 1)
-            {
-                $annotation_hash{$row}{pos_neg} = 'neg';
-            }
             
             # bin m/z for rapid scanning later
             # largest m/z we see is 900
             # +/-1 is ~1000 ppm, which is *way* over our 10 ppm tolerance
             # bins are too large, but are very simple to code up
             #
-            # also factor in +/- 2.014552 (pos - neg) difference
+            # also factor in +/- 2.0145529331578 (pos - neg) difference
             #
             $ppm_offset = $mz_tol_ppm * $mz / 1000000;
             $mz_floor   = floor($mz);
             $mz_minus1  = floor($mz - $ppm_offset);
             $mz_plus1   = floor($mz + $ppm_offset);
             
-            $mz_row_bins_hash{$mz_minus1}{$row} = 1;
-            $mz_row_bins_hash{$mz_floor}{$row}  = 1;
-            $mz_row_bins_hash{$mz_plus1}{$row}  = 1;
-
-            if (1 || $annotation_adduct_flag == 0)
-            {
-                $mz_minus3 = floor($mz - 2.014552 - $ppm_offset);
-                $mz_minus2 = floor($mz - 2.014552 + $ppm_offset);
-                $mz_plus2  = floor($mz + 2.014552 - $ppm_offset);
-                $mz_plus3  = floor($mz + 2.014552 + $ppm_offset);
-
-                # include -2.014552 if pos
-                if ($pos_flag)
-                {
-                    $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-                    $mz_row_bins_hash{$mz_minus2}{$row} = 1;
-                }
-                # include +2.014552 if neg
-                if ($neg_flag)
-                {
-                    $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-                    $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
-                }
-
-                # if neither, include both
-                if ($pos_flag == 0 && $neg_flag == 0)
-                {
-                    $mz_row_bins_hash{$mz_minus3}{$row} = 1;
-                    $mz_row_bins_hash{$mz_minus2}{$row} = 1;
-                    $mz_row_bins_hash{$mz_plus2}{$row}  = 1;
-                    $mz_row_bins_hash{$mz_plus3}{$row}  = 1;
-                }
-            }
+            $mz_row_bins_hash{$mz_minus1}{$pos_neg}{$row} = 1;
+            $mz_row_bins_hash{$mz_floor}{$pos_neg}{$row}  = 1;
+            $mz_row_bins_hash{$mz_plus1}{$pos_neg}{$row}  = 1;
         }
     }
 
@@ -2043,7 +2109,7 @@ while(defined($line=<DATA>))
         }
     }
     
-    $pos_neg = '';
+    $pos_neg = 'unk';
     if (defined($data_pos_neg_col))
     {
         $pos_flag = 0;
@@ -2101,66 +2167,89 @@ while(defined($line=<DATA>))
         %candidate_row_mz_pos_neg_hash = ();
 
         $mz_floor = floor($mz);
-        
+
+        @row_array = ();
+        if (defined($mz_row_bins_hash{$mz_floor}) &&
+            defined($mz_row_bins_hash{$mz_floor}{$pos_neg}))
+        {
+            @row_array = sort cmp_rows keys
+                %{$mz_row_bins_hash{$mz_floor}{$pos_neg}};
+        }
+
+            
         # scan annotations for m/z within tolerance
         #
-        # also include +/- 2.014552 (pos - neg difference)
+        # also include +/- 2.0145529331578 (pos - neg difference)
         #  already pre-binned earlier during +/- 3 binning
-        @row_array = sort cmp_rows keys %{$mz_row_bins_hash{$mz_floor}};
         foreach $row (@row_array)
         {
+            # if fsanity is undefined, then m/z will be undefined as well
+            # skip checking this row for m/z matches
+            #
+            $fsanity_db = $annotation_hash{$row}{fsanity};
+            if (!defined($fsanity_db))
+            {
+                next;
+            }
+
             # sanity check the formulas
             # skip rows that have wrong numbers of non-hydrogens
             #
-            $fsanity_db = $annotation_hash{$row}{fsanity};
             if ($fsanity ne '' && $fsanity_db ne '' &&
                 $fsanity ne $fsanity_db)
             {
                 next;
             }
-        
-            $pos_neg_db = $annotation_hash{$row}{pos_neg};
-            if (!defined($pos_neg_db))
+
+            $mz_db_str = '';
+            if (defined($annotation_hash{$row}) &&
+                defined($annotation_hash{$row}{mz}) &&
+                defined($annotation_hash{$row}{mz}{$pos_neg}))
             {
-                $pos_neg_db = '';
+                $mz_db_str =
+                  bless_delimiter_bar_metabolomics($annotation_hash{$row}{mz}{$pos_neg});
             }
 
-            $mz_db  = $annotation_hash{$row}{mz};
-            $ppm    = 1000000 * abs(( $mz_db             - $mz) / $mz_db);
-
-            # check only given m/z
-            # don't check any rows for the wrong ionization mode
-            if ($ppm <= $mz_tol_ppm &&
-                !($pos_neg_db ne '' &&
-                  $pos_neg ne '' &&
-                  $pos_neg ne $pos_neg_db))
+            @mz_db_array = split /\|/, $mz_db_str;
+            foreach $mz_db (@mz_db_array)
             {
-                $candidate_row_mz_hash{$row}         = 1;
-                $candidate_row_mz_pos_neg_hash{$row} = 1;
-            }
-            
-            # also check +/- 2.014552, in case we only have one of pos/neg
-            if (1 || $annotation_adduct_flag == 0)
-            {
-                $ppm_m2 = 1000000 * abs((($mz_db - 2.014552) - $mz) /
-                                        ( $mz_db - 2.014552));
-                $ppm_p2 = 1000000 * abs((($mz_db + 2.014552) - $mz) /
-                                        ( $mz_db + 2.014552));
+                # skip bad m/z
+                if (!($mz_db =~ /[0-9]/)) { next; }
 
-                if ($ppm_m2 <= $mz_tol_ppm)
+                $ppm = 1000000 * abs(($mz_db - $mz) / $mz_db);
+
+                # check only given m/z
+                # don't check any rows for the wrong ionization mode
+                if ($ppm <= $mz_tol_ppm)
                 {
-                    if ($pos_neg ne 'pos' && $pos_neg_db ne 'neg')
-                    {
-                        $candidate_row_pos_neg_hash{$row}    = 1;
-                        $candidate_row_mz_pos_neg_hash{$row} = 1;
-                    }
+                    $candidate_row_mz_hash{$row}         = 1;
+                    $candidate_row_mz_pos_neg_hash{$row} = 1;
                 }
-                if ($ppm_p2 <= $mz_tol_ppm)
+                
+                # also check +/- 2.0145529331578,
+                # in case we only have one of pos/neg
+                if ($annotation_adduct_flag == 0)
                 {
-                    if ($pos_neg ne 'neg' && $pos_neg_db ne 'pos')
+                    $ppm_m2 = 1000000 * abs((($mz_db - $mass_2p) - $mz) /
+                                            ( $mz_db - $mass_2p));
+                    $ppm_p2 = 1000000 * abs((($mz_db + $mass_2p) - $mz) /
+                                            ( $mz_db + $mass_2p));
+
+                    if ($ppm_m2 <= $mz_tol_ppm)
                     {
-                        $candidate_row_pos_neg_hash{$row}    = 1;
-                        $candidate_row_mz_pos_neg_hash{$row} = 1;
+                        if ($pos_neg ne 'pos')
+                        {
+                            $candidate_row_pos_neg_hash{$row}    = 1;
+                            $candidate_row_mz_pos_neg_hash{$row} = 1;
+                        }
+                    }
+                    if ($ppm_p2 <= $mz_tol_ppm)
+                    {
+                        if ($pos_neg ne 'neg')
+                        {
+                            $candidate_row_pos_neg_hash{$row}    = 1;
+                            $candidate_row_mz_pos_neg_hash{$row} = 1;
+                        }
                     }
                 }
             }
@@ -2567,10 +2656,18 @@ while(defined($line=<DATA>))
                 # score each row
                 foreach $row (@row_all_array)
                 {
+                    # if fsanity is undefined, then name will be as well
+                    # skip checking this row for name matches
+                    #
+                    $fsanity_db = $annotation_hash{$row}{fsanity};
+                    if (!defined($fsanity_db))
+                    {
+                        next;
+                    }
+
                     # sanity check the formulas
                     # skip rows that have wrong numbers of non-hydrogens
                     #
-                    $fsanity_db = $annotation_hash{$row}{fsanity};
                     if ($fsanity ne '' && $fsanity_db ne '' &&
                         $fsanity ne $fsanity_db)
                     {
@@ -2668,19 +2765,64 @@ while(defined($line=<DATA>))
                             $matched_type_array[$num_matches] = $match_type;
                             $num_matches++;
 
-                            $ppm = 1000000 *
-                                   abs(($annotation_hash{$row}{mz} - $mz)
-                                        / $annotation_hash{$row}{mz});
+                            $best_ppm  = 9E99;
+                            $best_mz   = 0;
 
-                            if ($annotation_hash{$row}{mz} < 99999)
+                            $mz_db_str = '';
+                            if (defined($annotation_hash{$row}) &&
+                                defined($annotation_hash{$row}{mz}) &&
+                                defined($annotation_hash{$row}{mz}{$pos_neg}))
                             {
-                                printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
-                                    $first_field,
+                                $mz_db_str =
+                                    bless_delimiter_bar_metabolomics($annotation_hash{$row}{mz}{$pos_neg});
+                            }
+
+                            @mz_db_array = split /\|/, $mz_db_str;
+                            foreach $mz_db (@mz_db_array)
+                            {
+                                # skip bad m/z
+                                if (!($mz_db =~ /[0-9]/)) { next; }
+
+                                $ppm = 1000000 *
+                                       abs(($mz_db - $mz) / $mz_db);
+
+                                if ($mz_db < 99999)
+                                {
+                                    if ($ppm < $best_ppm)
+                                    {
+                                        $best_ppm = $ppm;
+                                        $best_mz  = $mz_db;
+                                    }
+                                }
+                            }
+                            
+                            if ($best_ppm != 9E99)
+                            {
+                                # adduct can't be predicted well for these,
+                                # so we aren't too worried if they are off
+                                #
+                                $name_test = $annotation_hash{$row}{name};
+                                $warn_str = 'WARNING';
+                                if ($name_delim =~ /carnitine/i ||
+                                    $name_delim =~ /choline/i   ||
+                                    $name_delim =~ /cholic/i    ||
+                                    $name_delim =~ /cholate/i   ||
+                                    $name_test  =~ /carnitine/i ||
+                                    $name_test  =~ /choline/i   ||
+                                    $name_test  =~ /cholic/i    ||
+                                    $name_test  =~ /cholate/i)
+                                {
+                                    $warn_str = 'CAUTION';
+                                }
+
+                                printf STDERR "%s -- mz differ:\t%s\t%f\t%f\t%.1f\t%s\t%s\n",
+                                    $warn_str,
+                                    $pos_neg,
                                     $mz,
-                                    $annotation_hash{$row}{mz},
-                                    $ppm,
+                                    $best_mz,
+                                    $best_ppm,
                                     $name_delim,
-                                    $annotation_hash{$row}{name},
+                                    $name_test;
                             }
                         }
                         $matched_row_hash{$row} = 1;
@@ -2705,10 +2847,18 @@ while(defined($line=<DATA>))
                 # score each row
                 foreach $row (@row_all_array)
                 {
+                    # if fsanity is undefined, then name will be as well
+                    # skip checking this row for name matches
+                    #
+                    $fsanity_db = $annotation_hash{$row}{fsanity};
+                    if (!defined($fsanity_db))
+                    {
+                        next;
+                    }
+
                     # sanity check the formulas
                     # skip rows that have wrong numbers of non-hydrogens
                     #
-                    $fsanity_db = $annotation_hash{$row}{fsanity};
                     if ($fsanity ne '' && $fsanity_db ne '' &&
                         $fsanity ne $fsanity_db)
                     {
@@ -2806,19 +2956,64 @@ while(defined($line=<DATA>))
                             $matched_type_array[$num_matches] = $match_type;
                             $num_matches++;
 
-                            $ppm = 1000000 *
-                                   abs(($annotation_hash{$row}{mz} - $mz)
-                                        / $annotation_hash{$row}{mz});
+                            $best_ppm  = 9E99;
+                            $best_mz   = 0;
 
-                            if ($annotation_hash{$row}{mz} < 99999)
+                            $mz_db_str = '';
+                            if (defined($annotation_hash{$row}) &&
+                                defined($annotation_hash{$row}{mz}) &&
+                                defined($annotation_hash{$row}{mz}{$pos_neg}))
                             {
-                                printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
-                                    $first_field,
+                                $mz_db_str =
+                                    bless_delimiter_bar_metabolomics($annotation_hash{$row}{mz}{$pos_neg});
+                            }
+
+                            @mz_db_array = split /\|/, $mz_db_str;
+                            foreach $mz_db (@mz_db_array)
+                            {
+                                # skip bad m/z
+                                if (!($mz_db =~ /[0-9]/)) { next; }
+
+                                $ppm = 1000000 *
+                                       abs(($mz_db - $mz) / $mz_db);
+
+                                if ($mz_db < 99999)
+                                {
+                                    if ($ppm < $best_ppm)
+                                    {
+                                        $best_ppm = $ppm;
+                                        $best_mz  = $mz_db;
+                                    }
+                                }
+                            }
+
+                            if ($best_ppm != 9E99)
+                            {
+                                # adduct can't be predicted well for these,
+                                # so we aren't too worried if they are off
+                                #
+                                $name_test = $annotation_hash{$row}{name_orig};
+                                $warn_str = 'WARNING';
+                                if ($name_delim =~ /carnitine/i ||
+                                    $name_delim =~ /choline/i   ||
+                                    $name_delim =~ /cholic/i    ||
+                                    $name_delim =~ /cholate/i   ||
+                                    $name_test  =~ /carnitine/i ||
+                                    $name_test  =~ /choline/i   ||
+                                    $name_test  =~ /cholic/i    ||
+                                    $name_test  =~ /cholate/i)
+                                {
+                                    $warn_str = 'CAUTION';
+                                }
+
+                                printf STDERR "%s -- mz differ:\t%s\t%f\t%f\t%.1f\t%s\t%s\n",
+                                    $warn_str,
+                                    $pos_neg,
                                     $mz,
-                                    $annotation_hash{$row}{mz},
-                                    $ppm,
+                                    $best_mz,
+                                    $best_ppm,
                                     $name_delim,
-                                    $annotation_hash{$row}{name_orig},
+                                    $name_test;
                             }
                         }
                         $matched_row_hash{$row} = 1;
@@ -2842,10 +3037,18 @@ while(defined($line=<DATA>))
                 # score each row
                 foreach $row (@row_all_array)
                 {
+                    # if fsanity is undefined, then name will be as well
+                    # skip checking this row for name matches
+                    #
+                    $fsanity_db = $annotation_hash{$row}{fsanity};
+                    if (!defined($fsanity_db))
+                    {
+                        next;
+                    }
+
                     # sanity check the formulas
                     # skip rows that have wrong numbers of non-hydrogens
                     #
-                    $fsanity_db = $annotation_hash{$row}{fsanity};
                     if ($fsanity ne '' && $fsanity_db ne '' &&
                         $fsanity ne $fsanity_db)
                     {
@@ -2949,19 +3152,64 @@ while(defined($line=<DATA>))
                             $matched_type_array[$num_matches] = $match_type;
                             $num_matches++;
 
-                            $ppm = 1000000 *
-                                   abs(($annotation_hash{$row}{mz} - $mz)
-                                        / $annotation_hash{$row}{mz});
+                            $best_ppm  = 9E99;
+                            $best_mz   = 0;
 
-                            if ($annotation_hash{$row}{mz} < 99999)
+                            $mz_db_str = '';
+                            if (defined($annotation_hash{$row}) &&
+                                defined($annotation_hash{$row}{mz}) &&
+                                defined($annotation_hash{$row}{mz}{$pos_neg}))
                             {
-                                printf STDERR "WARNING -- mz differ:  %s  %f  %f  %.1f  %s  %s\n",
-                                    $first_field,
+                                $mz_db_str =
+                                    bless_delimiter_bar_metabolomics($annotation_hash{$row}{mz}{$pos_neg});
+                            }
+
+                            @mz_db_array = split /\|/, $mz_db_str;
+                            foreach $mz_db (@mz_db_array)
+                            {
+                                # skip bad m/z
+                                if (!($mz_db =~ /[0-9]/)) { next; }
+
+                                $ppm = 1000000 *
+                                       abs(($mz_db - $mz) / $mz_db);
+
+                                if ($mz_db < 99999)
+                                {
+                                    if ($ppm < $best_ppm)
+                                    {
+                                        $best_ppm = $ppm;
+                                        $best_mz  = $mz_db;
+                                    }
+                                }
+                            }
+
+                            if ($best_ppm != 9E99)
+                            {
+                                # adduct can't be predicted well for these,
+                                # so we aren't too worried if they are off
+                                #
+                                $name_test = $annotation_hash{$row}{name};
+                                $warn_str = 'WARNING';
+                                if ($name_delim =~ /carnitine/i ||
+                                    $name_delim =~ /choline/i   ||
+                                    $name_delim =~ /cholic/i    ||
+                                    $name_delim =~ /cholate/i   ||
+                                    $name_test  =~ /carnitine/i ||
+                                    $name_test  =~ /choline/i   ||
+                                    $name_test  =~ /cholic/i    ||
+                                    $name_test  =~ /cholate/i)
+                                {
+                                    $warn_str = 'CAUTION';
+                                }
+
+                                printf STDERR "%s -- mz differ:\t%s\t%f\t%f\t%.1f\t%s\t%s\n",
+                                    $warn_str,
+                                    $pos_neg,
                                     $mz,
-                                    $annotation_hash{$row}{mz},
-                                    $ppm,
+                                    $best_mz,
+                                    $best_ppm,
                                     $name_delim,
-                                    $annotation_hash{$row}{name},
+                                    $name_test;
                             }
                         }
                         $matched_row_hash{$row} = 1;
@@ -3196,13 +3444,32 @@ while(defined($line=<DATA>))
                         {
                           if (defined($bad_mz_row_hash{$row}))
                           {
-                            printf STDERR "WARNING -- rt differ:\t%s\t%f\t%f\t%s\t%s\t%f\t%f\n",
-                                $first_field,
-                                $mz,
-                                $annotation_hash{$row}{mz},
-                                $name_delim,
-                                $annotation_hash{$row}{name},
-                                $rt_data, $rt_db;
+                            $mz_db_str = '';
+                            if (defined($annotation_hash{$row}) &&
+                                defined($annotation_hash{$row}{mz}) &&
+                                defined($annotation_hash{$row}{mz}{$pos_neg}))
+                            {
+                                $mz_db_str =
+                                    bless_delimiter_bar_metabolomics($annotation_hash{$row}{mz}{$pos_neg});
+                            }
+
+                            # print only the first m/z from database
+                            $mz_db_str =~ s/\|.*//g;
+                            if ($mz_db_str eq '')
+                            {
+                                $mz_db_str = '||';
+                            }
+                            
+                            if ($mz_db_str ne '||')
+                            {
+                                printf STDERR "WARNING -- rt differ:\t%s\t%f\t%s\t%s\t%s\t%f\t%f\n",
+                                    $pos_neg,
+                                    $mz,
+                                    $mz_db_str,
+                                    $name_delim,
+                                    $annotation_hash{$row}{name},
+                                    $rt_data, $rt_db;
+                            }
                           }
                         }
                     }
@@ -3225,19 +3492,41 @@ while(defined($line=<DATA>))
 
                 foreach $row (@matched_row_array)
                 {
-                    # don't calculate PPM on unmatched placeholder row
-                    if ($row != $bad_row_id)
+                    $best_ppm  = 9E99;
+
+                    $mz_db_str = '';
+                    if (defined($annotation_hash{$row}) &&
+                        defined($annotation_hash{$row}{mz}) &&
+                        defined($annotation_hash{$row}{mz}{$pos_neg}))
                     {
-                        $ppm = 1000000 *
-                               abs(($annotation_hash{$row}{mz} - $mz) /
-                                   $annotation_hash{$row}{mz});
-                    }
-                    else
-                    {
-                        $ppm = 0;
+                        $mz_db_str =
+                            bless_delimiter_bar_metabolomics($annotation_hash{$row}{mz}{$pos_neg});
                     }
 
-                    if ($ppm > $mz_trash_ppm)
+                    @mz_db_array = split /\|/, $mz_db_str;
+                    foreach $mz_db (@mz_db_array)
+                    {
+                        # skip bad m/z
+                        if (!($mz_db =~ /[0-9]/)) { next; }
+
+                        # don't calculate PPM on unmatched placeholder row
+                        if ($row != $bad_row_id)
+                        {
+                            $ppm = 1000000 *
+                                   abs(($mz_db - $mz) / $mz_db);
+                            
+                            if ($ppm < $best_ppm)
+                            {
+                                $best_ppm = $ppm;
+                            }
+                        }
+                        else
+                        {
+                            $ppm = 0;
+                        }
+                    }
+
+                    if ($best_ppm < 9E99 && $best_ppm > $mz_trash_ppm)
                     {
                         $has_trash_mz_flag = 1;
                         $trash_mz_name_hash{$name_oc} = 'trash';
