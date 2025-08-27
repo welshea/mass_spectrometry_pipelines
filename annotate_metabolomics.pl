@@ -1,6 +1,9 @@
 #!/usr/bin/perl -w
 
 
+# 2025-08-26:  only break synonym ties on score vs. primary if no KEGG/counts
+# 2025-08-22:  warn about name matches for which adducts don't exist
+# 2025-08-22:  remove choline/cholate from the CAUTION list
 # 2025-08-07:  lots of changes to fix using generated HMDB adduct table
 # 2025-08-06:  suport potential matches to different mw+adduct combos
 # 2025-08-06:  more support for db rows with missing m/z
@@ -2622,9 +2625,23 @@ while(defined($line=<DATA>))
                         $has_kegg = 2;
                     }
                     
-                    if ($has_kegg == $best_has_kegg &&
-                        $count    == $best_count &&
-                        $score    == $best_score)
+                    # break ties on kegg and informative fields first
+                    $best_tie_flag = 0;
+                    if ($best_has_kegg || $best_count)
+                    {
+                        if ($has_kegg == $best_has_kegg &&
+                            $count    == $best_count)
+                        {
+                            $best_tie_flag = 1;
+                        }
+                    }
+                    # only break ties on primary name if no kegg/informative
+                    elsif ($score == $best_score)
+                    {
+                        $best_tie_flag = 1;
+                    }
+                    
+                    if ($best_tie_flag)
                     {
                         $match_flag = 1;
                         
@@ -2804,13 +2821,7 @@ while(defined($line=<DATA>))
                                 $name_test = $annotation_hash{$row}{name};
                                 $warn_str = 'WARNING';
                                 if ($name_delim =~ /carnitine/i ||
-                                    $name_delim =~ /choline/i   ||
-                                    $name_delim =~ /cholic/i    ||
-                                    $name_delim =~ /cholate/i   ||
-                                    $name_test  =~ /carnitine/i ||
-                                    $name_test  =~ /choline/i   ||
-                                    $name_test  =~ /cholic/i    ||
-                                    $name_test  =~ /cholate/i)
+                                    $name_test  =~ /carnitine/i)
                                 {
                                     $warn_str = 'CAUTION';
                                 }
@@ -2821,6 +2832,20 @@ while(defined($line=<DATA>))
                                     $mz,
                                     $best_mz,
                                     $best_ppm,
+                                    $name_delim,
+                                    $name_test;
+                            }
+                            # no adducts found
+                            else
+                            {
+                                $name_test = $annotation_hash{$row}{name};
+
+                                printf STDERR "%s -- mz differ:\t%s\t%f\t%s\t%s\t%s\t%s\n",
+                                    'WARNING',
+                                    $pos_neg,
+                                    $mz,
+                                    'NA',
+                                    'NA',
                                     $name_delim,
                                     $name_test;
                             }
@@ -2995,13 +3020,7 @@ while(defined($line=<DATA>))
                                 $name_test = $annotation_hash{$row}{name_orig};
                                 $warn_str = 'WARNING';
                                 if ($name_delim =~ /carnitine/i ||
-                                    $name_delim =~ /choline/i   ||
-                                    $name_delim =~ /cholic/i    ||
-                                    $name_delim =~ /cholate/i   ||
-                                    $name_test  =~ /carnitine/i ||
-                                    $name_test  =~ /choline/i   ||
-                                    $name_test  =~ /cholic/i    ||
-                                    $name_test  =~ /cholate/i)
+                                    $name_test  =~ /carnitine/i)
                                 {
                                     $warn_str = 'CAUTION';
                                 }
@@ -3012,6 +3031,20 @@ while(defined($line=<DATA>))
                                     $mz,
                                     $best_mz,
                                     $best_ppm,
+                                    $name_delim,
+                                    $name_test;
+                            }
+                            # no adducts found
+                            else
+                            {
+                                $name_test = $annotation_hash{$row}{name_orig};
+
+                                printf STDERR "%s -- mz differ:\t%s\t%f\t%s\t%s\t%s\t%s\n",
+                                    'WARNING',
+                                    $pos_neg,
+                                    $mz,
+                                    'NA',
+                                    'NA',
                                     $name_delim,
                                     $name_test;
                             }
@@ -3137,10 +3170,24 @@ while(defined($line=<DATA>))
                     {
                         $has_kegg = 2;
                     }
+
+                    # break ties on kegg and informative fields first
+                    $best_tie_flag = 0;
+                    if ($best_has_kegg || $best_count)
+                    {
+                        if ($has_kegg == $best_has_kegg &&
+                            $count    == $best_count)
+                        {
+                            $best_tie_flag = 1;
+                        }
+                    }
+                    # only break ties on primary name if no kegg/informative
+                    elsif ($score == $best_score)
+                    {
+                        $best_tie_flag = 1;
+                    }
                     
-                    if ($has_kegg == $best_has_kegg &&
-                        $count    == $best_count &&
-                        $score    == $best_score)
+                    if ($best_tie_flag)
                     {
                         $match_flag = 1;
                         $bad_mz_row_hash{$row} = 1;
@@ -3191,13 +3238,7 @@ while(defined($line=<DATA>))
                                 $name_test = $annotation_hash{$row}{name};
                                 $warn_str = 'WARNING';
                                 if ($name_delim =~ /carnitine/i ||
-                                    $name_delim =~ /choline/i   ||
-                                    $name_delim =~ /cholic/i    ||
-                                    $name_delim =~ /cholate/i   ||
-                                    $name_test  =~ /carnitine/i ||
-                                    $name_test  =~ /choline/i   ||
-                                    $name_test  =~ /cholic/i    ||
-                                    $name_test  =~ /cholate/i)
+                                    $name_test  =~ /carnitine/i)
                                 {
                                     $warn_str = 'CAUTION';
                                 }
@@ -3208,6 +3249,20 @@ while(defined($line=<DATA>))
                                     $mz,
                                     $best_mz,
                                     $best_ppm,
+                                    $name_delim,
+                                    $name_test;
+                            }
+                            # no adducts found
+                            else
+                            {
+                                $name_test = $annotation_hash{$row}{name};
+
+                                printf STDERR "%s -- mz differ:\t%s\t%f\t%s\t%s\t%s\t%s\n",
+                                    'WARNING',
+                                    $pos_neg,
+                                    $mz,
+                                    'NA',
+                                    'NA',
                                     $name_delim,
                                     $name_test;
                             }
