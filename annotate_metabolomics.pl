@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2025-09-05:  also match on synonyms after exact match, due to HMDB issues
 # 2025-08-26:  only break synonym ties on score vs. primary if no KEGG/counts
 # 2025-08-22:  warn about name matches for which adducts don't exist
 # 2025-08-22:  remove choline/cholate from the CAUTION list
@@ -2285,8 +2286,9 @@ while(defined($line=<DATA>))
 
             $name_not_adduct_flag = 1;
 
-            $match_flag = 0;
-            $match_type = '9X';    # 9: unmatched
+            %match_type_hash = ();
+            $match_flag      = 0;
+            $match_type      = '9X';    # 9: unmatched
 
             $name_lc           = lc $name_oc;
             $name_lc_conformed = conform_name($name_lc);
@@ -2383,6 +2385,10 @@ while(defined($line=<DATA>))
                         $score    == $best_score)
                     {
                         $match_flag = 1;
+                        if (!defined($match_type_hash{$row}))
+                        {
+                            $match_type_hash{$row} = $match_type;
+                        }
                         
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
@@ -2499,6 +2505,10 @@ while(defined($line=<DATA>))
                         $score    == $best_score)
                     {
                         $match_flag = 1;
+                        if (!defined($match_type_hash{$row}))
+                        {
+                            $match_type_hash{$row} = $match_type;
+                        }
                         
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
@@ -2533,7 +2543,11 @@ while(defined($line=<DATA>))
             # However, we now miss Glycochenodeoxycholate
             #   HMDB0000637  Chenodeoxycholic acid glycine conjugate
             #
-            if ($match_flag == 0)
+            # HMDB sometimes has duplicate molecules,
+            # one with chirality specified, the other ambiguous,
+            # so we must also match synonyms even if we match primary name
+            #
+            if ($match_flag == 0 || $match_flag)
             {
                 %candidate_name_hash = ();
                 %temp_row_score_hash = ();
@@ -2542,6 +2556,12 @@ while(defined($line=<DATA>))
                 # score each row
                 foreach $row (@row_mz_pos_neg_array)
                 {
+                    # row already has better match, don't rematch it
+                    if (defined($match_type_hash{$row}))
+                    {
+                        next;
+                    }
+                
                     @synonym_array     = @{$annotation_hash{$row}{syn_arr}};
                     $name_db           = $annotation_hash{$row}{name};
                     $name_db_alt       = $annotation_hash{$row}{name_orig};
@@ -2644,6 +2664,10 @@ while(defined($line=<DATA>))
                     if ($best_tie_flag)
                     {
                         $match_flag = 1;
+                        if (!defined($match_type_hash{$row}))
+                        {
+                            $match_type_hash{$row} = $match_type;
+                        }
                         
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
@@ -2773,6 +2797,11 @@ while(defined($line=<DATA>))
                         $score    == $best_score)
                     {
                         $match_flag = 1;
+                        if (!defined($match_type_hash{$row}))
+                        {
+                            $match_type_hash{$row} = $match_type;
+                        }
+
                         $bad_mz_row_hash{$row} = 1;
                         
                         # store each row only once per row
@@ -2972,6 +3001,11 @@ while(defined($line=<DATA>))
                         $score    == $best_score)
                     {
                         $match_flag = 1;
+                        if (!defined($match_type_hash{$row}))
+                        {
+                            $match_type_hash{$row} = $match_type;
+                        }
+
                         $bad_mz_row_hash{$row} = 1;
                         
                         # store each row only once per row
@@ -3190,6 +3224,11 @@ while(defined($line=<DATA>))
                     if ($best_tie_flag)
                     {
                         $match_flag = 1;
+                        if (!defined($match_type_hash{$row}))
+                        {
+                            $match_type_hash{$row} = $match_type;
+                        }
+
                         $bad_mz_row_hash{$row} = 1;
                         
                         # store each row only once per row
@@ -3420,6 +3459,10 @@ while(defined($line=<DATA>))
                         $score    == $best_score)
                     {
                         $match_flag = 1;
+                        if (!defined($match_type_hash{$row}))
+                        {
+                            $match_type_hash{$row} = $match_type;
+                        }
                         
                         # store each row only once per row
                         if (!defined($matched_row_hash{$row}))
