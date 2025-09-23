@@ -10,6 +10,7 @@
 # columns.
 
 
+# 2025-09-23:  begin adding MetaboScape support
 # 2023-06-15:  more informative MatchTypes
 # 2023-06-15:  move OxClas(...(group)) stripping to less-strict matches
 # 2023-06-15:  more matches by fixing typo in less-strict matching
@@ -266,6 +267,16 @@ $data_lgroup_col  = $data_header_col_hash{'LipidGroup'};
 if ($lipidmatch_flag == 0)
 {
     $data_formula_col = $data_header_col_hash{'ParentFormula'};
+}
+
+# MetaboScape
+$metaboscape_flag = 0;
+if (!defined($data_name_col) && defined($data_header_col_hash{'Boxplot'}))
+{
+    $data_name_col    = $data_header_col_hash{'Name'};
+    $data_formula_col = $data_header_col_hash{'Molecular Formula'};
+    
+    $metaboscape_flag = 1;
 }
 
 if (!defined($data_name_col))
