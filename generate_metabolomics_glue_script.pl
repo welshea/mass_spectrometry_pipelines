@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-09-23:  begin adding MetaboScape support
 # 2025-07-08:  --no-iron now also disables pos/neg mean equalization
 # 2025-07-08:  add --prefer-height --prefer-area
 # 2025-07-07:  change merged file name to reflect --no-log2 --no-iron flags
@@ -391,6 +392,7 @@ $lipidmatch_flag = 0;
 
 # lipidomics data can have comments and blank lines at the top
 # attempt to remove them before retrieving the first line as header line
+$cmd_str = '';
 if ($single_file_mode ne 'neg')
 {
     $cmd_str = "grep -v \'^#\' \"$pos_csv_filename\" | grep \'[^ \\t]\' - | head -1 -";
@@ -409,6 +411,32 @@ if ($result_str =~ /LipidIon/ ||
     if ($result_str =~ /SeriesType_Identifier/)
     {
         $lipidmatch_flag = 1;
+    }
+}
+
+# detect Metaboscape
+$metaboscape_flag = 0;
+if ($result_str =~ /Boxplot/)
+{
+    $metaboscape_flag = 1;
+    
+    # detect metaboscape lipidomics
+    if ($lipidomics_flag == 0)
+    {
+        if ($single_file_mode ne 'neg')
+        {
+            $cmd_str = "grep -v \'^#\' \"$pos_csv_filename\" | grep \'[^ \\t]\' - | grep 'Lipid Species' -";
+        }
+        elsif ($single_file_mode ne 'pos')
+        {
+            $cmd_str = "grep -v \'^#\' \"$neg_csv_filename\" | grep \'[^ \\t]\' - | grep 'Lipid Species' -";
+        }
+        $results2_str = `$cmd_str`;
+        
+        if ($results2_str =~ /Lipid Species/)
+        {
+            $lipidomics_flag = 1;
+        }
     }
 }
 
@@ -578,17 +606,20 @@ if ($mz_tol_ppm ne '')
 $annotate_pipe_str = '';
 if ($lipidomics_flag)
 {
-    # annotate with main ion assignments
-    if (defined($ls_summary_filename))
+    if ($metaboscape_flag == 0)
     {
-        $annotate_pipe_str = sprintf " | %s - \"%s\"",
-                                 'lipidomics_assign_main_ion.pl',
-                                 $ls_summary_filename;
-    }
-    elsif ($lipidmatch_flag == 0)
-    {
-        $annotate_pipe_str = sprintf " | %s - ",
-                                 'lipidomics_assign_main_ion.pl';
+        # annotate with main ion assignments
+        if (defined($ls_summary_filename))
+        {
+            $annotate_pipe_str = sprintf " | %s - \"%s\"",
+                                     'lipidomics_assign_main_ion.pl',
+                                     $ls_summary_filename;
+        }
+        elsif ($lipidmatch_flag == 0)
+        {
+            $annotate_pipe_str = sprintf " | %s - ",
+                                     'lipidomics_assign_main_ion.pl';
+        }
     }
     
     # annotate with LipidMaps
