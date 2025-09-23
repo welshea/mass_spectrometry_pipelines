@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2025-09-23:  extend synonym matching after exact mathc to more categories
 # 2025-09-05:  also match on synonyms after exact match, due to HMDB issues
 # 2025-08-26:  only break synonym ties on score vs. primary if no KEGG/counts
 # 2025-08-22:  warn about name matches for which adducts don't exist
@@ -2380,9 +2381,10 @@ while(defined($line=<DATA>))
                         $has_kegg = 2;
                     }
                     
-                    if ($has_kegg == $best_has_kegg &&
-                        $count    == $best_count &&
-                        $score    == $best_score)
+                    # so many issues with HMDB, not safe to break ties here
+                    if (1 || ($has_kegg == $best_has_kegg &&
+                              $count    == $best_count &&
+                              $score    == $best_score))
                     {
                         $match_flag = 1;
                         if (!defined($match_type_hash{$row}))
@@ -2500,9 +2502,10 @@ while(defined($line=<DATA>))
                         $has_kegg = 2;
                     }
                     
-                    if ($has_kegg == $best_has_kegg &&
-                        $count    == $best_count &&
-                        $score    == $best_score)
+                    # so many issues with HMDB, not safe to break ties here
+                    if (1 || ($has_kegg == $best_has_kegg &&
+                              $count    == $best_count &&
+                              $score    == $best_score))
                     {
                         $match_flag = 1;
                         if (!defined($match_type_hash{$row}))
@@ -2661,7 +2664,8 @@ while(defined($line=<DATA>))
                         $best_tie_flag = 1;
                     }
                     
-                    if ($best_tie_flag)
+                    # so many issues with HMDB, not safe to break ties here
+                    if (1 || $best_tie_flag)
                     {
                         $match_flag = 1;
                         if (!defined($match_type_hash{$row}))
@@ -2792,9 +2796,10 @@ while(defined($line=<DATA>))
                         $has_kegg = 2;
                     }
                     
-                    if ($has_kegg == $best_has_kegg &&
-                        $count    == $best_count &&
-                        $score    == $best_score)
+                    # so many issues with HMDB, not safe to break ties here
+                    if (1 || ($has_kegg == $best_has_kegg &&
+                              $count    == $best_count &&
+                              $score    == $best_score))
                     {
                         $match_flag = 1;
                         if (!defined($match_type_hash{$row}))
@@ -2996,9 +3001,10 @@ while(defined($line=<DATA>))
                         $has_kegg = 2;
                     }
                     
-                    if ($has_kegg == $best_has_kegg &&
-                        $count    == $best_count &&
-                        $score    == $best_score)
+                    # so many issues with HMDB, not safe to break ties here
+                    if (1 || ($has_kegg == $best_has_kegg &&
+                              $count    == $best_count &&
+                              $score    == $best_score))
                     {
                         $match_flag = 1;
                         if (!defined($match_type_hash{$row}))
@@ -3221,7 +3227,8 @@ while(defined($line=<DATA>))
                         $best_tie_flag = 1;
                     }
                     
-                    if ($best_tie_flag)
+                    # so many issues with HMDB, not safe to break ties here
+                    if (1 || $best_tie_flag)
                     {
                         $match_flag = 1;
                         if (!defined($match_type_hash{$row}))
