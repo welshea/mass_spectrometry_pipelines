@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-09-23:  begin adding MetaboScape support
 # 2025-07-08:  print non-blank samples with highest LOWSIGNAL counts
 # 2025-07-08:  remove unimplemented --ppm flag
 # 2025-07-08:  fix quanitation typo in STDERR message
@@ -995,6 +996,7 @@ if (!defined($name_col))
 # lipidomics
 $lipidsearch_flag = 0;
 $lipidmatch_flag  = 0;
+$metaboscape_flag = 0;
 if (!defined($name_col))
 {
     $name_col = $header_col_hash{'LipidIon'};
@@ -1039,6 +1041,19 @@ if (!defined($name_col))
     if (defined($name_col))
     {
         $lipidmatch_flag = 1;
+    }
+}
+if (!defined($name_col))
+{
+    # MetaboScape
+    if (defined($header_col_hash{'Boxplot'}))
+    {
+        $name_col = $header_col_hash{'Name'};
+        
+        if (defined($name_col))
+        {
+            $metaboscape_flag = 1;
+        }
     }
 }
 
@@ -1251,6 +1266,11 @@ if ($first_abundance_col == 9E99)
 
 
 printf STDERR "First abundance col: %s\n", $first_abundance_col;
+
+if ($metaboscape_flag)
+{
+    printf STDERR "MetaboScape output detected:\tdisabling low-signal filtering\n";
+}
 
 
 @sample_col_array = sort {$a<=>$b} keys %sample_col_hash;
@@ -1696,7 +1716,11 @@ while(defined($line=<INFILE>))
         # check for bad data
         # mass spec data is generally at least in the 1000's
         # a value < 10 is almost certainly garbage
-        if (is_number($field) && $field > 0 && $field < $floor_cutoff)
+        #
+        # WARNING -- disable for MetaboScape output,
+        #            since all values appear to be relatively small
+        if (is_number($field) && $field > 0 && $field < $floor_cutoff &&
+            $metaboscape_flag == 0)
         {
             $field = '0';
         
