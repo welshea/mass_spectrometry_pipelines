@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-# 2025-10-08:  support additional spelling of Desthio-Biotin ATP
+# 2025-10-08:  support more spellings/punctuations of Desthiobiotin-ATP
 # 2025-06-24:  refactor modification abbreviation code for maintainability
 # 2025-06-24:  add DBIA (db) to known modifications list
 # 2025-02-14;  add Methyl (me) and Trimethyl (tm) sites
@@ -561,14 +561,10 @@ for ($i = 0; $i < @array; $i++)
     # If a word is >= 3 long, and the first letter of a word isn't
     #  already capitalized, capitalize it
     #
-    # 2021-07-22 Maxquant broke capitalization yet again, this time with
-    #  Desthiobiotin vs. DesthioBiotin
-    # HACK: conform DesthioBiotin to Desthiobiotin,
-    #  since DesthioBiotin is poorly capitalized anyways
-    #  they've spelled in wrong in the past too, so fix that typo as well
+    # There are too many ways to spell/typo/capitalize/punctuate Desthiobiotin,
+    #  so attempt to conform them here for better future-proofing
     #
-    $array[$i] =~ s/DesthioBiotin/Desthiobiotin/ig;
-    $array[$i] =~ s/Dethiobiotin/Desthiobiotin/ig;
+    $array[$i] =~ s/Des*thio[ -]*Biotin[ -]*ATP/Desthiobiotin-ATP/ig;
     @word_array = split /\s+/, $array[$i];
     for ($j = 0; $j < @word_array; $j++)
     {
