@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2025-10-08:  support additional spelling of Desthio-Biotin ATP
 # 2025-06-24:  refactor modification abbreviation code for maintainability
 # 2025-06-24:  add DBIA (db) to known modifications list
 # 2025-02-14;  add Methyl (me) and Trimethyl (tm) sites
@@ -20,6 +21,7 @@ use POSIX;
 #    Biotin-HPDP         (b) (bh)
 #    Lactylation         (c) (la)
 #    ATP                 (d) (de)
+#    Desthio-Biotin ATP  (d) (de)
 #    Desthiobiotin-ATP   (d) (de)
 #    Dethiobiotin-ATP    (d) (de)
 #    GlyGly (K)          (g) (gl)
@@ -30,34 +32,36 @@ use POSIX;
 #    Phospho (STY)       (p) (ph)
 #    Trimethyl (K)       (t) (tm)
 
-$prev_seen_mod_type_hash{'Acetyl (K)'}{2}        = 'ac';
-$prev_seen_mod_type_hash{'Acetyl (K)'}{1}        = 'a';
-$prev_seen_mod_type_hash{'ATP'}{2}               = 'de';
-$prev_seen_mod_type_hash{'ATP'}{1}               = 'd';
-$prev_seen_mod_type_hash{'Desthiobiotin-ATP'}{2} = 'de';
-$prev_seen_mod_type_hash{'Desthiobiotin-ATP'}{1} = 'd';
-$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}{2}  = 'de';
-$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}{1}  = 'd';
-$prev_seen_mod_type_hash{'Biotin-HPDP'}{2}       = 'bh';
-$prev_seen_mod_type_hash{'Biotin-HPDP'}{1}       = 'b';
-$prev_seen_mod_type_hash{'DBIA'}{2}              = 'db';
-$prev_seen_mod_type_hash{'DBIA'}{1}              = 'i';
-$prev_seen_mod_type_hash{'GlyGly (K)'}{2}        = 'gl';
-$prev_seen_mod_type_hash{'GlyGly (K)'}{1}        = 'g';
-$prev_seen_mod_type_hash{'Lactylation'}{2}       = 'la';
-$prev_seen_mod_type_hash{'Lactylation'}{1}       = 'c';
-$prev_seen_mod_type_hash{'Lactylation Heavy'}{2} = 'lh';
-$prev_seen_mod_type_hash{'Lactylation Heavy'}{1} = 'c';
-$prev_seen_mod_type_hash{'Oxidation (M)'}{2}     = 'ox';
-$prev_seen_mod_type_hash{'Oxidation (M)'}{1}     = 'o';
-$prev_seen_mod_type_hash{'Phospho (STY)'}{2}     = 'ph';
-$prev_seen_mod_type_hash{'Phospho (STY)'}{1}     = 'p';
-$prev_seen_mod_type_hash{'Nitro-Y'}{2}           = 'ny';
-$prev_seen_mod_type_hash{'Nitro-Y'}{1}           = 'n';
-$prev_seen_mod_type_hash{'Methyl (KR)'}{2}       = 'me';
-$prev_seen_mod_type_hash{'Methyl (KR)'}{1}       = 'm';
-$prev_seen_mod_type_hash{'Trimethyl (K)'}{2}     = 'tm';
-$prev_seen_mod_type_hash{'Trimethyl (K)'}{1}     = 't';
+$prev_seen_mod_type_hash{'Acetyl (K)'}{2}         = 'ac';
+$prev_seen_mod_type_hash{'Acetyl (K)'}{1}         = 'a';
+$prev_seen_mod_type_hash{'ATP'}{2}                = 'de';
+$prev_seen_mod_type_hash{'ATP'}{1}                = 'd';
+$prev_seen_mod_type_hash{'Desthio-Biotin ATP'}{2} = 'de';
+$prev_seen_mod_type_hash{'Desthio-Biotin ATP'}{1} = 'd';
+$prev_seen_mod_type_hash{'Desthiobiotin-ATP'}{2}  = 'de';
+$prev_seen_mod_type_hash{'Desthiobiotin-ATP'}{1}  = 'd';
+$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}{2}   = 'de';
+$prev_seen_mod_type_hash{'Dethiobiotin-ATP'}{1}   = 'd';
+$prev_seen_mod_type_hash{'Biotin-HPDP'}{2}        = 'bh';
+$prev_seen_mod_type_hash{'Biotin-HPDP'}{1}        = 'b';
+$prev_seen_mod_type_hash{'DBIA'}{2}               = 'db';
+$prev_seen_mod_type_hash{'DBIA'}{1}               = 'i';
+$prev_seen_mod_type_hash{'GlyGly (K)'}{2}         = 'gl';
+$prev_seen_mod_type_hash{'GlyGly (K)'}{1}         = 'g';
+$prev_seen_mod_type_hash{'Lactylation'}{2}        = 'la';
+$prev_seen_mod_type_hash{'Lactylation'}{1}        = 'c';
+$prev_seen_mod_type_hash{'Lactylation Heavy'}{2}  = 'lh';
+$prev_seen_mod_type_hash{'Lactylation Heavy'}{1}  = 'c';
+$prev_seen_mod_type_hash{'Oxidation (M)'}{2}      = 'ox';
+$prev_seen_mod_type_hash{'Oxidation (M)'}{1}      = 'o';
+$prev_seen_mod_type_hash{'Phospho (STY)'}{2}      = 'ph';
+$prev_seen_mod_type_hash{'Phospho (STY)'}{1}      = 'p';
+$prev_seen_mod_type_hash{'Nitro-Y'}{2}            = 'ny';
+$prev_seen_mod_type_hash{'Nitro-Y'}{1}            = 'n';
+$prev_seen_mod_type_hash{'Methyl (KR)'}{2}        = 'me';
+$prev_seen_mod_type_hash{'Methyl (KR)'}{1}        = 'm';
+$prev_seen_mod_type_hash{'Trimethyl (K)'}{2}      = 'tm';
+$prev_seen_mod_type_hash{'Trimethyl (K)'}{1}      = 't';
 
 
 # seen single letter abbreviations
