@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2025-12-08: warn the user when no reference channel arguments are provided
 # 2025-02-25: better handle combinations of auto pool, --no-iron, --no-debatch
 # 2025-02-25: BUGFIX: --output-unlog was outputting unnormalized data
 # 2024-04-11: change >& to 2>&1> to fix more shell redirection issues
@@ -805,8 +806,12 @@ sub identify_pools
     # otherwise, assume 2 pools per plex, automatically guess them
     if ($num_fixed_pools == 0 && $auto_single_variable_pool_flag == 0)
     {
-      $num_pools = 2;
+      printf STDERR "NO REFERENCE CHANNEL OPTIONS SPECIFIED -- AUTO-GUESSING 2 POOL REPS PER PLEX\n";
+      printf STDERR "THIS IS UNDOCUMENTED BACKWARDS COMPATABILTY BEHAVIOR\n";
+      printf STDERR "MAKE SURE THIS WAS INTENDED\n";
     
+      $num_pools = 2;
+
       for ($p = 0; $p < $num_plexes; $p++)
       {
         $tmt_plex = $tmt_plex_array[$p];
