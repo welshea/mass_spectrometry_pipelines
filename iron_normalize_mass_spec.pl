@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2026-01-08:  skip normalization of common RNA-Seq annotation headers
 # 2025-04-01:  detect ORIEN Avatar SL###### format sample identifiers
 # 2025-01-17:  preserve transcript* fields
 # 2024-09-12:  preserve Symbol field
@@ -56,6 +57,24 @@ use File::Basename;
 # all functions are effectively macros, since there are no local variables
 
 # we assume that there can be no more than 2 pools per plex
+
+$headers_lc_to_skip_hash{'ensembl_gene_id'} = 1;
+$headers_lc_to_skip_hash{'gencodeid'} = 1;
+$headers_lc_to_skip_hash{'gene'} = 1;
+$headers_lc_to_skip_hash{'order_in_genome'} = 1;
+$headers_lc_to_skip_hash{'kept_in_filtered_gtf'} = 1;
+$headers_lc_to_skip_hash{'exist_in_ensembl'} = 1;
+$headers_lc_to_skip_hash{'hgnc_gene_id'} = 1;
+$headers_lc_to_skip_hash{'entrez_gene_id'} = 1;
+$headers_lc_to_skip_hash{'symbol'} = 1;
+$headers_lc_to_skip_hash{'alias'} = 1;
+$headers_lc_to_skip_hash{'type'} = 1;
+$headers_lc_to_skip_hash{'type_gene'} = 1;
+$headers_lc_to_skip_hash{'location'} = 1;
+$headers_lc_to_skip_hash{'description'} = 1;
+$headers_lc_to_skip_hash{'genetype'} = 1;
+$headers_lc_to_skip_hash{'genename'} = 1;
+$headers_lc_to_skip_hash{'transcript'} = 1;
 
 
 sub is_number
@@ -433,14 +452,11 @@ sub read_in_data_file
     
         for ($i = $id_col + 1; $i < @array; $i++)
         {
-            $field = $array[$i];
+            $field    = $array[$i];
+            $field_lc = lc $field;
             
-            if ($field =~ /Symbol/i)
-            {
-                printf STDERR "Treating %s column as non-data\n", $field;
-                next;
-            }
-            if ($field =~ /^transcript/i)
+            if (defined($headers_lc_to_skip_hash{$field_lc}) ||
+                $field =~ /^Accession/i)
             {
                 printf STDERR "Treating %s column as non-data\n", $field;
                 next;
