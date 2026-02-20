@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2020-10-15  keep track of non- species of interest contaminants as well
+# 2026-02-20:  correctly handle enclosing double quotes
+# 2020-10-15:  keep track of non- species of interest contaminants as well
 
 
 # TODO --
@@ -193,7 +194,18 @@ for ($i = 0; $i < @array; $i++)
 {
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
-    $array[$i] =~ s/\"//g;
+    $array[$i] =~ s/\s+/ /g;
+
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
     
     $header_col_hash{$array[$i]} = $i;
 }
@@ -303,7 +315,18 @@ while(defined($line=<INFILE>))
     {
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
-        $array[$i] =~ s/\"//g;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
     }
 
     $sequence        = $array[$sequence_col];
