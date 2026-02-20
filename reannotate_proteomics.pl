@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
-# 2024-08-19  delimit extra annotation fields by | instead of spaces
+# 2026-02-20  correctly handle enclosing double quotes
+# 2024-08-19  delimit some annotation by | instead of spaces
 # 2024-08-19  strip --- from CRAPome fields prior to sorting
 # 2024-02-28  annotate proteogenomics with RNA identifiers
 # 2024-02-27  map more proteogenomics identifiers to extra fields
@@ -132,25 +133,6 @@ sub bless_delimiter_bar
     
     return $text;
 }
-
-
-sub bless_delimiter_bar_only
-{
-    my $text = $_[0];
-
-    #$text =~ s/\;/\|/g;
-    #$text =~ s/\/\//\|/g;
-    #$text =~ s/,/\|/g;
-    #$text =~ s/\s+/\|/g;
-    $text =~ s/\s+\|/\|/g;
-    $text =~ s/\|\s+/\|/g;
-    $text =~ s/\|+/\|/g;
-    $text =~ s/^\|//;
-    $text =~ s/\|$//;
-    
-    return $text;
-}
-
 
 sub bless_delimiter_space
 {
@@ -2486,7 +2468,6 @@ while(defined($line=<DATA>))
 
 # data header line
 $line =~ s/[\r\n]+//;
-$line =~ s/\"//g;
 @array = split /\t/, $line;
 $num_accession_cols = 0;
 @accession_col_array = ();
@@ -2494,6 +2475,18 @@ for ($i = 0; $i < @array; $i++)
 {
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
 
     $field = $array[$i];
 
@@ -2651,7 +2644,6 @@ if ($num_accession_cols == 0)
 while(defined($line=<DATA>))
 {
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
 
     @array = split /\t/, $line;
 
@@ -2660,7 +2652,19 @@ while(defined($line=<DATA>))
     {
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
-        
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
         if (!($array[$i] =~ /\S/))
         {
 #            $array[$i] = '---';
