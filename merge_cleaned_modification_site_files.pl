@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 
 
@@ -237,7 +238,6 @@ for ($f = 0; $f < $num_files; $f++)
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//g;
         
         # skip comment lines and blank lines
         if ($line =~ /^#/ || !($line =~ /\S/))
@@ -251,6 +251,18 @@ for ($f = 0; $f < $num_files; $f++)
         {
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
 
             # fix Dethiobiotin typos
             $array[$i] =~ s/Dethiobiotin/Desthiobiotin/g;
