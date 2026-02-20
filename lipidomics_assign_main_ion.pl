@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2025-07-03:  merge in Isomer from LipidSearch summary file
 # 2025-07-03:  add --no-strip flag to disable column/zero stripping
 # 2025-07-03:  only convert zeros to blanks within sample columns
@@ -590,10 +591,20 @@ while($line=<INFILE>)
 
 # header line
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//g;
 @array = split /\t/, $line;    # skip empty headers at and
 for ($i = 0; $i < @array; $i++)
 {
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
@@ -924,13 +935,23 @@ $row = 0;
 while(defined($line=<INFILE>))
 {
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
 
     @array = split /\t/, $line, -1;    # don't skip empty fields at and
 
     # clean up fields
     for ($col = 0; $col < @array; $col++)
     {
+        $array[$col] =~ s/^\s+//;
+        $array[$col] =~ s/\s+$//;
+        $array[$col] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$col] =~ /^\".*\"$/)
+        {
+                $array[$col] =~ s/^\"(.*)\"$/$1/;
+                $array[$col] =~ s/\"\"/\"/g;
+        }
+
         $array[$col] =~ s/^\s+//;
         $array[$col] =~ s/\s+$//;
         $array[$col] =~ s/\s+/ /g;
