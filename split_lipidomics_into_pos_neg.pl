@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2024-03-20:  fix csv2tsv edge cases such as ,"a b"  text,
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 # 2023-06-09:  more LipidMatch column header fixes
@@ -426,12 +427,22 @@ while($line=<INFILE>)
 # header line
 if ($delimiter_type eq 'csv') { $line = csv2tsv_not_excel($line); }
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//g;
 @array = split /\t/, $line;    # skip empty headers at and
 
 # clean up fields, detect file type
 for ($i = 0; $i < @array; $i++)
 {
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
@@ -808,13 +819,23 @@ while(defined($line=<INFILE>))
     if ($delimiter_type eq 'csv') { $line = csv2tsv_not_excel($line); }
 
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
 
     @array = split /\t/, $line, -1;    # don't skip empty fields at and
 
     # clean up fields
     for ($col = 0; $col < @array; $col++)
     {
+        $array[$col] =~ s/^\s+//;
+        $array[$col] =~ s/\s+$//;
+        $array[$col] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$col] =~ /^\".*\"$/)
+        {
+            $array[$col] =~ s/^\"(.*)\"$/$1/;
+            $array[$col] =~ s/\"\"/\"/g;
+        }
+
         $array[$col] =~ s/^\s+//;
         $array[$col] =~ s/\s+$//;
         $array[$col] =~ s/\s+/ /g;
