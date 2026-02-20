@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2024-03-20:  fix csv2tsv edge cases such as ,"a b"  text,
 # 2023-12-22:  more strict negative slope cutoff; more cutoff comments
 # 2023-12-21:  allow limited inclusion of (-) ion rows
@@ -645,11 +646,21 @@ $count_commas = @matches;
 if ($count_commas && $count_tabs == 0) { $csv_flag = 1; }
 
 if ($csv_flag) { $line = csv2tsv_not_excel($line); }
-$line =~ s/\"//g;
 
 @array = split /\t/, $line;
 for ($i = 0; $i < @array; $i++)
 {
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
@@ -943,16 +954,25 @@ while(defined($line=<INFILE>))
 {
     $line =~ s/[\r\n]+//g;
     if ($csv_flag) { $line = csv2tsv_not_excel($line); }
-    $line =~ s/\"//g;
 
     @array = split /\t/, $line, -1;
 
-    # clean up fields
-    for ($col = 0; $col < @array; $col++)
+    for ($i = 0; $i < @array; $i++)
     {
-        $array[$col] =~ s/^\s+//;
-        $array[$col] =~ s/\s+$//;
-        $array[$col] =~ s/\s+/ /g;
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
     }
     
     # store original line for later output
