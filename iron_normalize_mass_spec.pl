@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2026-01-08:  skip normalization of common RNA-Seq annotation headers
 # 2025-04-01:  detect ORIEN Avatar SL###### format sample identifiers
 # 2025-01-17:  preserve transcript* fields
@@ -182,7 +183,6 @@ sub read_in_data_file
     # read in header line
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
 
     # remove UTF-8 byte order mark, since it causes many problems
     # remove some other BOM I've observed in the wild
@@ -191,6 +191,17 @@ sub read_in_data_file
     @array = split /\t/, $line, -1;
     for ($i = 0; $i < @array; $i++)
     {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
         $array[$i] =~ s/\s+/ /g;
@@ -534,13 +545,23 @@ sub read_in_data_file
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//g;
 
         # be sure to not skip trailing blank fields
         @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
@@ -803,12 +824,22 @@ sub iron_samples
     while(defined($line=<OUTPUT_FOR_IRON>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//g;
 
         @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
