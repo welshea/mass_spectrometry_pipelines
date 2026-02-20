@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2025-09-23:  begin adding MetaboScape support
 # 2025-07-08:  print non-blank samples with highest LOWSIGNAL counts
 # 2025-07-08:  remove unimplemented --ppm flag
@@ -694,10 +695,20 @@ while($line=<INFILE>)
 
 # header line
 $line =~ s/[\r\n]+//g;
-$line =~ s/\"//g;
 @array = split /\t/, $line;    # skip empty headers at and
 for ($i = 0; $i < @array; $i++)
 {
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
@@ -1432,7 +1443,6 @@ while(defined($line=<INFILE>))
     $row_count++;
 
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
 
     @array = split /\t/, $line, -1;    # don't skip empty fields at and
 
@@ -1441,6 +1451,17 @@ while(defined($line=<INFILE>))
     # clean up fields
     for ($col = 0; $col < @array; $col++)
     {
+        $array[$col] =~ s/^\s+//;
+        $array[$col] =~ s/\s+$//;
+        $array[$col] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$col] =~ /^\".*\"$/)
+        {
+            $array[$col] =~ s/^\"(.*)\"$/$1/;
+            $array[$col] =~ s/\"\"/\"/g;
+        }
+
         $array[$col] =~ s/^\s+//;
         $array[$col] =~ s/\s+$//;
         $array[$col] =~ s/\s+/ /g;
