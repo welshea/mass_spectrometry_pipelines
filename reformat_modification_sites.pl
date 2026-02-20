@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2025-10-08:  support more spellings/punctuations of Desthiobiotin-ATP
 # 2025-06-24:  refactor modification abbreviation code for maintainability
 # 2025-06-24:  add DBIA (db) to known modifications list
@@ -541,7 +542,6 @@ while(defined($line=<INFILE>))
 
 # header line
 $line =~ s/[\r\n]+//;
-$line =~ s/\"//g;
 
 # remove UTF-8 byte order mark, since it causes many problems
 # remove some other BOM I've observed in the wild
@@ -554,8 +554,19 @@ for ($i = 0; $i < @array; $i++)
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
 
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
+
     # damn it, Maxquant keeps changing case between versions...
-    # this is *ROYALLY*screwing everything up
+    # this is *ROYALLY* screwing everything up
     #
     # I am just going to conform all the capitalization here
     # If a word is >= 3 long, and the first letter of a word isn't
@@ -944,22 +955,25 @@ while(defined($line=<INFILE>))
     }
 
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//g;
 
     @array = split /\t/, $line;
     
     for ($i = 0; $i < @array; $i++)
     {
-        # remove mis-escaped quotes
-        if ($array[$i] =~ /^\"/ && $array[$i] =~ /\"$/)
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
         {
-            $array[$i] =~ s/^\"//;
-            $array[$i] =~ s/\"$//;
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
         }
 
-    	$array[$i] =~ s/^\s+//;
-    	$array[$i] =~ s/\s+$//;
-    	$array[$i] =~ s/\s+/ /g;
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
     	
     	if (!($array[$i] =~ /\S/))
     	{
