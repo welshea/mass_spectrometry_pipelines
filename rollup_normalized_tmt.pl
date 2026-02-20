@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2023-06-27:  update is_number() to not treat NaNs as numbers
 
 
@@ -79,13 +80,23 @@ sub read_in_data_file
     # read in header line
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//;
 
     @array = split /\t/, $line;
 
     $num_samples = 0;
     for ($i = 0; $i < @array; $i++)
     {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
         $array[$i] =~ s/\s+/ /g;
@@ -153,12 +164,22 @@ sub read_in_data_file
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
 
         @array = split /\t/, $line;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
@@ -189,11 +210,21 @@ sub read_in_group_file
     # read in header line
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//;
 
     @array = split /\t/, $line;
     for ($i = 0; $i < @array; $i++)
     {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
         $array[$i] =~ s/\s+/ /g;
@@ -243,12 +274,22 @@ sub read_in_group_file
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
 
         @array = split /\t/, $line;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
@@ -284,11 +325,21 @@ sub read_in_group_summary_file
     # read in header line
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//;
 
     @array = split /\t/, $line;
     for ($i = 0; $i < @array; $i++)
     {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
         $array[$i] =~ s/\s+/ /g;
@@ -321,12 +372,22 @@ sub read_in_group_summary_file
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
 
         @array = split /\t/, $line;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
