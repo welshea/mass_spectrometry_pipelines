@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-# 2026-02-20:  deal enclosing double-quotes from edited files
+# 2026-02-20:  correctly handle enclosing double quotes
 # 2025-02-25:  sum ___# intensity count columns as well
 # 2023-07-31:  disable removal of oxidation site columns
 # 2023-06-08:  prevent split from truncating lines due to empty end fields
