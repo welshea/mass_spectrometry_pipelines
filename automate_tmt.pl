@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2026-02-20: correctly handle enclosing double quotes
 # 2025-12-08: warn the user when no reference channel arguments are provided
 # 2025-02-25: better handle combinations of auto pool, --no-iron, --no-debatch
 # 2025-02-25: BUGFIX: --output-unlog was outputting unnormalized data
@@ -228,7 +229,6 @@ sub read_in_data_file
     # read in header line
     $line = <INFILE>;
     $line =~ s/[\r\n]+//g;
-    $line =~ s/\"//;
 
     # remove UTF-8 byte order mark, since it causes many problems
     # remove some other BOM I've observed in the wild
@@ -239,6 +239,17 @@ sub read_in_data_file
 
     for ($i = 0; $i < @array; $i++)
     {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
         $array[$i] =~ s/\s+/ /g;
@@ -332,13 +343,23 @@ sub read_in_data_file
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
 
         # do NOT strip off trailing empty fields !!
         @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
@@ -424,12 +445,22 @@ sub read_in_comp_pool_exclusions_file
     while(defined($line=<INFILE>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
 
         @array = split /\t/, $line;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
@@ -1191,13 +1222,23 @@ sub iron_pools
     while(defined($line=<OUTPUT_FOR_IRON>))
     {
         $line =~ s/[\r\n]+//g;
-        $line =~ s/\"//;
 
         # do NOT strip off trailing empty fields !!
         @array = split /\t/, $line, -1;
 
         for ($i = 0; $i < @array; $i++)
         {
+            $array[$i] =~ s/^\s+//;
+            $array[$i] =~ s/\s+$//;
+            $array[$i] =~ s/\s+/ /g;
+
+            # handle enclosing quotes
+            if ($array[$i] =~ /^\".*\"$/)
+            {
+                $array[$i] =~ s/^\"(.*)\"$/$1/;
+                $array[$i] =~ s/\"\"/\"/g;
+            }
+
             $array[$i] =~ s/^\s+//;
             $array[$i] =~ s/\s+$//;
             $array[$i] =~ s/\s+/ /g;
@@ -1556,13 +1597,23 @@ sub iron_samples
         while(defined($line=<OUTPUT_FOR_IRON>))
         {
             $line =~ s/[\r\n]+//g;
-            $line =~ s/\"//;
 
             # do NOT strip off trailing empty fields !!
             @array = split /\t/, $line, -1;
 
             for ($i = 0; $i < @array; $i++)
             {
+                $array[$i] =~ s/^\s+//;
+                $array[$i] =~ s/\s+$//;
+                $array[$i] =~ s/\s+/ /g;
+
+                # handle enclosing quotes
+                if ($array[$i] =~ /^\".*\"$/)
+                {
+                    $array[$i] =~ s/^\"(.*)\"$/$1/;
+                    $array[$i] =~ s/\"\"/\"/g;
+                }
+
                 $array[$i] =~ s/^\s+//;
                 $array[$i] =~ s/\s+$//;
                 $array[$i] =~ s/\s+/ /g;
