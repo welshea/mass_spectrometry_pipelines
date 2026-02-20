@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-02-20:  deal enclosing double-quotes from edited files
 # 2025-02-25:  sum ___# intensity count columns as well
 # 2023-07-31:  disable removal of oxidation site columns
 # 2023-06-08:  prevent split from truncating lines due to empty end fields
@@ -31,7 +32,17 @@ for ($i = 0; $i < @array; $i++)
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
     $array[$i] =~ s/\s+/ /g;
+    
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
 
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
 
     # damn it, Maxquant keeps changing case between versions...
     # this is *ROYALLY*screwing everything up
@@ -451,6 +462,25 @@ while(defined($line=<INFILE>))
 
     @array = split /\t/, $line, -1;
 
+    for ($i = 0; $i < @array; $i++)
+    {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+    
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+    }
+
+
     $print_flag = 0;
 
     for ($col = 0; $col < @array; $col++)
@@ -461,9 +491,6 @@ while(defined($line=<INFILE>))
         }
 
         $field = $array[$col];
-        $field =~ s/^\s+//;
-        $field =~ s/\s+$//;
-        $field =~ s/\s+/ /g;
         
         # clean accession junk
         $header = $header_col_array[$col];
