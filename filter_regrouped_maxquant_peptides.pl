@@ -115,7 +115,18 @@ for ($i = 0; $i < @array; $i++)
 {
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
-    $array[$i] =~ s/\"//g;
+    $array[$i] =~ s/\s+/ /g;
+
+    # handle enclosing quotes
+    if ($array[$i] =~ /^\".*\"$/)
+    {
+        $array[$i] =~ s/^\"(.*)\"$/$1/;
+        $array[$i] =~ s/\"\"/\"/g;
+    }
+
+    $array[$i] =~ s/^\s+//;
+    $array[$i] =~ s/\s+$//;
+    $array[$i] =~ s/\s+/ /g;
     
     $summary_header_col_hash{$array[$i]} = $i;
 }
@@ -139,7 +150,18 @@ while(defined($line=<SUMMARY>))
     {
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
-        $array[$i] =~ s/\"//g;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
     }
 
     $group = $array[$summary_group_col];
@@ -158,7 +180,24 @@ for ($i = 0; $i < @array; $i++)
 {
     $array[$i] =~ s/^\s+//;
     $array[$i] =~ s/\s+$//;
-    $array[$i] =~ s/\"//g;
+
+    for ($i = 0; $i < @array; $i++)
+    {
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
+    }
     
     $header_col_hash{$array[$i]} = $i;
 }
@@ -204,7 +243,18 @@ while(defined($line=<PEPTIDES>))
     {
         $array[$i] =~ s/^\s+//;
         $array[$i] =~ s/\s+$//;
-        $array[$i] =~ s/\"//g;
+        $array[$i] =~ s/\s+/ /g;
+
+        # handle enclosing quotes
+        if ($array[$i] =~ /^\".*\"$/)
+        {
+            $array[$i] =~ s/^\"(.*)\"$/$1/;
+            $array[$i] =~ s/\"\"/\"/g;
+        }
+
+        $array[$i] =~ s/^\s+//;
+        $array[$i] =~ s/\s+$//;
+        $array[$i] =~ s/\s+/ /g;
     }
     $line_new = join "\t", @array;
 
