@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2026-03-02:  handle sample naming issues with forced reference channel
 # 2026-02-20:  correctly handle enclosing double quotes
 # 2026-01-08:  skip normalization of common RNA-Seq annotation headers
 # 2025-04-01:  detect ORIEN Avatar SL###### format sample identifiers
@@ -624,6 +625,10 @@ sub store_condensed_data
 $log2 = log(2.0);
 sub iron_samples
 {
+    my %local_sample_hash  = ();
+    my @local_header_array = ();
+    my $temp_median_sample;
+
     # open IRON input file for writing
     open INPUT_FOR_IRON, ">$iron_input_name" or die "ABORT -- can't open $iron_input_name\n";
 
@@ -652,6 +657,9 @@ sub iron_samples
         $sample =~ s/^Abundances \(Grouped\):\s*//i;
         
         printf INPUT_FOR_IRON "\t%s", $sample;
+        
+        $local_sample_hash{$sample} = $i;
+        $local_header_array[$i]     = $sample;
     }
     printf INPUT_FOR_IRON "\n";
 
@@ -713,6 +721,47 @@ sub iron_samples
             $findmedian_output_name;
         $median_sample = `$cmd_string`;
         $median_sample =~ s/[\r\n]+//;
+    }
+    
+    # forced median sample not found in sample names
+    if (!defined($local_sample_hash{$median_sample}))
+    {
+        # match at end of sample
+        $temp_median_sample = $median_sample;
+        for ($i = 0; $i < @local_header_array; $i++)
+        {
+            if ($local_header_array[$i] =~ /\Q$temp_median_sample\E$/)
+            {
+                $median_sample = $local_header_array[$i];
+                last;
+            }
+        }
+    }
+    if (!defined($local_sample_hash{$median_sample}))
+    {
+        # match at beginning of sample
+        $temp_median_sample = $median_sample;
+        for ($i = 0; $i < @local_header_array; $i++)
+        {
+            if ($local_header_array[$i] =~ /^\Q$temp_median_sample\E/)
+            {
+                $median_sample = $local_header_array[$i];
+                last;
+            }
+        }
+    }
+    if (!defined($local_sample_hash{$median_sample}))
+    {
+        # match anywhere in sample
+        $temp_median_sample = $median_sample;
+        for ($i = 0; $i < @local_header_array; $i++)
+        {
+            if ($local_header_array[$i] =~ /\Q$temp_median_sample\E/)
+            {
+                $median_sample = $local_header_array[$i];
+                last;
+            }
+        }
     }
     
     # re-run to save findmedian results
