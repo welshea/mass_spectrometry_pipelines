@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-03-02:  bugfix: --boost and --last-ch no longer trigger usage statement
 # 2025-05-22:  allow debatching with --iron-auto-ch --comp-pool
 # 2023-08-29:  document new flags
 # 2023-08-29:  add --comp-pool-exclusions-first --comp-pool-exclusions-last
@@ -67,7 +68,7 @@ for ($i = 0; $i < @ARGV; $i++)
             $first_flag = 0;
         }
 
-        if ($field =~ /^--first-ch$/)
+        elsif ($field =~ /^--first-ch$/)
         {
             $first_flag = 1;
             $boost_flag = 0;
