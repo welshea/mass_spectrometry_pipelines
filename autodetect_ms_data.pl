@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2026-03-02: bugfix: --boost and --last-ch no longer trigger usage statement
 # 2023-11-13: support TMT-2
 # 2023-11-13: support iTRAQ-4 and iTRAQ-8
 # 2023-08-23: add Ensembl accessions detection
@@ -141,7 +142,7 @@ for ($i = 0; $i < @ARGV; $i++)
             $boost_flag = 1;
             $first_flag = 0;
         }
-        if ($field =~ /^--first-ch$/)
+        elsif ($field =~ /^--first-ch$/)
         {
             $first_flag = 1;
             $boost_flag = 0;
