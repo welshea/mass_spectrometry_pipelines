@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-03-02  restore accidentally deleted bless_delimiter_bar_only() function
 # 2026-02-20  correctly handle enclosing double quotes
 # 2024-08-19  delimit some annotation by | instead of spaces
 # 2024-08-19  strip --- from CRAPome fields prior to sorting
@@ -127,6 +128,23 @@ sub bless_delimiter_bar
     $text =~ s/\/\//\|/g;
     $text =~ s/,/\|/g;
     $text =~ s/\s+/\|/g;
+    $text =~ s/\|+/\|/g;
+    $text =~ s/^\|//;
+    $text =~ s/\|$//;
+    
+    return $text;
+}
+
+sub bless_delimiter_bar_only
+{
+    my $text = $_[0];
+
+    #$text =~ s/\;/\|/g;
+    #$text =~ s/\/\//\|/g;
+    #$text =~ s/,/\|/g;
+    #$text =~ s/\s+/\|/g;
+    $text =~ s/\s+\|/\|/g;
+    $text =~ s/\|\s+/\|/g;
     $text =~ s/\|+/\|/g;
     $text =~ s/^\|//;
     $text =~ s/\|$//;
