@@ -1099,7 +1099,7 @@ open MAPPING_FILE,  ">$mapping_filename"  or die "ABORT -- cannot open $mapping_
 @name_new_array = sort { cmp_args_alphanumeric($a, $b) }
                   keys %mapping_hash;
 
-printf MAPPING_FILE "%s\t%s\n", 'NameOriginal', 'NameIsoCorrectoR';
+printf MAPPING_FILE "%s\t%s\n", 'row ID', 'NameIsoCorrectoR';
 foreach $name_new (@name_new_array)
 {
     $row_id = $mapping_hash{$name_new};
