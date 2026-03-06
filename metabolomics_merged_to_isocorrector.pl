@@ -937,10 +937,19 @@ while(defined($line=<DATA>))
         $bad_label = $array[$data_bad_label_col];
     }
     
-    if ($bad_label =~ /b/i)
-    {
-        next;
-    }
+    # Leave bad peaks in for now.
+    # Most (~90%) of them are noise-level low-abundance peaks.
+    # The rest appear to be messy peaks that smear into each other.
+    # Either way, I think having the less-exactly-quantified abundances
+    # should help the isotopolog abundance corrections more than
+    # leaving them out.  IsoCorrectoR can handle missing data,
+    # but my gut feeling is that noisy labeled peaks are still better than
+    # entirely missing labeled peaks.
+    #
+    #if ($bad_label =~ /b/i)
+    #{
+    #    next;
+    #}
     
     
     # retention time sanity checks, if available
