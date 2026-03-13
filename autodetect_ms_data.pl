@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2026-03-13: single-plex TMT pY defaults to auto ref channel instead of last
 # 2026-03-02: bugfix: --boost and --last-ch no longer trigger usage statement
 # 2023-11-13: support TMT-2
 # 2023-11-13: support iTRAQ-4 and iTRAQ-8
@@ -609,17 +610,27 @@ if ($tmt_flag)
 {
     $tmt_channel = 'auto';
 }
+
 # default to last-ch for cross-plex normalization
 if ($tmt_flag && $multi_plex_flag)
 {
     $tmt_channel = 'TMT-' .
                    $channel_map_table[$max_channel+1][$max_channel]
 }
+
 # pY should always have the boosting channel last
-if ($tmt_flag && ($boost_flag || $py_flag))
+if ($tmt_flag && $multi_plex_flag && ($boost_flag || $py_flag))
 {
     $tmt_channel = 'TMT-' . $channel_map_table[$max_channel+1][$max_channel]
 }
+
+# use last channel if requested
+if ($tmt_flag && $boost_flag)
+{
+    $tmt_channel = 'TMT-' .
+                   $channel_map_table[$max_channel+1][0]
+}
+
 # use first channel if requested
 # override pY, --boost or --last-ch
 if ($tmt_flag && $first_flag)
@@ -627,6 +638,7 @@ if ($tmt_flag && $first_flag)
     $tmt_channel = 'TMT-' .
                    $channel_map_table[$max_channel+1][0]
 }
+
 if ($tmt_flag && $injection_plex_flag)
 {
     $tmt_channel = 'auto';
