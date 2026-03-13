@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-03-13:  output to _no-iron_log2_intensity.txt when --no-iron flag used
 # 2026-03-02:  bugfix: --boost and --last-ch no longer trigger usage statement
 # 2025-05-22:  allow debatching with --iron-auto-ch --comp-pool
 # 2023-08-29:  document new flags
@@ -527,12 +528,19 @@ if ($iron_ref_sample ne '')
 }
 
 
+$output_postfix = '_iron_log2_intensity.txt';
+if ($no_iron_flag)
+{
+    $output_postfix = '_no-iron_log2_intensity.txt';
+}
+
+
 $pipeline_norm_str = sprintf "%s %s \"%s%s\" \"%s\" \\\n  > \"%s%s\"",
     'iron_normalize_mass_spec.pl',
     $options_str,
     $output_root_name, '_orig_intensity.txt',
     $temp_ref_sample,
-    $output_root_name, '_iron_log2_intensity.txt';
+    $output_root_name, $output_postfix;
 
 
 
@@ -598,7 +606,7 @@ if (defined($autodetect_hash{TMT}) &&
             $options_str,
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
-            $output_root_name, '_iron_log2_intensity.txt';
+            $output_root_name, $output_postfix;
     }
     # multiple plexes, 100% injection replicates
     elsif ($autodetect_hash{TMT} eq 'injection' &&
@@ -611,7 +619,7 @@ if (defined($autodetect_hash{TMT}) &&
             $options_str,
             $output_root_name, '_orig_intensity.txt',
             $autodetect_hash{TMT_Channel},
-            $output_root_name, '_iron_log2_intensity.txt';
+            $output_root_name, $output_postfix;
 
         # remove 2nd, redundant, --comp-pool flag
         if ($comp_pool_flag)
