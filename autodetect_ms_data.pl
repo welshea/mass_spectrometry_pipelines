@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2026-03-17: detect Run#-# samples as injection replicates
 # 2026-03-13: single-plex TMT pY defaults to auto ref channel instead of last
 # 2026-03-02: bugfix: --boost and --last-ch no longer trigger usage statement
 # 2023-11-13: support TMT-2
@@ -353,7 +354,7 @@ if ($multi_plex_flag)
     
     foreach $plex (@plex_array)
     {
-        $plex =~ s/[-_. ]*run[-_. ]*[0-9]+$//i;
+        $plex =~ s/[-_. ]*run[-_. ]*[0-9]+([-_. ][0-9]+)*$//i;
         $temp_hash{$plex} = 1;
     }
     
