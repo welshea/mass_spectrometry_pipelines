@@ -214,6 +214,32 @@ csv2tab_not_excel.pl
 
 
 
+extract_uniprot_annotation.pl
+
+  Usage: extract_uniprot_annotation.pl [options] UP#_#.dat
+
+    Map as many UniProt accessions/isoforms to their parent SwissProt accession
+    as possible, classify them as SwissProt/Canonical/Non-canonical/Deprecated,
+    and annotate them with metadata we are interested in.
+
+    Isoform extracellular/helix metadata is cloned from the canonical isoform
+    and is not isoform-specific.  Sub-cellular locations are merged from all
+    isoforms combined.
+
+  Options:
+    --best-per-symbol     keep only most-annotated SwissProt per gene symbol
+
+  DAT file download location:
+    http://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/
+      reference_proteomes/Eukaryota/
+
+        Human: UP000005640/UP000005640_9606.dat.gz
+        Mouse: UP000000589/UP000000589_10090.dat.gz
+
+    see download site ../reference_proteomes/README for UP# species table
+
+
+
 filter_rows_by_missing_batches.pl
 
   Filter input prior to COMBAT de-batching so that COMBAT will not crash.
