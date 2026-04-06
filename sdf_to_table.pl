@@ -98,8 +98,8 @@ while(defined($line=<INFILE>))
     # NOTE -- most entries start with a line containing the identifier
     #         but some have missing or duplicate identifiers,
     #         so have to use the row we started on as the identifier
-    # 
-    if ($key_rank == 0 && $c =~ /\S/)
+    #
+    if ($key_rank == 0 && ($c =~ /\S/ || $line =~ /\S/))
     {
         $entry_row = $row;
         $seen_entry_row_hash{$entry_row} = 1;
@@ -114,8 +114,17 @@ while(defined($line=<INFILE>))
         {
             $key = $1;
             
-            while(defined($line=<INFILE>) && $line =~ /\S/)
+            while(defined($line=<INFILE>))
             {
+                # stop reading on fist blank line
+                if (!($line =~ /\S/))
+                {
+                    # increment row counter for error message book keeping
+                    $row++;
+
+                    last;
+                }
+            
                 $line      =~ s/[\r\n]+//g;
                 $line_orig = $line;
             
@@ -164,6 +173,9 @@ while(defined($line=<INFILE>))
 
                 $key_rank_hash{$key}  += $key_rank;
                 $key_count_hash{$key} += 1;
+                
+                # increment row counter for error message book keeping
+                $row++;
             }
             
             $key_rank++;
