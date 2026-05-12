@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-05-12:  prevent head NULL file error message in single ion mode
 # 2025-09-23:  begin adding MetaboScape support
 # 2025-07-08:  --no-iron now also disables pos/neg mean equalization
 # 2025-07-08:  add --prefer-height --prefer-area
@@ -443,10 +444,18 @@ if ($result_str =~ /Boxplot/)
 
 # detect if samples may contain blanks or not
 $blank_flag     = 0;
-$cmd_str_neg    = "head -1 \"$neg_csv_filename\" | transpose | grep -v AboveBlankBG | transpose";
-$result_str_neg = `$cmd_str_neg`;
-$cmd_str_pos    = "head -1 \"$pos_csv_filename\" | transpose | grep -v AboveBlankBG | transpose";
-$result_str_pos = `$cmd_str_pos`;
+$result_str_neg = '';
+$result_str_pos = '';
+if ($single_file_mode ne 'pos')
+{
+    $cmd_str_neg    = "head -1 \"$neg_csv_filename\" | transpose | grep -v AboveBlankBG | transpose";
+    $result_str_neg = `$cmd_str_neg`;
+}
+if ($single_file_mode ne 'neg')
+{
+    $cmd_str_pos    = "head -1 \"$pos_csv_filename\" | transpose | grep -v AboveBlankBG | transpose";
+    $result_str_pos = `$cmd_str_pos`;
+}
 if ($result_str_neg =~ /Blank(\b|[A-Z_])/    ||
     $result_str_neg =~ /(\b|_)blank(\b|_)/i)
 {
