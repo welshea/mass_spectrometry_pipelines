@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-05-20  preserve Angstrom symbols when stripping unicode newlines
 # 2025-03-25  speed up quote/space stripping
 # 2025-03-22  slower, but more correct, malformed fields quote/space stripping
 # 2025-03-21  bugfix --escape-dq
@@ -293,13 +294,19 @@ use File::Basename;
     
     # replace embedded tabs with placeholder string, to deal with better later
     $line =~ s/\t/$tab/g;
+
     
     # HACK -- handle internal \r and \n the same way we handle tabs
     if ($opt_eol == 0)
     {
         # \v is vertical spacing, includes \r\n and other unicode:
         #   [\n\cK\f\r\x85\x{2028}\x{2029}]
-        $line =~ s/[\v]+(?!$)/$tab/g;
+
+        #$line =~ s/[\v]+(?!$)/$tab/g;
+        #$line =~ s/[\n\cK\f\r\x85\x{2028}\x{2029}]+(?!$)/$tab/g;
+        
+        # \x85 destroys Angstrom symbols
+        $line =~ s/[\n\cK\f\r\x{2028}\x{2029}]+(?!$)/$tab/g;
     }
     # escape embedded EOL
     else
@@ -310,8 +317,15 @@ use File::Basename;
         # replace remaining EOL-like characters as per usual
         # \v is vertical spacing, includes \r\n and other unicode:
         #   [\n\cK\f\r\x85\x{2028}\x{2029}]
-        $line =~ s/[\v]+(?!$)/$tab/g;
+
+        #$line =~ s/[\v]+(?!$)/$tab/g;
+        #$line =~ s/[\n\cK\f\r\x85\x{2028}\x{2029}]+(?!$)/$tab/g;
+        
+        # \x85 destroys Angstrom symbols
+        $line =~ s/[\n\cK\f\r\x{2028}\x{2029}]+(?!$)/$tab/g;
     }
+
+
     
     # further escape ""
     $line =~ s/\"\"/$dq/g;
@@ -343,6 +357,7 @@ use File::Basename;
     @temp_array     = ();
     $i_last_quotes  = @temp_array + 1;
     $i_first_quotes = -1;
+
     
     if ($line =~ /\"/)
     {
