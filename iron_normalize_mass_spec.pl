@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2026-05-29:  added more RNA-Seq header columns to leave unnormalized
 # 2026-03-02:  handle sample naming issues with forced reference channel
 # 2026-02-20:  correctly handle enclosing double quotes
 # 2026-01-08:  skip normalization of common RNA-Seq annotation headers
@@ -77,6 +78,9 @@ $headers_lc_to_skip_hash{'description'} = 1;
 $headers_lc_to_skip_hash{'genetype'} = 1;
 $headers_lc_to_skip_hash{'genename'} = 1;
 $headers_lc_to_skip_hash{'transcript'} = 1;
+$headers_lc_to_skip_hash{'ensembl_gene'} = 1;
+$headers_lc_to_skip_hash{'hgnc_symbol'} = 1;
+$headers_lc_to_skip_hash{'CountOrigNotImputed'} = 1;
 
 
 sub is_number
