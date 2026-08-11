@@ -3,6 +3,8 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2026-08-11:  sort scaling factors alphanumerically instead of ASCII order
+# 2026-08-11:  add Preliminary Spectronaut support
 # 2026-05-29:  added more RNA-Seq header columns to leave unnormalized
 # 2026-03-02:  handle sample naming issues with forced reference channel
 # 2026-02-20:  correctly handle enclosing double quotes
@@ -131,6 +133,47 @@ sub is_number
 }
 
 
+# sort numeric parts as numbers, not strings
+sub cmp_args_alphanumeric
+{
+    my @array_a = split /([0-9]+)/, $_[0];
+    my @array_b = split /([0-9]+)/, $_[1];
+    my $count_a = @array_a;
+    my $count_b = @array_b;
+    my $min_count;
+    my $i;
+    my $j;
+    
+    $min_count = $count_a;
+    if ($count_b < $min_count)
+    {
+        $min_count = $count_b;
+    }
+    
+    for ($i = 0; $i < $min_count; $i += 2)
+    {
+        # even fields sort alphabetically
+        if ($array_a[$i] lt $array_b[$i]) { return -1; }
+        if ($array_a[$i] gt $array_b[$i]) { return  1; }
+        
+        # odd fields sort numerically
+        $j = $i + 1;
+        if ($j < $min_count)
+        {
+            if ($array_a[$j] < $array_b[$j]) { return -1; }
+            if ($array_a[$j] > $array_b[$j]) { return  1; }
+        }
+    }
+
+    # sort shorter remaining portion first
+    if ($count_a < $count_b) { return -1; }
+    if ($count_a > $count_b) { return  1; }
+
+    # this shouldn't ever trigger
+    return $_[0] cmp $_[1];
+}
+
+
 sub cmp_scale_lines
 {
     my $str_a = '';
@@ -176,7 +219,7 @@ sub cmp_scale_lines
         }
     }
     
-    return $str_a cmp $str_b;
+    return cmp_args_alphanumeric($str_a, $str_b);
 }
 
 
@@ -237,6 +280,33 @@ sub read_in_data_file
             }
         }
     }
+
+    # Spectronaut
+    if ($id_col eq '')
+    {
+        for ($i = 0; $i < @array; $i++)
+        {
+            # select the identifier column
+            if ($array[$i] =~ /^PG.ProteinGroups$/i)
+            {
+                $id_col = $i;
+                last;
+            }
+        }
+    }
+    if ($id_col eq '')
+    {
+        for ($i = 0; $i < @array; $i++)
+        {
+            # select the identifier column
+            if ($array[$i] =~ /^PG.ProteinNames$/i)
+            {
+                $id_col = $i;
+                last;
+            }
+        }
+    }
+
     if ($id_col eq '')
     {
         for ($i = 0; $i < @array; $i++)
@@ -399,6 +469,21 @@ sub read_in_data_file
             $sample_array[$num_samples++] = $field;
         }
     }
+
+    # didn't find any, maybe it is Spectronaut DIA data
+    if ($num_samples == 0)
+    {
+        for ($i = 0; $i < @array; $i++)
+        {
+            $field = $array[$i];
+
+            if ($field =~ /\.PG\.Quantity$/i)
+            {
+                $sample_to_file_col_hash{$field} = $i;
+                $sample_array[$num_samples++] = $field;
+            }
+        }
+    }
     
     # didn't find any, maybe it is metabolomics with _pos or _neg
     if ($num_samples == 0)
@@ -443,7 +528,6 @@ sub read_in_data_file
         }
     }
 
-
     # still didn't find any, maybe it is ORIEN Avatar SLIDs
     if ($num_samples == 0)
     {
@@ -456,10 +540,12 @@ sub read_in_data_file
                 $sample_to_file_col_hash{$field} = $i;
                 $sample_array[$num_samples++] = $field;
                 
-                $intensity_at_end_flag = 1;
+                #$intensity_at_end_flag = 1;
             }
         }
     }
+
+
     
     # still didn't find any, print warning and assume all columns are data
     if ($num_samples == 0)
@@ -481,7 +567,7 @@ sub read_in_data_file
             $sample_to_file_col_hash{$field} = $i;
             $sample_array[$num_samples++] = $field;
                 
-            $intensity_at_end_flag = 1;
+            #$intensity_at_end_flag = 1;
         }
     }
     
@@ -504,6 +590,13 @@ sub read_in_data_file
             {
                 $sample =~ s/\s+Intensity$//i;
             }
+            
+            # strip Spectronaut stuff
+            elsif ($sample =~ /\.PG\.Quantity$/i)
+            {
+            	$sample =~ s/^\[[0-9]+\]\s*//;
+            	$sample =~ s/\.[a-z]\.PG\.Quantity$//i;
+            }
 
             # strip mzMine stuff, add IRON
             elsif ($sample =~ / Peak height$/i ||
@@ -511,7 +604,6 @@ sub read_in_data_file
             {
                 $sample =~ s/\.mzX?ML[^.]+$//i;
                 $sample =~ s/ Peak \S+$//i;
-                
             }
             
             # strip lipidomics stuff
