@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-08-12:  add preliminary Spectronaut support
 # 2026-03-13:  output to _no-iron_log2_intensity.txt when --no-iron flag used
 # 2026-03-02:  bugfix: --boost and --last-ch no longer trigger usage statement
 # 2025-05-22:  allow debatching with --iron-auto-ch --comp-pool
@@ -285,6 +286,17 @@ if (!defined($autodetect_filename))
             $input_filename,
             $species;
     }
+
+    # deal with CSV files
+    if ($input_filename =~ /\.csv$/i)
+    {
+        $cmd_str =~ s/\"*\Q$input_filename\E\"*/\-/;
+
+        $cmd_str = sprintf "%s \"%s\" | %s",
+            'csv2tab_not_excel.pl --unwrap',
+            $input_filename,
+            $cmd_str;
+    }
 }
 else
 {
@@ -344,9 +356,19 @@ foreach $key (@autodetect_key_array)
 
 
 # initial command which will pipe the data into additional future commands
-$pipeline_preprocess_str = sprintf "%s \"%s\"",
-    'strip_maxquant_columns.pl',
-    $input_filename;
+if ($input_filename =~ /\.csv$/i)
+{
+    $pipeline_preprocess_str = sprintf "%s \"%s\" | %s -",
+        'csv2tab_not_excel.pl --unwrap',
+        $input_filename,
+        'strip_maxquant_columns.pl';
+}
+else
+{
+    $pipeline_preprocess_str = sprintf "%s \"%s\"",
+        'strip_maxquant_columns.pl',
+        $input_filename;
+}
 
 
 if (defined($autodetect_hash{Modification}) &&
