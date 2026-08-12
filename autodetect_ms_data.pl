@@ -2,6 +2,7 @@
 
 # Changelog:
 #
+# 2026-08-12: add Spectronaut support
 # 2026-03-17: detect Run#-# samples as injection replicates
 # 2026-03-13: single-plex TMT pY defaults to auto ref channel instead of last
 # 2026-03-02: bugfix: --boost and --last-ch no longer trigger usage statement
@@ -412,7 +413,9 @@ while(defined($line=<INFILE>))
         if ($header_array[$i] =~ /^Protein/i ||
             $header_array[$i] =~ /protein$/i ||
             $header_array[$i] =~ /\bprotein ids\b/i ||
-            $header_array[$i] =~ /^Protein Accession/i)
+            $header_array[$i] =~ /^Protein Accession/i ||
+            $header_array[$i] =~ /PG\.ProteinGroups/ ||
+            $header_array[$i] =~ /PG\.FastaHeaders/)
         {
             $blessed_string = $array[$i];
             $blessed_string =~ s/\,/;/g;
@@ -448,7 +451,9 @@ while(defined($line=<INFILE>))
             $header_array[$i] =~ /protein$/i ||
             $header_array[$i] =~ /\bprotein ids\b/i ||
             $header_array[$i] =~ /^Protein Accession/i ||
-            $header_array[$i] =~ /^Leading Proteins/i)
+            $header_array[$i] =~ /^Leading Proteins/i ||
+            $header_array[$i] =~ /PG\.ProteinGroups/ ||
+            $header_array[$i] =~ /PG\.FastaHeaders/)
         {
 
             @split_array = split /;/, $array[$i];
@@ -552,10 +557,17 @@ $db_counts_hash{Uniprot}   = $other_count;
 $db_counts_hash{Ensembl}   = $ensembl_count;
 $db_counts_hash{Gencode}   = $chrom_count;
 
-@db_array = keys %db_counts_hash;
+@db_array = sort keys %db_counts_hash;
 @db_array = sort {-($db_counts_hash{$a} <=> $db_counts_hash{$b})} @db_array;
 
 $refdb_string = $db_array[0];
+
+# sanity check, default to Uniprot if zero counts
+if ($db_counts_hash{$refdb_string} == 0)
+{
+    $refdb_string = 'Uniprot';
+}
+
 
 # detect proteogenomics, will be mostly UniProt/Ensembl with a few mutant chr
 if (defined($db_counts_hash{Gencode}) &&
