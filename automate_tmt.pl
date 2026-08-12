@@ -7,6 +7,7 @@
 #
 # Don't forget that current file format is ex: TMT-126, not just 126
 #
+# 2026-08-12: disable debatching for rows with only a single plex
 # 2026-02-20: correctly handle enclosing double quotes
 # 2025-12-08: warn the user when no reference channel arguments are provided
 # 2025-02-25: better handle combinations of auto pool, --no-iron, --no-debatch
@@ -1641,9 +1642,50 @@ sub iron_samples
 
 sub correct_abundances
 {
+    my %row_nonzero_plex_count_hash = ();
+    my %row_nonzero_plex_hash = ();
+    my $plex_has_data_flag;
+
     if ($comp_pool_flag)
     {
         print STDERR "De-batching with computational pools\n";
+    }
+    
+    # count number of plexes that have non-zero data for each row
+    for ($row = 0; $row < $num_rows; $row++)
+    {
+        $row_nonzero_plex_count_hash{$row} = 0;
+    
+        for ($p = 0; $p < $num_plexes; $p++)
+        {
+            $plex_has_data_flag = 0;
+
+            $tmt_plex = $tmt_plex_array[$p];
+
+            for ($ch = 0; $ch < $num_channels; $ch++)
+            {
+                $sample = $tmt_plex_hash{$tmt_plex}{$channel_array[$ch]};
+                $col = $sample_to_condensed_col_hash{$sample};
+
+                $value = $condensed_data_array[$row][$col];
+                if (!defined($value))
+                {
+                    $value = '';
+                }
+                
+                if (is_number($value) && $value > 0)
+                {
+                    $row_nonzero_plex_hash{$row}{$p} = 1;
+                    $plex_has_data_flag = 1;
+                    last;
+                }
+            }
+            
+            if ($plex_has_data_flag)
+            {
+                $row_nonzero_plex_count_hash{$row} += 1;
+            }
+        }
     }
 
     # overwrite condensed data with log2 ratio derived pseudo-abundances
@@ -1674,6 +1716,8 @@ sub correct_abundances
         
         for ($row = 0; $row < $num_rows; $row++)
         {
+            $nonzero_plex_count = $row_nonzero_plex_count_hash{$row};
+        
             $avg = '';
 
             # use computational pool instead of real pool
@@ -1737,22 +1781,44 @@ sub correct_abundances
                 # no average to divide by, undefine it
                 if ($avg eq '')
                 {
-                    undef($condensed_data_array[$row][$col]);
+                    # protect data only observed in a single plex
+                    if ($nonzero_plex_count != 1)
+                    {
+                        undef($condensed_data_array[$row][$col]);
+                    }
+                    elsif ($leave_ratios_flag)
+                    {
+                        # HACK -- set single plex to NA
+                        if (defined($row_nonzero_plex_hash{$row}{$p}))
+                        {
+                            $condensed_data_array[$row][$col] = 'NA';
+                        }
+                        # plex has no data, undefine it
+                        else
+                        {
+                            undef($condensed_data_array[$row][$col]);
+                        }
+                    }
                 }
 
                 $value = $condensed_data_array[$row][$col];
-                if (defined($value))
+                if (defined($value) && is_number($value))
                 {
-                    # HACK -- leave as ratios, rather than abundances
-                    if ($leave_ratios_flag)
+                    # only debatch if >= 2 plexes have data for this row
+                    if ($avg ne '' && $nonzero_plex_count >= 2)
                     {
-                        $condensed_data_array[$row][$col] = ($value / $avg);
-                    }
-                    # scale ratios back into abundances
-                    else
-                    {
-                        $condensed_data_array[$row][$col] =
-                            $row_pool_avg_values[$row] * ($value / $avg);
+                        # HACK -- leave as ratios, rather than abundances
+                        if ($leave_ratios_flag)
+                        {
+                            $condensed_data_array[$row][$col] =
+                                ($value / $avg);
+                        }
+                        # scale ratios back into abundances
+                        else
+                        {
+                            $condensed_data_array[$row][$col] =
+                                $row_pool_avg_values[$row] * ($value / $avg);
+                        }
                     }
                 }
             }
@@ -1777,10 +1843,10 @@ sub output_final_data
         
             $value = $condensed_data_array[$row][$i];
 
-            if (defined($value) && is_number($value))
+            if (defined($value))
             {
                 # print log2 value
-                if ($no_log2_flag == 0)
+                if (is_number($value) && $no_log2_flag == 0)
                 {
                     $orig_data_array[$row][$col] = log($value) / log(2.0);
                 }
