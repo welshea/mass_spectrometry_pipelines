@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 
+# 2026-08-12  add Spectronaut support
 # 2026-03-02  restore accidentally deleted bless_delimiter_bar_only() function
 # 2026-02-20  correctly handle enclosing double quotes
 # 2024-08-19  delimit some annotation by | instead of spaces
@@ -2529,7 +2530,9 @@ for ($i = 0; $i < @array; $i++)
             $field =~ /\bprotein ids*\b/i ||
             $field =~ /^Majority Protein IDs*$/i ||
             $field =~ /^Parent Protein$/i ||
-            $field =~ /^Mapped Proteins*$/i)
+            $field =~ /^Mapped Proteins*$/i ||
+            $field =~ /PG\.ProteinGroups/ ||
+            $field =~ /PG\.FastaHeaders/)
         {
             $accession_col_array[$num_accession_cols++] = $i;
         }
