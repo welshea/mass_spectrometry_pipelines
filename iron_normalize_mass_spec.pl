@@ -3,6 +3,8 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2026-10-08:  bugfix: never consider CountOriginalNotImputed a sample
+# 2026-10-08:  add DilutionPanel to list of columns to ignore
 # 2026-08-11:  sort scaling factors alphanumerically instead of ASCII order
 # 2026-08-11:  add Preliminary Spectronaut support
 # 2026-05-29:  added more RNA-Seq header columns to leave unnormalized
@@ -82,7 +84,8 @@ $headers_lc_to_skip_hash{'genename'} = 1;
 $headers_lc_to_skip_hash{'transcript'} = 1;
 $headers_lc_to_skip_hash{'ensembl_gene'} = 1;
 $headers_lc_to_skip_hash{'hgnc_symbol'} = 1;
-$headers_lc_to_skip_hash{'CountOrigNotImputed'} = 1;
+$headers_lc_to_skip_hash{'countorignotimputed'} = 1;
+$headers_lc_to_skip_hash{'dilutionpanel'} = 1;
 
 
 sub is_number
