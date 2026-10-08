@@ -3,6 +3,7 @@
 use Scalar::Util qw(looks_like_number);
 use File::Basename;
 
+# 2026-10-08:  add ProbeID to list of columns to ignore
 # 2026-10-08:  add Assay to list of columns to ignore
 # 2026-10-08:  bugfix: never consider CountOriginalNotImputed a sample
 # 2026-10-08:  add DilutionPanel to list of columns to ignore
@@ -88,6 +89,7 @@ $headers_lc_to_skip_hash{'hgnc_symbol'} = 1;
 $headers_lc_to_skip_hash{'countorignotimputed'} = 1;
 $headers_lc_to_skip_hash{'dilutionpanel'} = 1;
 $headers_lc_to_skip_hash{'assay'} = 1;
+$headers_lc_to_skip_hash{'probeid'} = 1;
 
 
 sub is_number
